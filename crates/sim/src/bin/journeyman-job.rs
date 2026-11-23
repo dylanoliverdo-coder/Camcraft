@@ -20,6 +20,12 @@
 //!   --tol <mm>                  deviate tolerance (default 0.0254)
 //!   --out-stl <file>            field arm only: write the stock surface
 //!   --shank <mm>                field arm only: cut with this tool length above the tip
+//!   --cutting-length project|T=mm,..|<mm>   column arm: check each cutting move for material
+//!                               above the flutes (the project's tool length, per-tool lengths,
+//!                               or one length for all)
+//!                               and report shank strikes; the cut itself is unchanged
+//!   --out-closed-stl <file>     column arm: write the stock as a closed mesh
+//!   --matrix a,b,...            16 numbers, row-major: setup-to-part for --out-closed-stl
 //!   --tool flat|ball|bull D [corner]   rows input only
 //!   --stock x0 y0 z0 x1 y1 z1   rows input only (same units as the rows)
 //!   --scale <k>                 rows input only: multiply lengths (25.4)
@@ -237,6 +243,74 @@ fn write_skyline(path: &str, tops: &[f64], nx: usize, ny: usize, b: [f64; 6], ce
            "frame": if m.is_some() { "part (setup-to-part matrix applied)" } else { "setup" }})
 }
 
+/// Rim copies of a band's cone (see `profile_atoms`).
+const PHI: usize = 24;
+
+/// Our CAMotics fork's revolved profile bands `[z0, z1, inner r0, inner r1, outer r0, outer r1]` (mm, tip at z = 0)
+/// as CamCraft column atoms, each with the lift of the moves it is swept along. A band that widens upward (or
+/// keeps its radius) is the flat disc of its lower radius lifted to z0, plus, where it widens, the sharp cone of
+/// its slope swept around that disc's rim: the frustum is exactly the disc's Minkowski sum with the cone, so `PHI`
+/// copies on the rim are an inner approximation within r0 (1 - cos(pi / PHI)) radially. A band narrower above than
+/// below (an undercut) or with an inner radius (a hollow tool) cannot stand on the column engine's upright atoms
+/// and is refused by name. None when the record has no bands.
+fn profile_atoms(rec: &Value) -> Option<Result<Vec<(ToolShape, [f64; 3])>, String>> {
+    let rows = rec["profile_bands"].as_array()?;
+    if rows.is_empty() {
+        return None;
+    }
+    let mut bands: Vec<[f64; 6]> = Vec::new();
+    for r in rows {
+        let v: Vec<f64> = r.as_array().map(|a| a.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+        if v.len() != 6 {
+            return Some(Err("a profile band needs six numbers".into()));
+        }
+        bands.push([v[0], v[1], v[2], v[3], v[4], v[5]]);
+    }
+    bands.sort_by(|a, b| a[0].partial_cmp(&b[0]).unwrap_or(std::cmp::Ordering::Equal));
+    let mut atoms = Vec::new();
+    let mut below = 0.0f64;
+    for &[z0, z1, i0, i1, r0, r1] in &bands {
+        if i0 > 0.0 || i1 > 0.0 {
+            return Some(Err(format!("hollow profile band (inner radius {i0} to {i1} mm): not an upright solid")));
+        }
+        if r1 + 1e-9 < r0 || r0 + 1e-9 < below {
+            return Some(Err(format!("undercut profile band (radius {r0} to {r1} mm over z {z0} to {z1} mm): narrower above than below")));
+        }
+        below = r1;
+        if r0 > 1e-9 {
+            atoms.push((ToolShape { radius: r0, ball: false, cone: None, corner: None }, [0.0, 0.0, z0]));
+        }
+        if r1 > r0 + 1e-9 {
+            let cone = ToolShape { radius: r1 - r0, ball: false, cone: Some((z1 - z0) / (r1 - r0)), corner: None };
+            if r0 <= 1e-9 {
+                atoms.push((cone, [0.0, 0.0, z0]));
+            } else {
+                for k in 0..PHI {
+                    let a = std::f64::consts::TAU * k as f64 / PHI as f64;
+                    atoms.push((cone, [r0 * a.cos(), r0 * a.sin(), z0]));
+                }
+            }
+        }
+    }
+    Some(Ok(atoms))
+}
+
+/// The moves carried by `d` (tip positions and XY arc centres).
+fn lifted(moves: &[Move], d: [f64; 3]) -> Vec<Move> {
+    moves
+        .iter()
+        .map(|m| {
+            let mut m = *m;
+            m.from = Point3::new(m.from.x + d[0], m.from.y + d[1], m.from.z + d[2]);
+            m.to = Point3::new(m.to.x + d[0], m.to.y + d[1], m.to.z + d[2]);
+            if let Some(a) = m.arc.as_mut() {
+                a.center = Point2::new(a.center.x + d[0], a.center.y + d[1]);
+            }
+            m
+        })
+        .collect()
+}
+
 /// CAMotics tool record -> the stock_sim atom. `conical` is a cone of
 /// height `length` to `diameter` (the virtual sharp leads); `ballnose`
 /// the sphere; `snubnose` a bull nose; anything else the flat cylinder
@@ -400,6 +474,10 @@ fn main() {
     };
     let stl_k = get("stl-scale").map(|s| num(&s)).unwrap_or(1.0);
     let t0 = Instant::now();
+    // Per op: the CAMotics tool number and its cutting length (the project's `length`, which our lane writes from
+    // the tool's flute height); None where the project's length is not a flute (a conical record's is its cone).
+    let mut cut_lens: Vec<(i64, Option<f64>)> = Vec::new();
+    let mut profiled: Vec<i64> = Vec::new();
     let (bounds, cell, ops): ([f64; 6], f64, Vec<(ToolShape, Vec<Move>)>) = if let Some(p) = get("camotics") {
         let proj: Value = serde_json::from_str(&std::fs::read_to_string(&p).unwrap_or_else(|e| die(format!("{p}: {e}"))))
             .unwrap_or_else(|e| die(format!("{p}: {e}")));
@@ -411,8 +489,26 @@ fn main() {
         let nc = proj["files"][0].as_str().unwrap_or_else(|| die("no NC file".into())).to_string();
         let mut ops = Vec::new();
         for (t, mv) in read_nc(&nc) {
-            match camotics_tool(&proj["tools"][t.to_string()]) {
-                Some(ts) => ops.push((ts, mv)),
+            let rec = &proj["tools"][t.to_string()];
+            let len = rec["length"].as_f64().filter(|l| *l > 0.0 && rec["shape"].as_str() != Some("conical"));
+            match profile_atoms(rec) {
+                Some(Err(e)) => die(format!("tool {t}: {e}")),
+                Some(Ok(atoms)) => {
+                    if !profiled.contains(&t) { profiled.push(t); }
+                    // The first atom carries the shank check (its own tip); the rest are the same tool's form.
+                    for (k, (ts, d)) in atoms.into_iter().enumerate() {
+                        cut_lens.push((t, if k == 0 { len } else { None }));
+                        ops.push((ts, if d == [0.0; 3] { mv.clone() } else { lifted(&mv, d) }));
+                    }
+                    continue;
+                }
+                None => {}
+            }
+            match camotics_tool(rec) {
+                Some(ts) => {
+                    cut_lens.push((t, len));
+                    ops.push((ts, mv));
+                }
                 None => {
                     if mv.iter().any(|m| m.kind != MoveKind::Rapid) && t != 0 {
                         die(format!("tool {t} has no usable shape"));
@@ -486,6 +582,19 @@ fn main() {
     let (mut sim_s, mut tops_s) = (0.0, 0.0);
     let mut sim: Result<(), String> = Ok(());
     let mut stocks: Vec<Stock> = Vec::new();
+    // --cutting-length: `project` (each tool's project length), `T=mm,T=mm` (per tool number; a tool not named is
+    // not checked), or one length in mm for every tool.
+    let per_tool: BTreeMap<i64, f64> = get("cutting-length").filter(|s| s.contains('=')).map(|s| s.split(',').map(|kv| {
+        let (k, v) = kv.split_once('=').unwrap_or_else(|| die(format!("cutting length {kv}: want T=mm")));
+        (k.trim().parse::<i64>().unwrap_or_else(|_| die(format!("tool number {k}"))), num(v.trim()))
+    }).collect()).unwrap_or_default();
+    let strike_len: Option<Option<f64>> = get("cutting-length").map(|s| if s == "project" || s.contains('=') { None } else { Some(num(&s)) });
+    if !per_tool.is_empty() {
+        let mut seen = std::collections::BTreeSet::new();
+        for c in cut_lens.iter_mut() { c.1 = if seen.insert(c.0) { per_tool.get(&c.0).copied() } else { None }; }
+    }
+    // tool number -> (cutting length, strike moves, worst excess mm, first (op, move), the moves seen across X tiles)
+    let mut strikes: BTreeMap<i64, (f64, usize, f64, (usize, usize), std::collections::BTreeSet<(usize, usize)>)> = BTreeMap::new();
     for tx in 0..ntx {
         let (i0, i1) = (tx * per, ((tx + 1) * per).min(nx));
         let (tx0, tx1) = (x0 + i0 as f64 * cell, x0 + i1 as f64 * cell);
@@ -510,6 +619,42 @@ fn main() {
                     };
                     for chunk in m.chunks(4096) {
                         if let Err(e) = f.subtract_batch(chunk, &tool, tol) { sim = Err(e.to_string()); break; }
+                    }
+                }
+            }
+            // --cutting-length project|<mm>: the column atoms are endless upward (material above the flutes is cut
+            // as if the shank were flute). Cut exactly that, and before each cutting move read the stock top at the
+            // tip centre and 8 points on 0.9 of the radius, at the move's start, middle and end: material standing
+            // more than one cell above tip + cutting length there is a shank strike, recorded per tool. A lower
+            // bound (sampled points, not the whole swept disc); never a lid left in the stock.
+            (Stock::Column(_), _) if strike_len.is_some() => {
+                let fixed = strike_len.flatten();
+                'ops: for (oi, (t, m)) in ops.iter().enumerate() {
+                    let (tn, own) = cut_lens.get(oi).copied().unwrap_or((-1, None));
+                    let len = fixed.or(own);
+                    for (k, mv) in m.iter().enumerate() {
+                        if let (Some(len), true) = (len, mv.kind != MoveKind::Rapid) {
+                            let mut worst = 0.0f64;
+                            for f in [0.0, 0.5, 1.0] {
+                                let c = [mv.from.x + (mv.to.x - mv.from.x) * f, mv.from.y + (mv.to.y - mv.from.y) * f,
+                                         mv.from.z + (mv.to.z - mv.from.z) * f];
+                                for s in 0..9 {
+                                    let (dx, dy) = if s == 0 { (0.0, 0.0) } else {
+                                        let a = std::f64::consts::TAU * (s - 1) as f64 / 8.0;
+                                        (0.9 * t.radius * a.cos(), 0.9 * t.radius * a.sin())
+                                    };
+                                    let top = stock.top(c[0] + dx, c[1] + dy);
+                                    if top.is_finite() { worst = worst.max(top - (c[2] + len)); }
+                                }
+                            }
+                            if worst > cell {
+                                let e = strikes.entry(tn).or_insert((len, 0usize, 0.0f64, (oi, k), std::collections::BTreeSet::new()));
+                                if e.4.insert((oi, k)) { e.1 += 1; }
+                                e.2 = e.2.max(worst);
+                            }
+                        }
+                        let one = [SimOp { moves: std::slice::from_ref(mv), radius: t.radius, ball: t.ball, cone: t.cone, corner: t.corner }];
+                        if let Err(e) = stock.simulate(&one) { sim = Err(e.to_string()); break 'ops; }
                     }
                 }
             }
@@ -563,6 +708,22 @@ fn main() {
         let t6 = Instant::now();
         out["closed_mesh"] = write_skyline(&p, &tops, nx, ny, bounds, cell, m.as_deref());
         out["closed_mesh"]["seconds"] = json!(t6.elapsed().as_secs_f64());
+    }
+    if strike_len.is_some() {
+        let rows: Vec<Value> = strikes.iter().map(|(t, (len, n, w, first, _))| json!({
+            "tool": t, "cutting_length_mm": len, "strike_moves": n, "worst_above_flutes_mm": w,
+            "first_op": first.0, "first_move": first.1})).collect();
+        let checked: std::collections::BTreeSet<i64> = cut_lens.iter().filter(|c| c.1.is_some()).map(|c| c.0).collect();
+        let mut unchecked: Vec<i64> = cut_lens.iter().map(|c| c.0).filter(|t| !checked.contains(t)).collect();
+        unchecked.dedup();
+        out["shank_strike"] = json!({
+            "basis": "stock top at the tip centre and 8 points on 0.9 radius, at each cutting move's start, middle and end, before the move; material more than one cell above tip + cutting length is a strike; a lower bound",
+            "cutting_length": get("cutting-length"), "tools_struck": rows, "tools_not_checked": unchecked,
+            "stock": "the column engine cuts above the flutes as if the shank were flute: no lid is left"});
+    }
+    if !profiled.is_empty() {
+        out["profile_tools"] = json!({"tools": profiled, "rim_copies": PHI,
+            "basis": "profile bands as a flat disc per band plus its cone swept on the disc rim (inner approximation within r0 (1 - cos(pi / rim_copies)) radially)"});
     }
     out["removed_mm3"] = json!(removed);
     out["remaining_mm3"] = json!((x1 - x0) * (y1 - y0) * (z1 - z0) - removed);
