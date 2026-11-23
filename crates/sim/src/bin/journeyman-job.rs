@@ -1,4 +1,4 @@
-//! journeyman_job - bake-off driver: cut one Journeyman group's stock with
+//! journeyman-job - cut one Journeyman group's stock with
 //! the `stock_sim` seam and compare it with another engine's stock mesh.
 //!
 //! Inputs, either:
@@ -46,7 +46,7 @@ struct ToolShape {
 }
 
 fn die(msg: String) -> ! {
-    eprintln!("journeyman_job: {msg}");
+    eprintln!("journeyman-job: {msg}");
     std::process::exit(1);
 }
 
