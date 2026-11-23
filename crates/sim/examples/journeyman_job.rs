@@ -101,6 +101,142 @@ fn write_stl(path: &str, tris: &[Triangle]) {
     std::fs::write(path, b).unwrap_or_else(|e| die(format!("cannot write {path}: {e}")));
 }
 
+/// The column stock as a closed solid: per material column a top and a bottom quad, and vertical walls where
+/// neighbours differ, each wall split at every height standing on its two corner lines so no edge has a T-junction.
+/// A saddle corner (two diagonal columns above the other two over a band) would put four faces on one edge; it is
+/// resolved first by raising the higher of the two low columns to the lower of the two high ones (material is only
+/// ever added, never removed, and the count and volume are reported). `m` is an optional row-major 4x4 applied to
+/// every vertex (the job's setup-to-part matrix).
+fn write_skyline(path: &str, tops: &[f64], nx: usize, ny: usize, b: [f64; 6], cell: f64, m: Option<&[f64]>) -> Value {
+    use std::io::{Seek, SeekFrom, Write};
+    let [x0, y0, z0, x1, y1, z1] = b;
+    // Heights are taken at f32 (the STL's precision) so two heights the file cannot tell apart are one height here.
+    let q = |v: f64| v as f32 as f64;
+    let (z0, z1) = (q(z0), q(z1));
+    let mut h: Vec<f64> = tops.iter().map(|&t| if t.is_finite() && q(t) > z0 { q(t).min(z1) } else { z0 }).collect();
+    let (mut raised, mut raise_max, mut raise_vol, mut sweeps) = (0usize, 0.0f64, 0.0f64, 0usize);
+    let id = |i: usize, j: usize| j * nx + i;
+    loop {
+        sweeps += 1;
+        let mut changed = false;
+        for j in 1..ny {
+            for i in 1..nx {
+                let (ka, kb, kc, kd) = (id(i - 1, j - 1), id(i, j - 1), id(i - 1, j), id(i, j));
+                let (a, bb, c, d) = (h[ka], h[kb], h[kc], h[kd]);
+                let fix = if a.min(d) > bb.max(c) {
+                    Some((if bb >= c { kb } else { kc }, a.min(d)))
+                } else if bb.min(c) > a.max(d) {
+                    Some((if a >= d { ka } else { kd }, bb.min(c)))
+                } else {
+                    None
+                };
+                if let Some((k, to)) = fix {
+                    raise_max = raise_max.max(to - h[k]);
+                    raise_vol += (to - h[k]) * cell * cell;
+                    h[k] = to;
+                    raised += 1;
+                    changed = true;
+                }
+            }
+        }
+        if !changed || sweeps >= 200 { break; }
+    }
+    let xs: Vec<f64> = (0..=nx).map(|i| if i == nx { x1.min(x0 + nx as f64 * cell) } else { x0 + i as f64 * cell }).collect();
+    let ys: Vec<f64> = (0..=ny).map(|j| if j == ny { y1.min(y0 + ny as f64 * cell) } else { y0 + j as f64 * cell }).collect();
+    let cellh = |i: isize, j: isize| -> f64 {
+        if i < 0 || j < 0 || i >= nx as isize || j >= ny as isize { z0 } else { h[j as usize * nx + i as usize] }
+    };
+    let corner = |i: usize, j: usize| -> Vec<f64> {
+        let (i, j) = (i as isize, j as isize);
+        let mut v = vec![z0, cellh(i - 1, j - 1), cellh(i, j - 1), cellh(i - 1, j), cellh(i, j)];
+        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        v.dedup();
+        v
+    };
+    let xf = |p: [f64; 3]| -> [f32; 3] {
+        match m {
+            Some(m) => [
+                (m[0] * p[0] + m[1] * p[1] + m[2] * p[2] + m[3]) as f32,
+                (m[4] * p[0] + m[5] * p[1] + m[6] * p[2] + m[7]) as f32,
+                (m[8] * p[0] + m[9] * p[1] + m[10] * p[2] + m[11]) as f32,
+            ],
+            None => [p[0] as f32, p[1] as f32, p[2] as f32],
+        }
+    };
+    let f = std::fs::File::create(path).unwrap_or_else(|e| die(format!("cannot write {path}: {e}")));
+    let mut w = std::io::BufWriter::with_capacity(1 << 22, f);
+    w.write_all(&[0u8; 84]).unwrap();
+    let mut n: u64 = 0;
+    let mut tri = |w: &mut std::io::BufWriter<std::fs::File>, a: [f64; 3], b2: [f64; 3], c: [f64; 3]| {
+        let mut rec = [0u8; 50];
+        for (k, p) in [a, b2, c].iter().enumerate() {
+            let q = xf(*p);
+            for (l, v) in q.iter().enumerate() {
+                rec[12 + 12 * k + 4 * l..16 + 12 * k + 4 * l].copy_from_slice(&v.to_le_bytes());
+            }
+        }
+        w.write_all(&rec).unwrap();
+        n += 1;
+    };
+    let mut volume = 0.0;
+    for j in 0..ny {
+        for i in 0..nx {
+            let z = h[id(i, j)];
+            if z <= z0 { continue; }
+            let (xa, xb, ya, yb) = (xs[i], xs[i + 1], ys[j], ys[j + 1]);
+            volume += (z - z0) * (xb - xa) * (yb - ya);
+            tri(&mut w, [xa, ya, z], [xb, ya, z], [xb, yb, z]);
+            tri(&mut w, [xa, ya, z], [xb, yb, z], [xa, yb, z]);
+            tri(&mut w, [xa, ya, z0], [xb, yb, z0], [xb, ya, z0]);
+            tri(&mut w, [xa, ya, z0], [xa, yb, z0], [xb, yb, z0]);
+        }
+    }
+    // One wall: corner lines p (heights la) and q (heights lb), between lo and hi, facing `out`.
+    let mut wall = |w: &mut std::io::BufWriter<std::fs::File>, p: [f64; 2], q: [f64; 2], la: &[f64], lb: &[f64], lo: f64, hi: f64, out: [f64; 2]| {
+        let a: Vec<f64> = la.iter().copied().filter(|z| *z >= lo && *z <= hi).collect();
+        let bq: Vec<f64> = lb.iter().copied().filter(|z| *z >= lo && *z <= hi).collect();
+        // cross(q - p, +z) = (dy, -dx): flip when it points away from `out`.
+        let flip = (q[1] - p[1]) * out[0] - (q[0] - p[0]) * out[1] < 0.0;
+        let (mut ia, mut ib) = (0usize, 0usize);
+        while ia + 1 < a.len() || ib + 1 < bq.len() {
+            let adv_a = ib + 1 == bq.len() || (ia + 1 < a.len() && a[ia + 1] <= bq[ib + 1]);
+            let (u, v, s) = if adv_a {
+                let t = ([p[0], p[1], a[ia]], [q[0], q[1], bq[ib]], [p[0], p[1], a[ia + 1]]);
+                ia += 1;
+                t
+            } else {
+                let t = ([p[0], p[1], a[ia]], [q[0], q[1], bq[ib]], [q[0], q[1], bq[ib + 1]]);
+                ib += 1;
+                t
+            };
+            if flip { tri(w, u, s, v) } else { tri(w, u, v, s) }
+        }
+    };
+    for j in 0..ny {
+        for i in 0..=nx {
+            let (ha, hb) = (cellh(i as isize - 1, j as isize), cellh(i as isize, j as isize));
+            if ha == hb { continue; }
+            let out = if ha > hb { [1.0, 0.0] } else { [-1.0, 0.0] };
+            wall(&mut w, [xs[i], ys[j]], [xs[i], ys[j + 1]], &corner(i, j), &corner(i, j + 1), ha.min(hb), ha.max(hb), out);
+        }
+    }
+    for j in 0..=ny {
+        for i in 0..nx {
+            let (ha, hb) = (cellh(i as isize, j as isize - 1), cellh(i as isize, j as isize));
+            if ha == hb { continue; }
+            let out = if ha > hb { [0.0, 1.0] } else { [0.0, -1.0] };
+            wall(&mut w, [xs[i], ys[j]], [xs[i + 1], ys[j]], &corner(i, j), &corner(i + 1, j), ha.min(hb), ha.max(hb), out);
+        }
+    }
+    w.flush().unwrap();
+    let mut f = w.into_inner().unwrap();
+    f.seek(SeekFrom::Start(80)).unwrap();
+    f.write_all(&(n as u32).to_le_bytes()).unwrap();
+    json!({"path": path, "facets": n, "volume_mm3": volume, "saddle_cells_raised": raised,
+           "saddle_raise_max_mm": raise_max, "saddle_raise_mm3": raise_vol, "saddle_sweeps": sweeps,
+           "frame": if m.is_some() { "part (setup-to-part matrix applied)" } else { "setup" }})
+}
+
 /// CAMotics tool record -> the stock_sim atom. `conical` is a cone of
 /// height `length` to `diameter` (the virtual sharp leads); `ballnose`
 /// the sphere; `snubnose` a bull nose; anything else the flat cylinder
@@ -422,6 +558,12 @@ fn main() {
     }
     out["tops_s"] = json!(tops_s);
     out["grid"] = json!([nx, ny]);
+    if let Some(p) = get("out-closed-stl") {
+        let m: Option<Vec<f64>> = opt.get("matrix").map(|v| v[0].split(',').map(|s| num(s.trim())).collect());
+        let t6 = Instant::now();
+        out["closed_mesh"] = write_skyline(&p, &tops, nx, ny, bounds, cell, m.as_deref());
+        out["closed_mesh"]["seconds"] = json!(t6.elapsed().as_secs_f64());
+    }
     out["removed_mm3"] = json!(removed);
     out["remaining_mm3"] = json!((x1 - x0) * (y1 - y0) * (z1 - z0) - removed);
     out["through_columns"] = json!(through);
