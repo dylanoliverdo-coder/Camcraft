@@ -19,6 +19,7 @@
 //!   --part-stl <part.stl>       the part: `Stock::deviate` against it
 //!   --tol <mm>                  deviate tolerance (default 0.0254)
 //!   --out-stl <file>            field arm only: write the stock surface
+//!   --shank <mm>                field arm only: cut with this tool length above the tip
 //!   --tool flat|ball|bull D [corner]   rows input only
 //!   --stock x0 y0 z0 x1 y1 z1   rows input only (same units as the rows)
 //!   --scale <k>                 rows input only: multiply lengths (25.4)
@@ -31,7 +32,7 @@
 use camcraft_sim::cl::{Move, MoveKind};
 use camcraft_sim::geometry::{Point3, Triangle};
 use camcraft_sim::geo2d::Point2;
-use camcraft_sim::stock_sim::{iso, part_surface, Backend, SimOp, Stock, FIELD_BAND};
+use camcraft_sim::stock_sim::{iso, part_surface, Backend, SdfTool, SimOp, Stock, FIELD_BAND};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::time::Instant;
@@ -296,6 +297,7 @@ fn main() {
         let sv = opt.get("stock").cloned().unwrap_or_else(|| die("--stock needed".into()));
         let b: Vec<f64> = sv.iter().map(|s| num(s) * k).collect();
         let cell = get("cell").map(|s| num(&s)).unwrap_or(0.254);
+        let max_seg = get("max-seg").map(|s| num(&s)).unwrap_or(f64::INFINITY);
         let src = std::fs::read_to_string(&p).unwrap_or_else(|e| die(format!("{p}: {e}")));
         let mut mv = Vec::new();
         let mut prev: Option<Point3> = None;
@@ -307,11 +309,19 @@ fn main() {
                 if (a.x - p.x).abs() + (a.y - p.y).abs() + (a.z - p.z).abs() > 1e-9 {
                     let kind = if v[6] > 0.0 { MoveKind::Feed } else { MoveKind::Rapid };
                     let fd = if v[6] > 0.0 { Some(v[6] * k) } else { None };
-                    let mut m = Move::new(kind, a, p, fd);
                     let ax = [v[3], v[4], v[5]];
                     let upright = ax[0].abs() < 1e-12 && ax[1].abs() < 1e-12 && ax[2] > 0.0;
-                    if !upright { m = m.with_axis(ax); }
-                    mv.push(m);
+                    // --max-seg: the field arm refuses a chord whose window passes 4M cells; split long cuts.
+                    let len = ((p.x - a.x).powi(2) + (p.y - a.y).powi(2) + (p.z - a.z).powi(2)).sqrt();
+                    let n = if kind == MoveKind::Rapid { 1 } else { ((len / max_seg).ceil() as usize).max(1) };
+                    for s in 0..n {
+                        let f0 = s as f64 / n as f64;
+                        let f1 = (s + 1) as f64 / n as f64;
+                        let lerp = |f: f64| Point3::new(a.x + (p.x - a.x) * f, a.y + (p.y - a.y) * f, a.z + (p.z - a.z) * f);
+                        let mut m = Move::new(kind, lerp(f0), if s + 1 == n { p } else { lerp(f1) }, fd);
+                        if !upright { m = m.with_axis(ax); }
+                        mv.push(m);
+                    }
                 }
             }
             prev = Some(p);
@@ -345,7 +355,32 @@ fn main() {
         let (tx0, tx1) = (x0 + i0 as f64 * cell, x0 + i1 as f64 * cell);
         let t1 = Instant::now();
         let mut stock = Stock::block(backend, tx0, y0, tx1, y1, z1, cell).unwrap_or_else(|e| die(e.to_string()));
-        if let Err(e) = stock.simulate(&sim_ops) { sim = Err(e.to_string()); }
+        let shank = get("shank").map(|s| num(&s));
+        match (&mut stock, shank) {
+            // --shank: the field arm cuts each tool with its real length above the tip (a finite
+            // solid), not the world-diagonal flank `Stock::simulate` gives it; a tilted tool's
+            // window then stays payable.
+            (Stock::Field(f), Some(len)) => {
+                let tol = (f.cell() * 0.25).max(1e-9);
+                for (t, m) in &ops {
+                    let tool = if t.ball {
+                        SdfTool::Shanked { r: t.radius, shank: len }
+                    } else if let Some(c) = t.corner {
+                        SdfTool::BullNose { r: t.radius, corner: c, flank: len.max(c) }
+                    } else if let Some(cot) = t.cone {
+                        SdfTool::Drill { r: t.radius, cot, flank: len.max(t.radius * cot) }
+                    } else {
+                        SdfTool::Flat { r: t.radius, flank: len }
+                    };
+                    for chunk in m.chunks(4096) {
+                        if let Err(e) = f.subtract_batch(chunk, &tool, tol) { sim = Err(e.to_string()); break; }
+                    }
+                }
+            }
+            _ => {
+                if let Err(e) = stock.simulate(&sim_ops) { sim = Err(e.to_string()); }
+            }
+        }
         sim_s += t1.elapsed().as_secs_f64();
         let t2 = Instant::now();
         for iy in 0..ny {
