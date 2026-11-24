@@ -337,6 +337,20 @@ impl WalkState {
         Self { first: false, last_cut_z: Some(z), above, st: LinkState::default() }
     }
 
+    /// Start a walk already retracted above the cut plane with material top
+    /// `above` (Journeyman spec S5): the first pass enters by descending from
+    /// retract rather than feeding from the cut plane.
+    pub(super) fn retracted(above: f64) -> Self {
+        Self { first: false, last_cut_z: None, above, st: LinkState::default() }
+    }
+
+    /// Raise the material top for subsequent passes at the current level (e.g.
+    /// last-level finishing where upper levels left wall allowance standing up
+    /// to `entry_top`, Journeyman spec S5).
+    pub(super) fn set_above(&mut self, top: f64) {
+        self.above = self.above.max(top);
+    }
+
     /// Record planar cuts already made at the current level so subsequent
     /// stay-down links cannot cross them (Journeyman spec S5).
     pub(super) fn add_level_cuts(&mut self, cuts: &[Vec<Point2>]) {

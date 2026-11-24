@@ -103,8 +103,8 @@ pub use finish_passes::{
     AdaptiveFinish, adaptive_avoid_with_finish, adaptive_flute_covers_wall,
     adaptive_trochoidal_with_finish, adaptive_with_finish,
 };
-pub(crate) use finish_passes::{emit_troch_finish_level, level_runs_finishing};
-pub(crate) use finish_rings::plan_finish_rings;
+pub(crate) use finish_passes::level_runs_finishing;
+pub(crate) use finish_rings::{emit_troch_finish_level, plan_finish_rings};
 
 /// The worst contact angle a trial walk read, and where.
 type Worst = (f64, Point2);

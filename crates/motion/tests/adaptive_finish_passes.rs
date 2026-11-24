@@ -19,8 +19,9 @@ use camcraft_motion::geo2d::{Loop, Point2, Region};
 use camcraft_motion::links::{Link, Links};
 use camcraft_motion::load::DEFAULT_OPTIMAL_LOAD;
 use camcraft_motion::machining2d::{
-    ARC_FIT_TOL, AdaptiveFinish, CornerRelief, FinishLevel, PassStart, PocketParams, PocketStrategy,
-    StartSide, adaptive_flute_covers_wall, adaptive_with_finish, pocket_started_on,
+    ARC_FIT_TOL, AdaptiveFinish, AdaptiveTrochParams, CornerRelief, FinishLevel, PassStart,
+    PocketParams, PocketStrategy, StartSide, adaptive_avoid_with_finish, adaptive_flute_covers_wall,
+    adaptive_trochoidal_with_finish, adaptive_with_finish, pocket_started_on,
 };
 use common::shape_mask::{CutDepth, MaskSpec, ShapeMask};
 
@@ -422,4 +423,192 @@ fn s5_pocket_with_island_finishes_both_walls_with_opposite_senses() {
     assert!(signed_turn(outer_rings[1]) > 0.0, "climb outer boundary must turn CCW");
     assert!(signed_turn(island_rings[1]) < 0.0, "climb island must turn CW");
     assert!(camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty());
+}
+
+/// Regression for R1 BLOCKER 1: under multi-level `finish_level = Last`, the
+/// uncut finishing wall stands all the way up to `top_z`, so no rapid move
+/// onto a finishing pass may descend below `top_z`.
+#[test]
+fn s5_multi_level_last_never_rapids_below_top_z_for_finishing() {
+    let area = rect(-30.0, -20.0, 30.0, 20.0);
+    let mut p = base_params(true);
+    p.top_z = 0.0;
+    p.bottom_z = -6.0;
+    p.stepdown = 2.0; // levels: -2.0, -4.0, -6.0
+    let finish = AdaptiveFinish {
+        finish_passes: 2,
+        finish_spacing: 0.25,
+        spring_passes: 1,
+        finish_level: FinishLevel::Last,
+    };
+    let path = adaptive_with_finish(&area, &p, &CornerRelief::default(), &StartSide::default(), &finish)
+        .expect("multi-level last finish");
+
+    // Any rapid move positioned within the finishing wall band (< 5.5 mm from
+    // a wall) must stay at or above `top_z = 0.0` (never rapiding into uncut
+    // wall stock at z = -4.0 + plunge_height).
+    for (i, m) in path.moves.iter().enumerate() {
+        if m.kind == MoveKind::Rapid {
+            let wall_d = (30.0 - m.to.x.abs()).min(20.0 - m.to.y.abs());
+            if wall_d < 5.5 - 1e-4 {
+                assert!(
+                    m.to.z >= p.top_z - 1e-6,
+                    "move {i} rapids below top_z ({:.3}) into uncut wall band (wall_d={wall_d:.3}): {m:?}",
+                    m.to.z
+                );
+            }
+        }
+    }
+    assert!(camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty());
+}
+
+/// Regression for R1 BLOCKER 2 & MAJOR 1: `adaptive_trochoidal_with_finish`
+/// with `Link::KeepDown` + cleanup never feeds diagonally from `hop` down to
+/// `z`, never rapids into uncut wall stock under `FinishLevel::Last`, stays
+/// crossing-free, and emits finishing rings at `w + d_f` and `w`.
+#[test]
+fn s5_trochoidal_with_finish_keep_down_no_diagonal_feed_and_valid_rings() {
+    let area = rect(0.0, 0.0, 36.0, 16.0);
+    let p = PocketParams {
+        tool_diameter: 6.0,
+        stepover: 2.0,
+        stock_to_leave: 0.0,
+        clearance_z: 10.0,
+        retract_z: Some(2.0),
+        top_z: 0.0,
+        bottom_z: -4.0,
+        stepdown: 2.0,
+        feed: 600.0,
+        plunge_feed: 150.0,
+        climb: true,
+        strategy: PocketStrategy::Adaptive,
+        entry: Entry3D::Helix,
+        helix_radius: 1.5,
+        optimal_load: DEFAULT_OPTIMAL_LOAD,
+        blend_turns: false,
+        blend_radius: None,
+        links: Links { pass: Link::KeepDown, ..Links::PLANAR },
+    };
+    let finish = AdaptiveFinish {
+        finish_passes: 2,
+        finish_spacing: 0.2,
+        spring_passes: 0,
+        finish_level: FinishLevel::Last,
+    };
+    let path = adaptive_trochoidal_with_finish(&area, &p, &AdaptiveTrochParams::default(), None, &finish)
+        .expect("trochoidal finish");
+
+    // Zero diagonal full-feed moves descending from retract (`hop = 2.0`) to cut plane.
+    for (i, m) in path.moves.iter().enumerate() {
+        if m.kind == MoveKind::Feed && m.arc.is_none() && m.from.z > p.top_z + 0.5 && m.to.z < p.top_z - 0.5 {
+            let xy = (m.to.x - m.from.x).hypot(m.to.y - m.from.y);
+            assert!(
+                xy <= 1e-6 || m.feed.is_some_and(|f| f <= p.plunge_feed + 1e-6),
+                "move {i} feeds diagonally from hop ({:.3}) to cut ({:.3}) at full feed: {m:?}",
+                m.from.z,
+                m.to.z
+            );
+        }
+        if m.kind == MoveKind::Rapid {
+            let wall_d = m.to.x.min(36.0 - m.to.x).min(m.to.y).min(16.0 - m.to.y);
+            if wall_d < 3.4 - 1e-4 {
+                assert!(
+                    m.to.z >= p.top_z - 1e-6,
+                    "trochoidal move {i} rapids below top_z ({:.3}) into uncut wall band (wall_d={wall_d:.3})",
+                    m.to.z
+                );
+            }
+        }
+    }
+
+    // Verify both finishing rings at 3.2 mm and 3.0 mm exist at bottom_z = -4.0.
+    let min_wall_at_bottom = path
+        .moves
+        .iter()
+        .filter(|m| m.kind == MoveKind::Feed && (m.from.z + 4.0).abs() < 1e-6 && (m.to.z + 4.0).abs() < 1e-6)
+        .flat_map(|m| m.chords(0.01))
+        .map(|(a, _)| a.x.min(36.0 - a.x).min(a.y).min(16.0 - a.y))
+        .fold(f64::INFINITY, f64::min);
+    assert!(
+        (min_wall_at_bottom - 3.0).abs() < 1e-2,
+        "trochoidal finishing must reach final wall offset 3.0 mm (got {min_wall_at_bottom:.4})"
+    );
+    assert!(camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty());
+}
+
+/// R1 MAJOR 2(b): `adaptive_avoid_with_finish` keeps the full tool clear of a
+/// protected "Do not touch" pin while still finishing the reachable walls.
+#[test]
+fn s5_avoid_with_finish_keeps_clear_of_protected_zone() {
+    use camcraft_motion::geometry::{Point3, Triangle};
+    use camcraft_motion::tools::ToolGeom;
+    use camcraft_motion::verify::{AVOID_VERIFY_TOL, AvoidItem, AvoidSpec, Cutter, avoid_hits};
+
+    let box_facets = |min: [f64; 3], max: [f64; 3]| -> Vec<Triangle> {
+        let v = |i: usize| {
+            Point3::new([min[0], max[0]][i & 1], [min[1], max[1]][(i >> 1) & 1], [min[2], max[2]][(i >> 2) & 1])
+        };
+        let quad = |a: usize, b: usize, c: usize, d: usize| [Triangle::new(v(a), v(b), v(c)), Triangle::new(v(a), v(c), v(d))];
+        [quad(4, 5, 7, 6), quad(0, 2, 3, 1), quad(0, 1, 5, 4), quad(2, 6, 7, 3), quad(1, 3, 7, 5), quad(2, 0, 4, 6)]
+            .into_iter()
+            .flatten()
+            .collect()
+    };
+    let cutter = Cutter::flat(&ToolGeom {
+        radius: 3.0,
+        nose_radius: 0.0,
+        flute_len: 8.0,
+        shank_radius: 4.5,
+        shank_len: 10.0,
+        holder_radius: 12.0,
+        holder_len: 20.0,
+    });
+    let spec = AvoidSpec {
+        items: vec![AvoidItem { label: "east pin".into(), tris: box_facets([28.0, 5.0, -10.0], [33.0, 11.0, 2.0]), edges: vec![] }],
+        cutter,
+        clearance: 1.0,
+    };
+    let area = rect(0.0, 0.0, 36.0, 16.0);
+    let p = PocketParams {
+        tool_diameter: 6.0,
+        stepover: 2.5,
+        stock_to_leave: 0.0,
+        clearance_z: 10.0,
+        retract_z: Some(2.0),
+        top_z: 0.0,
+        bottom_z: -5.0,
+        stepdown: 2.5,
+        feed: 600.0,
+        plunge_feed: 150.0,
+        climb: true,
+        strategy: PocketStrategy::Adaptive,
+        entry: Entry3D::Helix,
+        helix_radius: 1.5,
+        optimal_load: 0.4,
+        blend_turns: false,
+        blend_radius: None,
+        links: Links::ROUGH3D,
+    };
+    let finish = AdaptiveFinish {
+        finish_passes: 2,
+        finish_spacing: 0.2,
+        spring_passes: 0,
+        finish_level: FinishLevel::Every,
+    };
+    let path = adaptive_avoid_with_finish(&area, &p, &spec, &CornerRelief::default(), &StartSide::default(), &finish)
+        .expect("avoid adaptive finish");
+
+    let hits = avoid_hits(&path, &spec, AVOID_VERIFY_TOL).expect("avoid_hits");
+    assert!(hits.is_empty(), "avoid finish must stay clear of protected pin: {hits:?}");
+    assert!(camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty());
+
+    // Reachable western wall (x = 0) gets finished to x = 3.0 mm.
+    let min_x = path
+        .moves
+        .iter()
+        .filter(|m| m.kind == MoveKind::Feed && (m.from.z + 5.0).abs() < 1e-6 && (m.to.z + 5.0).abs() < 1e-6)
+        .flat_map(|m| m.chords(0.01))
+        .map(|(a, _)| a.x)
+        .fold(f64::INFINITY, f64::min);
+    assert!((min_x - 3.0).abs() < 1e-2, "western wall should finish at x=3.0 mm (got {min_x:.4})");
 }

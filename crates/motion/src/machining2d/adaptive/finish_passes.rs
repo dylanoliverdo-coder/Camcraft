@@ -251,14 +251,23 @@ fn adaptive_finish_inside(
     let clear_gap = finish.clearing_gap(p);
     let mut center_clear = non_sliver_center(region, w + clear_gap)?;
     if let Some((ko, _)) = keepout {
-        center_clear = center_clear.difference(ko)?;
+        let ko_clear = if clear_gap > 0.0 { ko.offset(clear_gap)? } else { ko.clone() };
+        center_clear = center_clear.difference(&ko_clear)?;
     }
     if center_clear.is_empty() {
-        return Err(GenError::Invalid(format!(
-            "2D Adaptive finishing: with {} finishing passes of {:.3} mm ({extra:.3} mm wall allowance), \
-             no room remains for clearing - reduce finishing passes or spacing",
-            finish.finish_passes, finish.finish_spacing
-        )));
+        let msg = if finish.finish_passes > 0 {
+            format!(
+                "2D Adaptive finishing: with {} finishing passes of {:.3} mm ({extra:.3} mm wall allowance), \
+                 no room remains for clearing - reduce finishing passes or spacing",
+                finish.finish_passes, finish.finish_spacing
+            )
+        } else {
+            format!(
+                "2D Adaptive finishing: no clearing room remains inside the {clear_gap:.3} mm spring-pass wall skim - \
+                 use a smaller tool or set spring passes to 0"
+            )
+        };
+        return Err(GenError::Invalid(msg));
     }
     let p_clear = PocketParams { stock_to_leave: p.stock_to_leave + clear_gap, ..*p };
     let (clear_passes, clear_notes, clear_strategy, clear_room, clear_joins) =
@@ -337,6 +346,9 @@ fn adaptive_finish_inside(
         for &z in &zs {
             walk_one_level(b, z, &clear_passes, c_runs, &clear_motion, Some(&clear_cert), Some(&clear_links_cert), None, &mut ws);
             if level_runs_finishing(finish, &zs, z) && !fp_slice.is_empty() {
+                if finish.finish_level == FinishLevel::Last && zs.len() > 1 {
+                    ws.set_above(fin_motion.top_z);
+                }
                 ws.add_level_cuts(&clear_passes);
                 walk_one_level(b, z, fp_slice, fr_slice, &fin_motion, Some(&fin_cert), Some(&fin_cert), None, &mut ws);
             }
@@ -356,33 +368,4 @@ fn adaptive_finish_inside(
         return Err(GenError::Invalid("path left the finite horizon".into()));
     }
     Ok(path)
-}
-
-/// Emit wall finishing rings at level `z` after trochoidal clearing/cleanup.
-pub(crate) fn emit_troch_finish_level(
-    bld: &mut PathBuilder,
-    fin_passes: &[Vec<Point2>],
-    fin_runs: &[Vec<Seg>],
-    center_final: &Region,
-    p: &PocketParams,
-    z: f64,
-    above: f64,
-) {
-    if fin_passes.is_empty() {
-        return;
-    }
-    let fin_motion = Motion::new(p.clearance_z, p.retract_z, p.feed, p.plunge_feed)
-        .with_entry(p.entry, p.helix_radius).with_arc_radius(p.tool_diameter)
-        .with_links(p.links, p.helix_radius).with_top(above).with_solid_restart().with_cleared_links(true);
-    let cert = Cert::Region(center_final);
-    let prior_cuts: Vec<Vec<Point2>> = bld
-        .moves()
-        .iter()
-        .filter(|m| m.kind == MoveKind::Feed && (m.from.z - z).abs() < 1e-6 && (m.to.z - z).abs() < 1e-6)
-        .map(|m| vec![Point2::new(m.from.x, m.from.y), Point2::new(m.to.x, m.to.y)])
-        .collect();
-    let mut ws = WalkState::resumed_at(z, above);
-    ws.add_level_cuts(&prior_cuts);
-    walk_one_level(bld, z, fin_passes, Some(fin_runs), &fin_motion, Some(&cert), Some(&cert), None, &mut ws);
-    ws.finish(bld, &fin_motion);
 }

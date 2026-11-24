@@ -178,7 +178,10 @@ pub(super) fn trochoidal_inside_finish(
         )));
     }
     let center = match keepout {
-        Some(ko) if !ko.is_empty() => center.difference(ko)?,
+        Some(ko) if !ko.is_empty() => {
+            let ko_clear = if extra > 0.0 { ko.offset(extra)? } else { ko.clone() };
+            center.difference(&ko_clear)?
+        }
         _ => center,
     };
     if center.is_empty() {
@@ -226,10 +229,13 @@ pub(super) fn trochoidal_inside_finish(
             && super::adaptive::level_runs_finishing(f, &zs, z)
         {
             let at = bld.at();
+            let fin_above = if f.finish_level == super::contour_passes::FinishLevel::Last && zs.len() > 1 {
+                p_orig.links.approach.entry_top(p_orig.top_z)
+            } else {
+                above
+            };
             let fin_passes = super::adaptive::plan_finish_rings(region, p_orig, f, keepout, Point2::new(at.x, at.y))?;
-            let fin_runs: Vec<Vec<super::arcs::Seg>> =
-                fin_passes.iter().map(|ring| super::arcs::fit_arcs(ring, super::ARC_FIT_TOL)).collect();
-            super::adaptive::emit_troch_finish_level(&mut bld, &fin_passes, &fin_runs, &center_final, p_orig, z, above);
+            super::adaptive::emit_troch_finish_level(&mut bld, &fin_passes, &center_final, p_orig, z, fin_above);
         }
         above = z;
     }
