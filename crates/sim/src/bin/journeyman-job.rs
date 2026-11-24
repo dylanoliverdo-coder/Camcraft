@@ -597,6 +597,50 @@ type NcOp = (i64, Option<i64>, Vec<Move>, Vec<usize>);
 /// Our post's G-code -> runs of moves per (tool number, operation), in program order: the moves and, for each move,
 /// its 1-based NC line. The operation is the id in our post's `(JOURNEYMAN OPERATION ID n)` comment (None before
 /// the first one).
+/// The project's own oriented path (CAMotics `path`: one dict per move, X Y Z in mm, `tool`, `type`
+/// rapid|cutting, `feed`, `operation_id`, `line`, and `tool_orientation` [x, y, z, w], the unit quaternion
+/// that turns the vertical tool onto the move's tool axis). Indexed and posed jobs carry their tilt here and
+/// not in the NC file. Each move's axis is q applied to +Z; an upright axis stays None (the column case).
+fn read_path(path: &[Value], max_seg: f64) -> Vec<NcOp> {
+    let mut ops: Vec<NcOp> = Vec::new();
+    let mut prev: Option<Point3> = None;
+    for (i, d) in path.iter().enumerate() {
+        let c = |k: &str| d[k].as_f64().unwrap_or_else(|| die(format!("path move {i}: no {k}")));
+        let p = Point3::new(c("X"), c("Y"), c("Z"));
+        let Some(a) = prev.replace(p) else { continue };
+        if (a.x - p.x).abs() + (a.y - p.y).abs() + (a.z - p.z).abs() <= 1e-12 { continue; }
+        let tool = d["tool"].as_i64().unwrap_or(0);
+        let op = d["operation_id"].as_i64();
+        let ln = d["line"].as_u64().unwrap_or(0) as usize;
+        let cutting = d["type"].as_str() != Some("rapid");
+        let feed = d["feed"].as_f64().filter(|f| *f > 0.0);
+        let mut m = Move::new(if cutting { MoveKind::Feed } else { MoveKind::Rapid }, a, p, if cutting { feed } else { None });
+        if let Some(q) = d["tool_orientation"].as_array() {
+            let q: Vec<f64> = q.iter().map(|v| v.as_f64().unwrap_or(f64::NAN)).collect();
+            if q.len() != 4 || q.iter().any(|v| !v.is_finite()) { die(format!("path move {i}: tool_orientation is not 4 numbers")); }
+            let n = (q.iter().map(|v| v * v).sum::<f64>()).sqrt();
+            if (n - 1.0).abs() > 1e-6 { die(format!("path move {i}: tool_orientation is not a unit quaternion")); }
+            let (x, y, z, w) = (q[0] / n, q[1] / n, q[2] / n, q[3] / n);
+            let ax = [2.0 * (x * z + w * y), 2.0 * (y * z - w * x), 1.0 - 2.0 * (x * x + y * y)];
+            if !(ax[0].abs() < 1e-12 && ax[1].abs() < 1e-12 && ax[2] > 0.0) { m = m.with_axis(ax); }
+        }
+        // A long cut in pieces of at most max_seg (the field arm refuses a chord whose window passes 4M cells).
+        let len = ((p.x - a.x).powi(2) + (p.y - a.y).powi(2) + (p.z - a.z).powi(2)).sqrt();
+        let n = if cutting { ((len / max_seg).ceil() as usize).max(1) } else { 1 };
+        let lerp = |f: f64| Point3::new(a.x + (p.x - a.x) * f, a.y + (p.y - a.y) * f, a.z + (p.z - a.z) * f);
+        for s in 0..n {
+            let end = if s + 1 == n { p } else { lerp((s + 1) as f64 / n as f64) };
+            let mut piece = Move::new(m.kind, lerp(s as f64 / n as f64), end, m.feed);
+            if let Some(ax) = m.axis { piece = piece.with_axis(ax); }
+            match ops.last_mut() {
+                Some((t, o, v, l)) if *t == tool && *o == op => { v.push(piece); l.push(ln); }
+                _ => ops.push((tool, op, vec![piece], vec![ln])),
+            }
+        }
+    }
+    ops
+}
+
 fn read_nc(path: &str) -> Vec<NcOp> {
     let src = std::fs::read_to_string(path).unwrap_or_else(|e| die(format!("cannot read {path}: {e}")));
     let mut ops: Vec<NcOp> = Vec::new();
@@ -835,14 +879,21 @@ fn main() {
         let f = |a: &str, k: usize| w[a][k].as_f64().unwrap_or_else(|| die("workpiece bounds".into()));
         let b = [f("min", 0), f("min", 1), f("min", 2), f("max", 0), f("max", 1), f("max", 2)];
         let cell = get("cell").map(|s| num(&s)).or(proj["resolution"].as_f64()).unwrap_or(0.254);
-        let nc = proj["files"][0].as_str().unwrap_or_else(|| die("no NC file".into())).to_string();
+        // A project with its own oriented path (indexed / posed jobs) is cut from that path; else from its NC file.
+        let source = match proj["path"].as_array().filter(|p| !p.is_empty()) {
+            Some(path) => read_path(path, get("max-seg").map(|s| num(&s)).unwrap_or(f64::INFINITY)),
+            None => read_nc(proj["files"][0].as_str().unwrap_or_else(|| die("no NC file".into()))),
+        };
         let mut ops = Vec::new();
-        for (t, opid, mv, lines) in read_nc(&nc) {
+        for (t, opid, mv, lines) in source {
             let rec = &proj["tools"][t.to_string()];
             let len = rec["length"].as_f64().filter(|l| *l > 0.0 && rec["shape"].as_str() != Some("conical"));
             match profile_atoms(rec) {
                 Some(Err(e)) => die(format!("tool {t}: {e}")),
                 Some(Ok(atoms)) => {
+                    if atoms.iter().any(|(_, d)| *d != [0.0; 3]) && mv.iter().any(|m| m.axis.is_some()) {
+                        die(format!("tool {t}: a stacked profile is lifted along +Z; posed moves would need it along their own axis"));
+                    }
                     if !profiled.contains(&t) { profiled.push(t); }
                     // The first atom carries the shank check (its own tip); the rest are the same tool's form.
                     for (k, (ts, d)) in atoms.into_iter().enumerate() {
@@ -1290,5 +1341,32 @@ mod per_move_tests {
             assert_eq!(bulk.top(x, y).to_bits(), each.top(x, y).to_bits(), "column ({x}, {y})");
         } }
         assert!(secs < 10.0, "4000 one-move calls took {secs} s");
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn the_oriented_path_carries_each_moves_tool_axis() {
+        let h = std::f64::consts::FRAC_1_SQRT_2;
+        let path: Vec<Value> = serde_json::from_value(serde_json::json!([
+            {"X": 0.0, "Y": 0.0, "Z": 10.0, "tool": 0, "type": "rapid", "feed": 0.0, "operation_id": 1, "line": 2},
+            {"X": 5.0, "Y": 0.0, "Z": 10.0, "tool": 3, "type": "cutting", "feed": 100.0, "operation_id": 1, "line": 3,
+             "tool_orientation": [h, 0.0, 0.0, h]},
+            {"X": 9.0, "Y": 0.0, "Z": 10.0, "tool": 3, "type": "cutting", "feed": 100.0, "operation_id": 2, "line": 4,
+             "tool_orientation": [0.0, 0.0, 0.0, 1.0]},
+            {"X": 9.0, "Y": 4.0, "Z": 10.0, "tool": 3, "type": "cutting", "feed": 100.0, "operation_id": 2, "line": 5,
+             "tool_orientation": [0.0, h, 0.0, h]}
+        ])).unwrap();
+        let ops = read_path(&path, f64::INFINITY);
+        assert_eq!(ops.len(), 2, "one run per (tool, operation)");
+        let a = ops[0].2[0].axis.expect("90 deg about X is posed");
+        assert!(a[0].abs() < 1e-12 && (a[1] + 1.0).abs() < 1e-12 && a[2].abs() < 1e-12, "{a:?}");
+        assert!(ops[1].2[0].axis.is_none(), "the identity pose is upright");
+        let b = ops[1].2[1].axis.expect("90 deg about Y is posed");
+        assert!((b[0] - 1.0).abs() < 1e-12 && b[1].abs() < 1e-12 && b[2].abs() < 1e-12, "{b:?}");
+        assert_eq!(ops[1].3, vec![4, 5], "each move keeps its NC line");
     }
 }
