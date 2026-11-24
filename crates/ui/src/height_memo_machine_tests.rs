@@ -58,6 +58,7 @@ fn advice(state: &State) -> Option<String> {
         Some("Setup1"),
         &SrcRef::Stock,
         &OpParams::Drill {
+            chamfer_width: 0.0,
             clearance_z: Height::fixed(2.0),
             retract_z: None,
             top_z: Height::fixed(0.0),

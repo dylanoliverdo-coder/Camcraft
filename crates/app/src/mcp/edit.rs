@@ -101,6 +101,10 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
     if let OpParams::WireContour(wire) = &next {
         back.insert("taper_deg".into(), json!(wire.taper_deg));
     }
+    // Drill's zero width is deliberately omitted from saved projects.
+    if let OpParams::Drill { chamfer_width, .. } = &next {
+        back.insert("chamfer_width".into(), json!(chamfer_width));
+    }
     // An opt-in flag (`blend_turns`) is written only when ON, so `false`
     // never comes back: it is kept when `true` would have come back.
     for (k, v) in patch {

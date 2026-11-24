@@ -64,6 +64,7 @@ fn configured_spot(depth: f64, stock_top: f64, diameter: f64, tip_angle: f64) ->
     tool.tip_angle = tip_angle;
     history.execute(&world, AddTool::new(&world, "Spot6", tool).expect("spot tool"));
     let params = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(TOP + 15.0),

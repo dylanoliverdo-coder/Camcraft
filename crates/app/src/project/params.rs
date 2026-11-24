@@ -662,6 +662,8 @@ pub enum ParamsDto {
     /// produced is what the file holds, and the source digest makes a
     /// moved model mark the op Stale beside it.
     Drill {
+        #[serde(default, skip_serializing_if = "is_zero")]
+        chamfer_width: f64,
         clearance_z: HeightDto,
         /// Absent means the hop-to-clearance every drilling default
         /// uses, like the pocket family's.

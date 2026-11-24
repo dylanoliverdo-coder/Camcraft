@@ -193,6 +193,7 @@ fn a_cross_drill_on_a_mill_is_refused_before_any_traverse() {
     let hole = || CrossHole { origin: Point3::new(10.0, 0.0, 0.0), dir: Point3::new(-1.0, 0.0, 0.0), radius: 2.0, entry_d: 0.0, floor_d: -6.0, through: false };
     h.execute(&world, ImportModel::from_mesh("B", punched_bar::punched_bar(10.0, punched_bar::FOOT, punched_bar::TOP, &[hole()])));
     let p = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(25.0),

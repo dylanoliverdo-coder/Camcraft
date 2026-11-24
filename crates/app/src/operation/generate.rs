@@ -2628,6 +2628,7 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             (region, path)
         }
         OpParams::Drill {
+            chamfer_width,
             cycle,
             peck,
             dwell,
@@ -2639,6 +2640,10 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             break_through_from,
             ..
         } => {
+            let chamfering = *chamfer_width > 0.0;
+            if chamfering && (!cross.is_empty() || lathe_axial) {
+                return Err(GenError::Invalid("Chamfer width requires mill Z holes".into()));
+            }
             // #1557: the stated break-through drives the mill's Z holes;
             // the turret's axial and radial holes keep their own exit.
             if break_through.is_some() && (!cross.is_empty() || lathe_axial) {
@@ -2758,20 +2763,20 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
                     drilling::axial_doors(&material.facets, holes, d, hl.bottom, drilling::THROUGH_CLEAR)?;
                 }
                 let run = break_through.unwrap_or(drilling::THROUGH_CLEAR);
-                let tip_run = if hl.bottom.is_none() && holes.iter().any(|h| h.through) {
+                let tip_run = if !chamfering && hl.bottom.is_none() && holes.iter().any(|h| h.through) {
                     drilling::through_tip_run(&tool, *cycle, run, tip_from)?
                 } else {
                     0.0
                 };
                 // Spot stops at the entry dimple, regardless of a through floor.
-                if hl.bottom.is_none() && !lathe_axial && *cycle != drilling::CycleChoice::Spot {
+                if !chamfering && hl.bottom.is_none() && !lathe_axial && *cycle != drilling::CycleChoice::Spot {
                     broke = super::break_through::deepest(
                         holes.iter().filter(|h| h.through).map(|h| (h.xy, h.floor_z - tip_run)),
                         tip_run,
                     );
                 }
                 drilling::drill(&drilling::CycleParams {
-                    chamfer_width: 0.0,
+                    chamfer_width: *chamfer_width,
                     through_clear: run,
                     break_through_from: tip_from,
                     clearance_z: hl.clearance,

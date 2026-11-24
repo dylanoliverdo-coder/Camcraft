@@ -18,6 +18,7 @@ fn hole(x: f64, dia: f64) -> Hole {
 fn drill_op(cycle: CycleChoice, holes: Vec<Hole>) -> OpParams {
     use crate::operation::Height;
     OpParams::Drill {
+        chamfer_width: 0.0,
         clearance_z: Height::fixed(30.0),
         retract_z: None,
         top_z: Height::fixed(10.0),

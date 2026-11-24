@@ -87,6 +87,7 @@ fn build_air_cut_world(spindle_rpm: f64) -> World {
         Hole { xy: Point2::new(40.0, 20.0), radius: 2.5, entry_z: 20.0, floor_z: 14.0, through: false, stepped: false },
     ];
     let drill = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(30.0),

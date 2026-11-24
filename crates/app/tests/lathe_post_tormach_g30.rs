@@ -72,6 +72,7 @@ fn drill_world() -> (World, History) {
     let (world, mut history) = world_with(bar, stock, -20.0, &["DR-0400"], false);
     let hole = Hole { xy: Point2::new(0.0, 0.0), radius: 2.05, entry_z: 20.0, floor_z: 10.0, through: false, stepped: false };
     let params = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(30.0),

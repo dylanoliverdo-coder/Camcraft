@@ -100,6 +100,7 @@ fn world() -> (World, History) {
 fn drill(tip: f64, radius: f64) -> OpParams {
     let hole = Hole { xy: Point2::new(0.0, 0.0), radius, entry_z: TOP, floor_z: tip, through: false, stepped: false };
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(TOP + 15.0),

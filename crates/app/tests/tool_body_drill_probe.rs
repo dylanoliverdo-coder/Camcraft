@@ -93,6 +93,7 @@ fn drill_op() -> Operation {
         "DR-0400",
         "part",
         OpParams::Drill {
+            chamfer_width: 0.0,
             break_through: None,
             break_through_from: Default::default(),
             clearance_z: Height::fixed(50.0),

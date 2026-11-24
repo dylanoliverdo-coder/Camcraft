@@ -29,6 +29,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             cross,
             break_through,
             break_through_from,
+            ..
         } => {
             if tab == SEC_GEO {
                 field(ui, "Holes");

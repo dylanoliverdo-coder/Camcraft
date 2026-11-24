@@ -396,6 +396,13 @@ pub fn resolve_params_with(
         // The drill bottom is an override of the whole pattern, not a
         // requirement: each hole's own floor is the default depth, so an
         // unresolved (None) bottom is the normal shape, not a failure.
+        OpParams::Drill { clearance_z, retract_z, top_z, chamfer_width, .. } if *chamfer_width > 0.0 => (
+            req("Clearance Z", *clearance_z)?,
+            Some(req("Top of Part Z", *top_z)?),
+            None,
+            None,
+            opt("Retract Z", *retract_z)?,
+        ),
         OpParams::Drill { clearance_z, retract_z, top_z, bottom_z, .. }
         // The boring ride and the thread mill carry the drill's four
         // heights verbatim (M2.4 C) - the floors ride the holes, the

@@ -118,6 +118,7 @@ fn finish() -> OpParams {
 fn drill() -> OpParams {
     let hole = Hole { xy: Point2::new(C.0, C.1), radius: 4.0, entry_z: 10.0, floor_z: 0.0, through: true, stepped: false };
     OpParams::Drill {
+        chamfer_width: 0.0,
         clearance_z: Height::fixed(CLEAR),
         retract_z: None,
         top_z: Height::fixed(12.0),

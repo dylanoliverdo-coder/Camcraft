@@ -110,6 +110,7 @@ fn a_bar_whose_shank_outgrows_its_head_is_judged_by_its_full_shank() {
     history.execute(&world, AddTool::new(&world, "DR-1300-L", drill).expect("a sane drill"));
     let hole = Hole { xy: Point2::new(0.0, 0.0), radius: 6.55, entry_z: 50.0, floor_z: -16.0, through: false, stepped: false };
     let drill_params = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(60.0),

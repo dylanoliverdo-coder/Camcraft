@@ -20,6 +20,7 @@ impl OpParams {
         let wh_opt = |h: &mut std::hash::DefaultHasher, v: Option<Height>| digest::wh_opt(world, setup, src, h, v);
         match self {
             OpParams::Drill {
+                chamfer_width,
                 clearance_z,
                 retract_z,
                 top_z,
@@ -44,6 +45,10 @@ impl OpParams {
                 // `FullDiameter` writes `0xB8` so switching invalidates cache.
                 if *break_through_from == crate::drilling::BreakThroughFrom::FullDiameter {
                     h.write_u8(0xB8);
+                }
+                if *chamfer_width != 0.0 {
+                    h.write_u8(0xB9);
+                    w(h, *chamfer_width);
                 }
                 wh(h, *clearance_z);
                 wh(h, *top_z);

@@ -77,6 +77,7 @@ fn op(cross: Vec<CrossHole>) -> Operation {
         tool: "DR-0400".into(),
         src: SrcRef::Entity("bar".into()),
         params: OpParams::Drill {
+            chamfer_width: 0.0,
             break_through: None,
             break_through_from: Default::default(),
             clearance_z: Height::fixed(20.0 + R_D),
