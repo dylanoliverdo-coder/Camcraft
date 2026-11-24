@@ -57,6 +57,20 @@ fn depth_reads_the_included_angle_and_each_hole_mouth() {
 }
 
 #[test]
+fn chamfer_width_changes_depth_without_rewriting_the_cycle_choice() {
+    let tool = spot_tool(90.0);
+    let holes = [hole(9.0, 9.0, 3.3)];
+    let mut p = params(&tool, &holes, 0.5);
+    for (choice, kind) in [(CycleChoice::Auto, CycleKind::Drill), (CycleChoice::Peck, CycleKind::Peck)] {
+        p.cycle = choice;
+        let path = drilling::drill(&p).expect("the selected drilling cycle");
+        let cut = &path.cycles[0];
+        assert_eq!(cut.kind, kind);
+        assert!((cut.bottom_z + 3.8).abs() < 1e-9);
+    }
+}
+
+#[test]
 fn an_oversize_chamfer_skips_only_that_hole_and_names_its_position() {
     let tool = spot_tool(90.0);
     let holes = [hole(-9.0, -9.0, 5.75), hole(9.0, 9.0, 0.0)];

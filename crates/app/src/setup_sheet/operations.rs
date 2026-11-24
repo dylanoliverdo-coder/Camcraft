@@ -115,17 +115,23 @@ fn render_cycles(
         return;
     }
     let tool = model::find_by_name(world, tool_name).and_then(|e| model::tool_of(world, &e));
+    let r_z = operation::resolve_height(world, op_setup, Some(src), *top_z);
+    let cycle_label = |bottom: f64| match cycle {
+        CycleChoice::Auto => match (&tool, r_z) {
+            (Some(t), Some(r)) if (r - bottom).is_finite() && t.diameter.is_finite() => {
+                kind_label(drilling::auto_kind(t.kind, r - bottom, t.diameter))
+            }
+            _ => "auto".to_string(),
+        },
+        other => choice_label(*other).to_lowercase(),
+    };
     if *chamfer_width > 0.0 {
         out.push_str(&format!("      Chamfer width {} mm\n", mm(*chamfer_width)));
         if let Some(tool) = &tool {
-            let kind = match cycle {
-                CycleChoice::Auto => "spot".to_owned(),
-                other => choice_label(*other).to_lowercase(),
-            };
             for (i, hole) in holes.iter().enumerate() {
-                let detail = match drilling::chamfer_tip_z(hole, tool, *chamfer_width) {
-                    Ok(z) => format!("bottom {}", mm(z)),
-                    Err(why) => format!("skipped: {why}"),
+                let (kind, detail) = match drilling::chamfer_tip_z(hole, tool, *chamfer_width) {
+                    Ok(z) => (cycle_label(z), format!("bottom {}", mm(z))),
+                    Err(why) => ("-".to_owned(), format!("skipped: {why}")),
                 };
                 out.push_str(&format!(
                     "      hole {:>2}  {:<10} X {}  Y {}  {detail}\n",
@@ -135,20 +141,11 @@ fn render_cycles(
         }
         return;
     }
-    let r_z = operation::resolve_height(world, op_setup, Some(src), *top_z);
     let override_z =
         (*bottom_z).and_then(|b| operation::resolve_height(world, op_setup, Some(src), b));
     for (i, h) in holes.iter().enumerate() {
         let bottom = override_z.unwrap_or(h.floor_z);
-        let kind = match cycle {
-            CycleChoice::Auto => match (&tool, r_z) {
-                (Some(t), Some(r)) if (r - bottom).is_finite() && t.diameter.is_finite() => {
-                    kind_label(drilling::auto_kind(t.kind, r - bottom, t.diameter))
-                }
-                _ => "auto".to_string(),
-            },
-            other => choice_label(*other).to_lowercase(),
-        };
+        let kind = cycle_label(bottom);
         let thru = if h.through { "  thru" } else { "" };
         out.push_str(&format!(
             "      hole {:>2}  {:<10} X {}  Y {}  bottom {}{thru}\n",

@@ -100,7 +100,6 @@ pub fn drill(p: &CycleParams) -> Result<Toolpath, GenError> {
             ));
         }
         let kind = match p.cycle {
-            CycleChoice::Auto if chamfering => CycleKind::Spot,
             CycleChoice::Auto => auto_kind(p.tool.kind, p.r_z - bottom, d),
             _ => resolve_choice(p),
         };
