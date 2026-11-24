@@ -5,6 +5,8 @@
 # lane_job.py; empty runs cargo directly). --locked: the build uses Cargo.lock as committed.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+# The record names HEAD: a tree with uncommitted changes would make it name a commit the binary is not.
+git diff --quiet HEAD -- || { echo "build.sh: uncommitted changes in $PWD; commit or build from a clean worktree" >&2; exit 1; }
 export CARGO_TARGET_DIR="${JM_TARGET:-$PWD/target-jm}"
 CARGO="${CARGO:-cargo}"
 # Reproducible: no absolute build paths in the binary.

@@ -29,6 +29,9 @@
 //!   --out-closed-stl <file>     column arm: write the stock as a closed mesh
 //!   --matrix a,b,...            16 numbers, row-major: setup-to-part for --out-closed-stl
 //!   --move-lines <file.json>    camotics input: write each op's per-move NC line numbers
+//!   --progressive <spec.json>   column arm: after each operation (JOURNEYMAN OPERATION ID n in
+//!                               the NC), read sample points of each placed part copy against
+//!                               the stock; per-operation surface on the cut / past the line
 //!   --tool flat|ball|bull D [corner]   rows input only
 //!   --stock x0 y0 z0 x1 y1 z1   rows input only (same units as the rows)
 //!   --scale <k>                 rows input only: multiply lengths (25.4)
@@ -586,20 +589,29 @@ fn refused_word(g: u32) -> Option<&'static str> {
     }
 }
 
-/// Our post's G-code -> per tool number, in program order: the moves and, for each move, its 1-based NC line.
-fn read_nc(path: &str) -> Vec<(i64, Vec<Move>, Vec<usize>)> {
+/// One run of moves of one tool within one operation, in program order.
+type NcOp = (i64, Option<i64>, Vec<Move>, Vec<usize>);
+
+/// Our post's G-code -> runs of moves per (tool number, operation), in program order: the moves and, for each move,
+/// its 1-based NC line. The operation is the id in our post's `(JOURNEYMAN OPERATION ID n)` comment (None before
+/// the first one).
+fn read_nc(path: &str) -> Vec<NcOp> {
     let src = std::fs::read_to_string(path).unwrap_or_else(|e| die(format!("cannot read {path}: {e}")));
-    let mut ops: Vec<(i64, Vec<Move>, Vec<usize>)> = Vec::new();
+    let mut ops: Vec<NcOp> = Vec::new();
     let (mut pos, mut have) = ([0.0f64; 3], false);
     let (mut tool, mut modal, mut plane) = (0i64, 0u8, 17u8);
+    let mut op: Option<i64> = None;
     let mut feed = 1000.0;
     let mut ln = 0usize;
-    let push = |tool: i64, m: Move, ln: usize, ops: &mut Vec<(i64, Vec<Move>, Vec<usize>)>| match ops.last_mut() {
-        Some((t, v, l)) if *t == tool => { v.push(m); l.push(ln); }
-        _ => ops.push((tool, vec![m], vec![ln])),
+    let push = |tool: i64, op: Option<i64>, m: Move, ln: usize, ops: &mut Vec<NcOp>| match ops.last_mut() {
+        Some((t, o, v, l)) if *t == tool && *o == op => { v.push(m); l.push(ln); }
+        _ => ops.push((tool, op, vec![m], vec![ln])),
     };
     for raw in src.lines() {
         ln += 1;
+        if let Some(i) = raw.find("JOURNEYMAN OPERATION ID") {
+            op = raw[i + 23..].trim().trim_end_matches(')').trim().parse::<i64>().ok().or(op);
+        }
         let line = match raw.find('(') { Some(i) => &raw[..i], None => raw }.trim();
         if line.is_empty() { continue; }
         if let Some((g, why)) = g_words(line).into_iter().find_map(|g| refused_word(g).map(|w| (g, w))) {
@@ -630,7 +642,7 @@ fn read_nc(path: &str) -> Vec<(i64, Vec<Move>, Vec<usize>)> {
             let full = (to[0] - pos[0]).abs() < 1e-9 && (to[1] - pos[1]).abs() < 1e-9 && (to[2] - pos[2]).abs() < 1e-9;
             if plane == 17 && !full {
                 let c = Point2::new(pos[0] + i, pos[1] + j);
-                push(tool, Move::new(kind, p3(pos), p3(to), fd).with_arc(c, ccw), ln, &mut ops);
+                push(tool, op, Move::new(kind, p3(pos), p3(to), fd).with_arc(c, ccw), ln, &mut ops);
             } else {
                 let (pl, c) = match plane {
                     18 => ((2usize, 0usize, 1usize), [pos[2] + k, pos[0] + i]),
@@ -640,16 +652,135 @@ fn read_nc(path: &str) -> Vec<(i64, Vec<Move>, Vec<usize>)> {
                 // G18 views from +Y: Z->X is CCW (RS-274), handled by the (z, x) pair.
                 let mut prev = pos;
                 for p in arc_points(pos, to, c, ccw, pl, 0.002) {
-                    push(tool, Move::new(kind, p3(prev), p3(p), fd), ln, &mut ops);
+                    push(tool, op, Move::new(kind, p3(prev), p3(p), fd), ln, &mut ops);
                     prev = p;
                 }
             }
         } else if to != pos {
-            push(tool, Move::new(kind, p3(pos), p3(to), fd), ln, &mut ops);
+            push(tool, op, Move::new(kind, p3(pos), p3(to), fd), ln, &mut ops);
         }
         pos = to;
     }
     ops
+}
+
+/// `--progressive`: each part copy's surface read toolpath by toolpath against the stock the group's earlier
+/// toolpaths left (the column engine's stock: one material height per column). A copy is a set of surface samples
+/// (point, outward normal, area, face index, setup frame mm). After each operation a sample is past the line when
+/// the material `line` inside its surface is gone, and on the cut when the material `line` outside is gone while
+/// the inside one stands. Each sample keeps the first operation that made it so; the state before the first
+/// operation is kept apart (never counted to a toolpath).
+struct PartCopy {
+    key: String,
+    s: Vec<[f32; 8]>,          // x y z nx ny nz area face (face as f32 bits)
+    past: Vec<u32>,            // first evaluation index past the line (u32::MAX: never)
+    on: Vec<u32>,              // first evaluation index on the cut
+    unmeasured: Vec<bool>,     // the inside or outside point is in another X tile or off the stock's columns
+}
+
+struct Progressive {
+    line: f64,
+    z0: f64,
+    copies: Vec<PartCopy>,
+    order: Vec<i64>,           // operation ids, program order
+}
+
+const BEFORE: u32 = u32::MAX - 1;
+const NEVER: u32 = u32::MAX;
+
+impl Progressive {
+    fn load(path: &str, z0: f64, op_ids: &[Option<i64>]) -> Self {
+        let spec: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap_or_else(|e| die(format!("{path}: {e}"))))
+            .unwrap_or_else(|e| die(format!("{path}: {e}")));
+        let line = spec["line_mm"].as_f64().filter(|l| *l > 0.0).unwrap_or_else(|| die("progressive: line_mm".into()));
+        let mut copies = Vec::new();
+        for c in spec["copies"].as_array().unwrap_or_else(|| die("progressive: copies".into())) {
+            let f = c["samples"].as_str().unwrap_or_else(|| die("progressive: samples".into()));
+            let b = std::fs::read(f).unwrap_or_else(|e| die(format!("{f}: {e}")));
+            if b.len() % 32 != 0 { die(format!("{f}: not 32-byte samples")); }
+            let s: Vec<[f32; 8]> = b.chunks_exact(32).map(|r| {
+                let mut a = [0f32; 8];
+                for (k, v) in a.iter_mut().enumerate() { *v = f32::from_le_bytes(r[4 * k..4 * k + 4].try_into().unwrap()); }
+                a
+            }).collect();
+            let n = s.len();
+            copies.push(PartCopy { key: c["key"].as_str().unwrap_or("?").to_string(), s, past: vec![NEVER; n], on: vec![NEVER; n],
+                               unmeasured: vec![false; n] });
+        }
+        let mut order = Vec::new();
+        for id in op_ids.iter().flatten() { if !order.contains(id) { order.push(*id); } }
+        Progressive { line, z0, copies, order }
+    }
+
+    /// Read every sample whose point lies in this X tile against the tile's stock; `at` is the evaluation index.
+    fn eval(&mut self, stock: &Stock, tx0: f64, tx1: f64, last_tile: bool, at: u32) {
+        let (line, z0) = (self.line, self.z0);
+        let in_tile = |x: f64| x >= tx0 && (x < tx1 || (last_tile && x <= tx1));
+        for c in &mut self.copies {
+            for k in 0..c.s.len() {
+                let s = c.s[k];
+                if !in_tile(s[0] as f64) || c.unmeasured[k] { continue; }
+                let p = [s[0] as f64, s[1] as f64, s[2] as f64];
+                let nrm = [s[3] as f64, s[4] as f64, s[5] as f64];
+                let q = |sgn: f64| [p[0] + sgn * line * nrm[0], p[1] + sgn * line * nrm[1], p[2] + sgn * line * nrm[2]];
+                let (qi, qo) = (q(-1.0), q(1.0));
+                if !in_tile(qi[0]) || !in_tile(qo[0]) { c.unmeasured[k] = true; continue; }
+                // Gone: below the stock's bottom, or above the column's top (a column with no top is off the grid).
+                let mut off = false;
+                let mut gone = |r: [f64; 3]| -> bool {
+                    if r[2] < z0 { return true; }
+                    let t = stock.top(r[0], r[1]);
+                    if t.is_nan() { off = true; return true; }
+                    !(r[2] < t)
+                };
+                let (gi, go) = (gone(qi), gone(qo));
+                if off { c.unmeasured[k] = true; continue; }
+                if gi && c.past[k] == NEVER { c.past[k] = at; }
+                if go && !gi && c.on[k] == NEVER { c.on[k] = at; }
+            }
+        }
+    }
+
+    /// Per copy, per operation in program order: surface newly on the cut and newly past the line (mm2), faces
+    /// first entered, faces first cut to size (some of the face on the cut and none of it past the line, at the
+    /// first operation where that holds), plus what stood before the first operation.
+    fn report(&self) -> Value {
+        let n = self.order.len() as u32;
+        let mut copies = serde_json::Map::new();
+        for c in &self.copies {
+            let face = |k: usize| c.s[k][7].to_bits();
+            let (mut on_a, mut past_a) = (vec![0.0f64; n as usize], vec![0.0f64; n as usize]);
+            let (mut before_on, mut before_past, mut unmeasured_a, mut area) = (0.0, 0.0, 0.0, 0.0);
+            let mut faces: BTreeMap<u32, (u32, u32)> = BTreeMap::new();   // face -> (first past, first on by a toolpath)
+            for k in 0..c.s.len() {
+                let a = c.s[k][6] as f64;
+                area += a;
+                if c.unmeasured[k] { unmeasured_a += a; continue; }
+                let e = faces.entry(face(k)).or_insert((NEVER, NEVER));
+                // A face any of whose surface was past the line before the first toolpath stays BEFORE.
+                match c.past[k] {
+                    BEFORE => { before_past += a; e.0 = BEFORE; }
+                    NEVER => {}
+                    i => { past_a[i as usize] += a; if e.0 != BEFORE { e.0 = e.0.min(i); } }
+                }
+                match c.on[k] { BEFORE => before_on += a, NEVER => {}, i => { on_a[i as usize] += a; e.1 = e.1.min(i); } }
+            }
+            let (mut entered, mut to_size) = (vec![0u32; n as usize], vec![0u32; n as usize]);
+            for (_, &(fp, fo)) in &faces {
+                if fp < n { entered[fp as usize] += 1; }
+                // cut to size at the first toolpath that brings some of it on the cut while none of it is past
+                if fo < n && (fp == NEVER || (fp != BEFORE && fp > fo)) { to_size[fo as usize] += 1; }
+            }
+            let rows: Vec<Value> = (0..n as usize).map(|i| json!({"operation_id": self.order[i],
+                "surface_newly_on_cut_mm2": on_a[i], "surface_newly_past_mm2": past_a[i],
+                "faces_newly_entered": entered[i], "faces_first_cut_to_size": to_size[i]})).collect();
+            copies.insert(c.key.clone(), json!({"per_toolpath": rows, "samples": c.s.len(), "faces": faces.len(),
+                "surface_mm2": area, "unmeasured_mm2": unmeasured_a, "before_first_toolpath_on_cut_mm2": before_on,
+                "before_first_toolpath_past_mm2": before_past}));
+        }
+        json!({"line_mm": self.line, "operations": self.order, "copies": copies,
+               "basis": "column stock (one material height per column) after each operation; a surface sample is past the line when the material line_mm inside it is gone, on the cut when the material line_mm outside is gone and the inside stands; areas are the samples' own; a face is entered at its first sample past the line, cut to size at the first operation that puts some of it on the cut while none of it is past; volume into a copy not measured"})
+    }
 }
 
 fn main() {
@@ -684,6 +815,10 @@ fn main() {
     let mut profiled: Vec<i64> = Vec::new();
     // Per op: each move's 1-based NC line (empty for rows input), so a reported move names its program line.
     let mut op_lines: Vec<Vec<usize>> = Vec::new();
+    // Per op: its operation id (our post's comment; None for rows input) and whether it is the first atom of its
+    // run (the atom that carries the shank check).
+    let mut op_ids: Vec<Option<i64>> = Vec::new();
+    let mut first_atom: Vec<bool> = Vec::new();
     let (bounds, cell, ops): ([f64; 6], f64, Vec<(ToolShape, Vec<Move>)>) = if let Some(p) = get("camotics") {
         let proj: Value = serde_json::from_str(&std::fs::read_to_string(&p).unwrap_or_else(|e| die(format!("{p}: {e}"))))
             .unwrap_or_else(|e| die(format!("{p}: {e}")));
@@ -694,7 +829,7 @@ fn main() {
         let cell = get("cell").map(|s| num(&s)).or(proj["resolution"].as_f64()).unwrap_or(0.254);
         let nc = proj["files"][0].as_str().unwrap_or_else(|| die("no NC file".into())).to_string();
         let mut ops = Vec::new();
-        for (t, mv, lines) in read_nc(&nc) {
+        for (t, opid, mv, lines) in read_nc(&nc) {
             let rec = &proj["tools"][t.to_string()];
             let len = rec["length"].as_f64().filter(|l| *l > 0.0 && rec["shape"].as_str() != Some("conical"));
             match profile_atoms(rec) {
@@ -705,6 +840,8 @@ fn main() {
                     for (k, (ts, d)) in atoms.into_iter().enumerate() {
                         cut_lens.push((t, if k == 0 { len } else { None }));
                         op_lines.push(lines.clone());
+                        op_ids.push(opid);
+                        first_atom.push(k == 0);
                         ops.push((ts, if d == [0.0; 3] { mv.clone() } else { lifted(&mv, d) }));
                     }
                     continue;
@@ -715,6 +852,8 @@ fn main() {
                 Some(ts) => {
                     cut_lens.push((t, len));
                     op_lines.push(lines);
+                    op_ids.push(opid);
+                    first_atom.push(true);
                     ops.push((ts, mv));
                 }
                 None => {
@@ -798,11 +937,14 @@ fn main() {
     }).collect()).unwrap_or_default();
     let strike_len: Option<Option<f64>> = get("cutting-length").map(|s| if s == "project" || s.contains('=') { None } else { Some(num(&s)) });
     if !per_tool.is_empty() {
-        let mut seen = std::collections::BTreeSet::new();
-        for c in cut_lens.iter_mut() { c.1 = if seen.insert(c.0) { per_tool.get(&c.0).copied() } else { None }; }
+        // Every run of a named tool is checked on its first atom (a profile tool's other atoms are its form).
+        for (k, c) in cut_lens.iter_mut().enumerate() {
+            c.1 = if first_atom.get(k).copied().unwrap_or(true) { per_tool.get(&c.0).copied() } else { None };
+        }
     }
     // tool number -> (cutting length, strike moves, worst excess mm, first (op, move), the moves seen across X tiles)
     let mut strikes: BTreeMap<i64, (f64, usize, f64, (usize, usize), std::collections::BTreeSet<(usize, usize)>)> = BTreeMap::new();
+    let mut prog = get("progressive").map(|p| Progressive::load(&p, z0, &op_ids));
     for tx in 0..ntx {
         let (i0, i1) = (tx * per, ((tx + 1) * per).min(nx));
         let (tx0, tx1) = (x0 + i0 as f64 * cell, x0 + i1 as f64 * cell);
@@ -835,12 +977,19 @@ fn main() {
             // tip centre and 8 points on 0.9 of the radius, at the move's start, middle and end: material standing
             // more than one cell above tip + cutting length there is a shank strike, recorded per tool. A lower
             // bound (sampled points, not the whole swept disc); never a lid left in the stock.
-            (Stock::Column(_), _) if strike_len.is_some() => {
+            // --progressive (alone or with the strike check): the same cut op by op, each copy read after the last
+            // atom of every operation.
+            (Stock::Column(_), _) if strike_len.is_some() || prog.is_some() => {
                 let fixed = strike_len.flatten();
+                let last_tile = tx + 1 == ntx;
+                if let Some(p) = prog.as_mut() { p.eval(&stock, tx0, tx1, last_tile, BEFORE); }
                 'ops: for (oi, (t, m)) in ops.iter().enumerate() {
                     let (tn, own) = cut_lens.get(oi).copied().unwrap_or((-1, None));
-                    let len = fixed.or(own);
-                    for (k, mv) in m.iter().enumerate() {
+                    let len = if strike_len.is_some() { fixed.or(own) } else { None };
+                    if strike_len.is_none() {
+                        if let Err(e) = stock.simulate(&sim_ops[oi..oi + 1]) { sim = Err(e.to_string()); break 'ops; }
+                    }
+                    for (k, mv) in m.iter().enumerate().filter(|_| strike_len.is_some()) {
                         if let (Some(len), true) = (len, mv.kind != MoveKind::Rapid) {
                             let mut worst = 0.0f64;
                             for f in [0.0, 0.5, 1.0] {
@@ -863,6 +1012,13 @@ fn main() {
                         }
                         let one = [SimOp { moves: std::slice::from_ref(mv), radius: t.radius, ball: t.ball, cone: t.cone, corner: t.corner }];
                         if let Err(e) = stock.simulate(&one) { sim = Err(e.to_string()); break 'ops; }
+                    }
+                    // The last atom of an operation: read every copy against the stock it leaves.
+                    if let (Some(p), Some(id)) = (prog.as_mut(), op_ids.get(oi).copied().flatten()) {
+                        if oi + 1 == ops.len() || op_ids.get(oi + 1).copied().flatten() != Some(id) {
+                            let at = p.order.iter().position(|x| *x == id).unwrap_or(0) as u32;
+                            p.eval(&stock, tx0, tx1, last_tile, at);
+                        }
                     }
                 }
             }
@@ -941,6 +1097,7 @@ fn main() {
         out["profile_tools"] = json!({"tools": profiled, "rim_copies": PHI,
             "basis": "profile bands as a flat disc per band plus its cone swept on the disc rim (inner approximation within r0 (1 - cos(pi / rim_copies)) radially)"});
     }
+    if let Some(p) = &prog { out["progressive"] = p.report(); }
     out["removed_mm3"] = json!(removed);
     out["remaining_mm3"] = json!((x1 - x0) * (y1 - y0) * (z1 - z0) - removed);
     out["through_columns"] = json!(through);
@@ -1014,4 +1171,43 @@ fn main() {
     }
     out["total_s"] = json!(t0.elapsed().as_secs_f64());
     println!("{out}");
+}
+
+#[cfg(test)]
+mod progressive_tests {
+    use super::*;
+
+    fn pass(stock: &mut Stock, xs: &[f64], z: f64) {
+        let moves: Vec<Move> = xs.iter().map(|&x| Move::new(MoveKind::Feed, Point3::new(x, -3.0, z), Point3::new(x, 23.0, z), Some(500.0))).collect();
+        stock.simulate(&[SimOp { moves: &moves, radius: 2.0, ball: false, cone: None, corner: None }]).unwrap();
+    }
+
+    /// A block 20 x 20 x 10 mm; the part's top face at z 5 (face 1, 54 samples of 1 mm2) and a wall at x 15 facing +x
+    /// (face 2, 27 samples). Operation 10 faces to z 5, 20 cuts the wall to z 2, 30 dips to z 4 over x 5-10.
+    #[test]
+    fn three_operations_read_in_order() {
+        let mut s = Vec::new();
+        for x in [6.0, 7.0, 8.0, 12.0, 13.0, 14.0] { for y in 6..15 { s.push([x as f32, y as f32, 5.0, 0.0, 0.0, 1.0, 1.0, f32::from_bits(1)]); } }
+        for z in [2.5f32, 3.5, 4.5] { for y in 6..15 { s.push([15.0, y as f32, z, 1.0, 0.0, 0.0, 1.0, f32::from_bits(2)]); } }
+        let n = s.len();
+        let mut p = Progressive { line: 0.3, z0: 0.0, order: vec![10, 20, 30],
+            copies: vec![PartCopy { key: "a".into(), s, past: vec![NEVER; n], on: vec![NEVER; n], unmeasured: vec![false; n] }] };
+        let mut stock = Stock::block(Backend::Column, 0.0, 0.0, 20.0, 20.0, 10.0, 0.1).unwrap();
+        p.eval(&stock, 0.0, 20.0, true, BEFORE);
+        pass(&mut stock, &[-1.0, 1.0, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0, 17.0, 19.0, 21.0], 5.0);
+        p.eval(&stock, 0.0, 20.0, true, 0);
+        pass(&mut stock, &[17.0, 19.0, 21.0], 2.0);
+        p.eval(&stock, 0.0, 20.0, true, 1);
+        pass(&mut stock, &[7.0, 8.0], 4.0);
+        p.eval(&stock, 0.0, 20.0, true, 2);
+        let r = p.report();
+        let rows = &r["copies"]["a"]["per_toolpath"];
+        let f = |i: usize, k: &str| rows[i][k].as_f64().unwrap();
+        assert_eq!((f(0, "surface_newly_on_cut_mm2"), f(1, "surface_newly_on_cut_mm2"), f(2, "surface_newly_on_cut_mm2")), (54.0, 27.0, 0.0));
+        assert_eq!((f(0, "surface_newly_past_mm2"), f(1, "surface_newly_past_mm2"), f(2, "surface_newly_past_mm2")), (0.0, 0.0, 27.0));
+        assert_eq!((f(0, "faces_first_cut_to_size"), f(1, "faces_first_cut_to_size"), f(2, "faces_first_cut_to_size")), (1.0, 1.0, 0.0));
+        assert_eq!((f(0, "faces_newly_entered"), f(2, "faces_newly_entered")), (0.0, 1.0));
+        assert_eq!(r["copies"]["a"]["unmeasured_mm2"].as_f64(), Some(0.0));
+        assert_eq!(r["copies"]["a"]["before_first_toolpath_on_cut_mm2"].as_f64(), Some(0.0));
+    }
 }
