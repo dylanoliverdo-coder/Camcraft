@@ -104,3 +104,32 @@ fn trochoidal_method_shows_its_passes_and_feeds_fields_and_spiral_and_offset_hid
     off.run();
     assert_eq!(off.query_all_by_label("Return feed").count(), 0, "Offset2D hides Return feed");
 }
+
+/// Journeyman spec S5 (Held 1991, Stori & Wright 2000; no vendor parameters,
+/// text or code): 2D Adaptive's Passes tab shows finishing passes, spring
+/// passes, and reveals spacing/levels when active; 2D Offset hides them.
+#[test]
+fn adaptive_passes_tab_shows_wall_finishing_rows_and_offset_hides_them() {
+    use camcraft_app::machining2d::FinishLevel;
+
+    let mut harness = passes_of(OpType::Adaptive2D);
+    assert_eq!(harness.query_all_by_label("Finishing passes").count(), 1);
+    assert_eq!(harness.query_all_by_label("Spring passes").count(), 1);
+    assert_eq!(harness.query_all_by_label("Finishing spacing").count(), 0, "hidden while finish_passes == 0");
+    assert_eq!(harness.query_all_by_label("Finish levels").count(), 0, "hidden while inactive");
+
+    if let OpParams::Adaptive2D { finish, .. } = &mut harness.state_mut().state.op_ui.params {
+        finish.finish_passes = 2;
+        finish.finish_spacing = 0.25;
+        finish.finish_level = FinishLevel::Last;
+    } else {
+        panic!("draft is not Adaptive2D");
+    }
+    harness.run();
+    assert_eq!(harness.query_all_by_label("Finishing spacing").count(), 1, "shown when finish_passes > 0");
+    assert_eq!(harness.query_all_by_label("Finish levels").count(), 1, "shown when active");
+    assert_eq!(combos_showing(&harness, "Last level only"), 1);
+
+    let off = passes_of(OpType::Offset2D);
+    assert_eq!(off.query_all_by_label("Finishing passes").count(), 0, "Offset2D hides Finishing passes");
+}
