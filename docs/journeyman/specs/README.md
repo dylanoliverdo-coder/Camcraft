@@ -40,3 +40,4 @@ Each module that a spec changes or adds carries one provenance line, for example
 | S5 | 2D Adaptive: wall finishing passes after clearing | written |
 | S6 | Drill: chamfer each hole to a width | written |
 | S7 | 2D descents: a stated height where the rapid becomes a feed | written |
+| S8 | Contour, Pocket, Face: finishing levels at a smaller stepdown | written |
