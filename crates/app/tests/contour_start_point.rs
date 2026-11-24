@@ -30,6 +30,7 @@ use serde_json::{json, Value};
 
 fn contour_op(pick: Option<Point2>) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::of(HeightReference::TopOfStock, 10.0),
         retract_z: Height::of(HeightReference::TopOfStock, 5.0),

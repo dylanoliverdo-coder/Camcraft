@@ -313,7 +313,13 @@ pub(super) fn heights_gate(
     if let Some(why) = operation::selection_heights_sane(world, setup, src, params) {
         return Err(CommandError::Invalid(why));
     }
-    if !operation::depth_sane(world, setup, Some(src), params) {
+    // Journeyman S2: a nonzero floor offset must resolve at the command door.
+    if params.floor_stock().is_some_and(|stock| stock != 0.0) {
+        let frame = operation::OpFrame::new(setup.map(str::to_owned), params.tilt())
+            .checked_frame().map_err(|e| CommandError::Invalid(e.to_string()))?;
+        operation::resolve_params_folded(world, setup, Some(src), params, frame.as_ref())
+            .map_err(CommandError::Invalid)?;
+    } else if !operation::depth_sane(world, setup, Some(src), params) {
         return Err(CommandError::Invalid(format!(
             "a {} operation must cut downward: its top height resolves below its bottom height (check the From references)",
             params.kind()

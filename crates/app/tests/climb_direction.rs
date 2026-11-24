@@ -115,7 +115,7 @@ fn hole(world: &World) -> SrcRef {
 }
 
 fn pocket(strategy: PocketStrategy, climb: bool) -> OpParams {
-    OpParams::Pocket { pass_start: Default::default(), rest: None,
+    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         stepover: 4.0,
@@ -143,6 +143,7 @@ fn pocket(strategy: PocketStrategy, climb: bool) -> OpParams {
 
 fn contour(side: Side, climb: bool, lead: Lead, bottom: f64) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(40.0),
         retract_z: Height::fixed(25.0),

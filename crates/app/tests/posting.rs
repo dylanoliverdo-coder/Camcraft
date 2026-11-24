@@ -49,6 +49,7 @@ fn box_stock(world: &World, history: &mut History, dx: f64, dy: f64, dz: f64) {
 
 fn contour_params() -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),
@@ -236,7 +237,7 @@ fn an_unborn_toolpath_refuses_to_post() {
 }
 
 fn face_params() -> OpParams {
-    OpParams::Face { holes: Default::default(), blend_turns: false,
+    OpParams::Face { floor_stock: 0.0, holes: Default::default(), blend_turns: false,
         tilt: None,
         stepover: 3.0,
         clearance_z: Height::fixed(25.0),
@@ -572,7 +573,7 @@ fn a_non_g54_slot_is_what_the_script_writes() {
         SetWcsOrigin::new(&world, Location::default()).expect("place the WCS"),
     );
     history.execute(&world, SetSetupWorkOffset::new(&world, "Setup1", Some(1)).expect("pick G55"));
-    let params = OpParams::Face { holes: Default::default(), blend_turns: false,
+    let params = OpParams::Face { floor_stock: 0.0, holes: Default::default(), blend_turns: false,
         tilt: None,
         stepover: 3.0,
         clearance_z: Height::of(HeightReference::WorkOffset, 25.0),

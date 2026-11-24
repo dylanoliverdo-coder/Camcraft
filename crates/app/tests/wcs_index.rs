@@ -30,6 +30,7 @@ const TORMACH: &str = "Tormach PathPilot";
 
 fn face_params() -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,

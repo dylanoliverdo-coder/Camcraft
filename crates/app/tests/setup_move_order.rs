@@ -32,6 +32,7 @@ fn run(
 
 fn face(world: &World, history: &mut History, name: &str) {
     let params = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false,

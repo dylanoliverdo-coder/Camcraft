@@ -35,6 +35,7 @@ use camcraft_app::verify::Warning;
 /// plunge-height rapid lands at Z 7.
 fn contour() -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),
@@ -154,6 +155,7 @@ fn the_same_slot_over_stock_to_its_top_is_silent() {
 /// pass).
 fn face(cut: f64) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,

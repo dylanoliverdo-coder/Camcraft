@@ -37,6 +37,7 @@ fn post_text(stem: &str) -> String {
 
 fn contour_params(comp: Compensation) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),

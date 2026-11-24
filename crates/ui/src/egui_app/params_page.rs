@@ -258,6 +258,14 @@ pub(super) fn params_fields(ui: &mut Ui, state: &mut State, tab: usize) {
     let world = &state.world;
     let params = &mut state.op_ui.params;
     super::mill2d_page::fields(ui, world, params, &mut cx);
+    // Journeyman S2: edit the draft through the existing Apply command.
+    if tab == SEC_HEIGHTS
+        && let OpParams::Face { floor_stock, .. }
+            | OpParams::Contour { floor_stock, .. }
+            | OpParams::Pocket { floor_stock, .. } = params
+    {
+        prop_row(ui, "Floor stock", |ui| num(ui, u, floor_stock));
+    }
     super::mill2d_more_page::fields(ui, world, params, &mut cx);
     super::vcarve_page::fields(ui, world, params, &mut cx);
     super::holes_page::fields(ui, world, params, &mut cx);

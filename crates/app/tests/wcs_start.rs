@@ -76,6 +76,7 @@ fn world_at(g54: [f64; 3]) -> (World, History) {
 
 fn face() -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false,

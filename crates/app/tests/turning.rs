@@ -181,6 +181,7 @@ fn a_lathe_shuts_the_mill_door_and_a_millturn_opens_both() {
     mount(&world, &mut history, "lathe");
     add_tool(&world, &mut history, "EM-0400-2FL");
     let contour = OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),

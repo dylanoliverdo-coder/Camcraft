@@ -454,6 +454,7 @@ pub fn resolve_params_with(
             opt("Retract Z", p.retract_z)?,
         ),
     };
+    let bottom = super::floor_stock::offset(params, bottom, top.or(face_top))?;
     Ok(ResolvedHeights { clearance, top, bottom, face_top, retract })
 }
 

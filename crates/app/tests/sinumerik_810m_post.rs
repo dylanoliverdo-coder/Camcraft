@@ -56,6 +56,7 @@ fn build_air_cut_world(spindle_rpm: f64) -> World {
     h.execute(&world, AddTool::new(&world, "5MM DRILL", tuned_tool("DR-0400", 5.0, 1800.0, 180.0)).expect("T2"));
 
     let contour = OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(30.0),

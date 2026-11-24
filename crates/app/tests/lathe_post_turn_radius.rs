@@ -134,6 +134,7 @@ fn a_mill_stream_states_no_turning_radius() {
     let tool = catalog().into_iter().find(|(n, _)| *n == "EM-0600-4FL").map(|(_, t)| t).expect("catalog entry");
     history.execute(&world, AddTool::new(&world, "EM-0600-4FL", tool).expect("catalog tool"));
     let face = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,

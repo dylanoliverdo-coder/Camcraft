@@ -89,6 +89,7 @@ fn a_3d_finish_in_the_users_box_stock_reads_no_gouge_at_its_wall() {
         .find(|&i| KindInfo::ALL.get(i).is_some_and(|k| k.label == "3D Finish"))
         .expect("3D Finish kind");
     let base = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         stepover: 3.0,

@@ -101,6 +101,10 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
     if let OpParams::WireContour(wire) = &next {
         back.insert("taper_deg".into(), json!(wire.taper_deg));
     }
+    // Journeyman S2: accept an explicit return to zero on the three milling kinds.
+    if let Some(stock) = next.floor_stock() {
+        back.insert("floor_stock".into(), json!(stock));
+    }
     // An opt-in flag (`blend_turns`) is written only when ON, so `false`
     // never comes back: it is kept when `true` would have come back.
     for (k, v) in patch {

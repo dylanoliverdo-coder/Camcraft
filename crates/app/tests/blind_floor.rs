@@ -76,6 +76,7 @@ fn block_with_hole(floor: Option<f64>) -> Mesh {
 
 fn contour_op(stepdown: f64, leave: f64) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: leave,
         clearance_z: Height::fixed(30.0),
         retract_z: Height::fixed(25.0),
@@ -395,7 +396,7 @@ fn the_gouge_clause_speaks_the_document_s_units() {
 
 #[test]
 fn a_face_cut_into_the_part_is_a_gouge() {
-    let face = |cut: f64| OpParams::Face { holes: Default::default(),
+    let face = |cut: f64| OpParams::Face { floor_stock: 0.0, holes: Default::default(),
         blend_turns: false,
         tilt: None,
         stepover: 4.0,

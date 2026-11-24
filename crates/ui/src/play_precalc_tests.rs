@@ -19,6 +19,7 @@ use crate::state::{Sim, State};
 
 fn face(stepover: f64) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         stepover,

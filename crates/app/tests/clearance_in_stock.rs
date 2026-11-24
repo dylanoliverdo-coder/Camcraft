@@ -38,6 +38,7 @@ const LOW: f64 = 8.0;
 
 fn contour(clearance: f64, retract: f64) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(clearance),
@@ -90,6 +91,7 @@ fn slot(clearance: f64) -> OpParams {
 
 fn face(cut: f64) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,

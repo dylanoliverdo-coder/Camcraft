@@ -121,6 +121,7 @@ fn extruded_vise_jaw_from_dxf_is_hit_by_rapid_until_edited_below_it() {
     let tool = catalog().into_iter().find(|(n, _)| *n == "EM-0400-2FL").map(|(_, t)| t).expect("tool");
     history.execute(&world, AddTool::new(&world, "EM-0400-2FL", tool).expect("tool"));
     let op = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false,

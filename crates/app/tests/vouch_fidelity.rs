@@ -36,6 +36,7 @@ fn brick() -> Mesh {
 
 fn face() -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         stepover: 3.0,

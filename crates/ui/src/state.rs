@@ -1033,7 +1033,7 @@ impl Default for OpUi {
             // carries this clearance into every kind, so the draft
             // default must already be the seed shape the panes display -
             // quick-add and the retype menu then say the same thing.
-            params: OpParams::Face { holes: Default::default(),
+            params: OpParams::Face { floor_stock: 0.0, holes: Default::default(),
                 tilt: None,
                 stepover: 3.0,
                 clearance_z: Height::of(HeightReference::TopOfStock, 25.0),

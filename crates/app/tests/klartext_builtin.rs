@@ -45,6 +45,7 @@ fn generated_contour_and_face() -> flecs_ecs::prelude::World {
     tool.rpm = 3500.0;
     history.execute(&world, AddTool::new(&world, name, tool).unwrap());
     let face = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,
@@ -69,6 +70,7 @@ fn generated_contour_and_face() -> flecs_ecs::prelude::World {
     );
     history.execute(&world, ImportModel::from_mesh("Block", part));
     let contour = OpParams::Contour {
+        floor_stock: 0.0,
         chain_overrides: Vec::new(),
         passes: camcraft_app::machining2d::WallPasses::default(),
         tilt: None,

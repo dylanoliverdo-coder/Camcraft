@@ -117,6 +117,7 @@ fn model_stock_refuses_sub_pitch_side_face_overlap_at_four_grid_phases() {
 
 fn contour() -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(20.0),
@@ -144,6 +145,7 @@ fn contour() -> OpParams {
 
 fn face_op(cut_z: f64) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false,

@@ -41,6 +41,7 @@ fn face_world(dz: f64, cut: f64) -> (flecs_ecs::prelude::World, History) {
     let tool = catalog().into_iter().find(|(n, _)| *n == "EM-0400-2FL").map(|(_, t)| t).expect("catalog");
     history.execute(&world, AddTool::new(&world, "EM-0400-2FL", tool).expect("tool"));
     let params = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false,

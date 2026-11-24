@@ -249,6 +249,9 @@ impl WallPassesDto {
 #[serde(rename_all = "snake_case")]
 pub enum ParamsDto {
     Face {
+        // Journeyman S2: zero is implicit in files saved before the field.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        floor_stock: f64,
         stepover: f64,
         clearance_z: HeightDto,
         cut_z: HeightDto,
@@ -277,6 +280,8 @@ pub enum ParamsDto {
         tilt: Option<TiltDto>,
     },
     Contour {
+        #[serde(default, skip_serializing_if = "is_zero")]
+        floor_stock: f64,
         /// M11.2 level transitions and links: absent is the kind's earlier shape.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         links: Option<LinksDto>,
@@ -336,6 +341,8 @@ pub enum ParamsDto {
         passes: WallPassesDto,
     },
     Pocket {
+        #[serde(default, skip_serializing_if = "is_zero")]
+        floor_stock: f64,
         /// M11.2 level transitions and links: absent is the kind's earlier shape.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         links: Option<LinksDto>,

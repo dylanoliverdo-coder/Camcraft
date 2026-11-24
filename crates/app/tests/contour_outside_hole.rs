@@ -119,6 +119,7 @@ fn top_face(world: &World, z: f64) -> Vec<GeoSel> {
 
 fn params(side: Side, top: Height, bottom: Height) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(30.0),

@@ -183,6 +183,7 @@ fn judged(m: &Machine, to: [f64; 3], feed: f64, rpm: f64) -> machine::MachineChe
             after: Default::default(),
             suppressed: false,
             params: OpParams::Face {
+                floor_stock: 0.0,
                 holes: Default::default(),
                 tilt: None,
                 blend_turns: false,

@@ -164,6 +164,7 @@ fn pocket(bottom: f64) -> OpParams {
 
 fn face(cut: f64) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: FaceHoles::CutAir,
         blend_turns: false,
         tilt: None,

@@ -30,6 +30,7 @@ use camcraft_app::{model, setup_sheet};
 
 fn face_params(stepover: f64, cut_z: f64, clear_z: f64) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,

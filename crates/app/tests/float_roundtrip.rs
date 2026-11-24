@@ -29,6 +29,7 @@ const OFF_ROUND: f64 = -14.966666666666667;
 
 fn contour() -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),

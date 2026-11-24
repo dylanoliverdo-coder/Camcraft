@@ -283,6 +283,7 @@ fn render_all_guide_images() {
             panic!("2D Contour1 should be OpParams::Contour");
         };
         let contour_with_lead = |lead: Lead| OpParams::Contour {
+            floor_stock: 0.0,
             stock_to_leave, clearance_z, retract_z, top_z, bottom_z, stepdown,
             feed, plunge_feed, climb, side, lead, tolerance, tab_count, tab_width,
             tab_height, entry, helix_radius, blend_turns, links, tilt, passes,
@@ -383,7 +384,7 @@ fn pocket_variant(base: &OpParams, strategy: PocketStrategy, stepover: f64,
     let OpParams::Pocket { stock_to_leave, clearance_z, retract_z, top_z, bottom_z,
         stepdown, feed, plunge_feed, climb, optimal_load, blend_turns,
         blend_radius, tilt, rest, ref corner_relief, .. } = *base else { panic!("expected guide pocket"); };
-    OpParams::Pocket { pass_start: Default::default(), stock_to_leave, clearance_z, retract_z, top_z, bottom_z,
+    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), stock_to_leave, clearance_z, retract_z, top_z, bottom_z,
         stepdown, feed, plunge_feed, climb, optimal_load, blend_turns,
         blend_radius, tilt, rest, corner_relief: corner_relief.clone(), strategy, stepover, entry, helix_radius, links }
 }

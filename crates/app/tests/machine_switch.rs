@@ -106,6 +106,7 @@ fn faced_on(via: Via, a: Machine) -> (World, History) {
     add_tool(&world, &mut h, "EM-0400-2FL");
     mount(&world, &mut h, via, "a.mch", a);
     let face = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,
@@ -140,7 +141,7 @@ fn tilted_on(via: Via) -> (World, History) {
     let loc = Location { pos: Point3::new(20.0, 15.0, -20.0), ..Location::default() };
     h.execute(&world, SetStock::new(&world, StockShape::Box { dx: 40.0, dy: 30.0, dz: 10.0 }, loc).expect("stock"));
     mount_builtin(&world, &mut h, via, "Tilt-head 5-axis");
-    let params = OpParams::Pocket { pass_start: Default::default(), rest: None,
+    let params = OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         tilt: Some(Tilt { basis_version: 1, a_deg: 0.0, b_deg: 90.0, origin: [-25.0, 0.0, -15.0] }),

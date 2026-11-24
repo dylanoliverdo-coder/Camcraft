@@ -147,6 +147,7 @@ fn struck_world() -> State {
     let tool = catalog().into_iter().find(|(n, _)| *n == "EM-0400-2FL").map(|(_, t)| t).expect("catalog");
     state.history.execute(w, AddTool::new(w, "EM-0400-2FL", tool).expect("tool"));
     let params = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false,

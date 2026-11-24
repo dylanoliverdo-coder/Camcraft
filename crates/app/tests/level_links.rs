@@ -30,6 +30,7 @@ const TOOL: &str = "EM-1000-4FL";
 
 fn contour_op(links: Links) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::of(HeightReference::TopOfStock, 20.5),
         retract_z: Height::of(HeightReference::TopOfStock, 13.5),

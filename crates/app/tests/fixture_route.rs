@@ -54,6 +54,7 @@ fn two_pockets() -> (World, History) {
     let tool = catalog().into_iter().find(|(n, _)| *n == "EM-0400-2FL").map(|(_, t)| t).expect("catalog");
     h.execute(&world, AddTool::new(&world, "EM-0400-2FL", tool).expect("tool"));
     let params = OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(25.0),
         retract_z: Height::fixed(22.0),

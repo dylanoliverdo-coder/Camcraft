@@ -32,6 +32,7 @@ const CLEAR: f64 = 30.0;
 
 fn face(clear: f64, tilt: Option<Tilt>, cut: f64) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt,
         blend_turns: false,

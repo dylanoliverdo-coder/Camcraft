@@ -30,6 +30,7 @@ use camcraft_app::tools::{WorkMaterial, catalog};
 /// plunge-height rapid lands at Z 7, beside the box.
 fn contour() -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),
