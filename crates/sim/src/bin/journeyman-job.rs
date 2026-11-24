@@ -6,7 +6,9 @@
 //!                               (tools, workpiece box, resolution, the NC
 //!                               file); the NC is the same G-code subset
 //!                               CAMotics cuts (G0/G1/G2/G3, G17/18/19,
-//!                               M6 Tn per move, metric).
+//!                               M6 Tn per move, metric). A canned cycle
+//!                               (G73/G74/G76/G81-G89) or G91 is refused
+//!                               by name with its NC line, never skipped.
 //!   --rows <rows.txt>           posed 5-axis rows `x y z i j k feed`
 //!                               (feed <= 0 is a rapid), with --tool,
 //!                               --stock and --scale.
@@ -26,6 +28,7 @@
 //!                               and report shank strikes; the cut itself is unchanged
 //!   --out-closed-stl <file>     column arm: write the stock as a closed mesh
 //!   --matrix a,b,...            16 numbers, row-major: setup-to-part for --out-closed-stl
+//!   --move-lines <file.json>    camotics input: write each op's per-move NC line numbers
 //!   --tool flat|ball|bull D [corner]   rows input only
 //!   --stock x0 y0 z0 x1 y1 z1   rows input only (same units as the rows)
 //!   --scale <k>                 rows input only: multiply lengths (25.4)
@@ -388,20 +391,55 @@ fn arc_points(a: [f64; 3], b: [f64; 3], c: [f64; 2], ccw: bool, plane: (usize, u
         .collect()
 }
 
-/// Our post's G-code -> moves per tool number, in program order.
-fn read_nc(path: &str) -> Vec<(i64, Vec<Move>)> {
+/// Every G number on a line ("G81G99" and "G81 G99" alike), as integers; G-words with a fraction are kept as
+/// their integer part times 10 plus the tenth (G90.1 -> 901) so they never read as a whole code.
+fn g_words(line: &str) -> Vec<u32> {
+    let b = line.as_bytes();
+    let mut out = Vec::new();
+    for (i, &c) in b.iter().enumerate() {
+        if (c == b'G' || c == b'g') && (i == 0 || !b[i - 1].is_ascii_alphanumeric() || b[i - 1].is_ascii_digit()) {
+            let rest = &line[i + 1..];
+            let end = rest.find(|x: char| !(x.is_ascii_digit() || x == '.')).unwrap_or(rest.len());
+            let w = &rest[..end];
+            match w.split_once('.') {
+                Some((a, f)) => if let (Ok(a), Ok(f)) = (a.parse::<u32>(), f.parse::<u32>()) { out.push(a * 10 + f) },
+                None => if let Ok(a) = w.parse::<u32>() { out.push(a) },
+            }
+        }
+    }
+    out
+}
+
+/// A word whose motion this reader does not expand: cutting it would silently skip or misplace material, so the
+/// program is refused by name (the lane routes such a program to CAMotics).
+fn refused_word(g: u32) -> Option<&'static str> {
+    match g {
+        73 | 74 | 76 | 81..=89 => Some("canned cycle (not expanded upstream; this reader cuts G0/G1/G2/G3 only)"),
+        91 => Some("incremental positioning (this reader reads absolute G90 only)"),
+        _ => None,
+    }
+}
+
+/// Our post's G-code -> per tool number, in program order: the moves and, for each move, its 1-based NC line.
+fn read_nc(path: &str) -> Vec<(i64, Vec<Move>, Vec<usize>)> {
     let src = std::fs::read_to_string(path).unwrap_or_else(|e| die(format!("cannot read {path}: {e}")));
-    let mut ops: Vec<(i64, Vec<Move>)> = Vec::new();
+    let mut ops: Vec<(i64, Vec<Move>, Vec<usize>)> = Vec::new();
     let (mut pos, mut have) = ([0.0f64; 3], false);
     let (mut tool, mut modal, mut plane) = (0i64, 0u8, 17u8);
     let mut feed = 1000.0;
-    let push = |tool: i64, m: Move, ops: &mut Vec<(i64, Vec<Move>)>| match ops.last_mut() {
-        Some((t, v)) if *t == tool => v.push(m),
-        _ => ops.push((tool, vec![m])),
+    let mut ln = 0usize;
+    let push = |tool: i64, m: Move, ln: usize, ops: &mut Vec<(i64, Vec<Move>, Vec<usize>)>| match ops.last_mut() {
+        Some((t, v, l)) if *t == tool => { v.push(m); l.push(ln); }
+        _ => ops.push((tool, vec![m], vec![ln])),
     };
     for raw in src.lines() {
+        ln += 1;
         let line = match raw.find('(') { Some(i) => &raw[..i], None => raw }.trim();
         if line.is_empty() { continue; }
+        if let Some((g, why)) = g_words(line).into_iter().find_map(|g| refused_word(g).map(|w| (g, w))) {
+            let g = if g > 100 { format!("G{}.{}", g / 10, g % 10) } else { format!("G{g}") };
+            die(format!("refused: {g} at NC line {ln}: {why}"));
+        }
         if line.contains("M6") || line.starts_with('T') {
             if let Some(t) = word(line, 'T') { tool = t.round() as i64; }
         }
@@ -426,7 +464,7 @@ fn read_nc(path: &str) -> Vec<(i64, Vec<Move>)> {
             let full = (to[0] - pos[0]).abs() < 1e-9 && (to[1] - pos[1]).abs() < 1e-9 && (to[2] - pos[2]).abs() < 1e-9;
             if plane == 17 && !full {
                 let c = Point2::new(pos[0] + i, pos[1] + j);
-                push(tool, Move::new(kind, p3(pos), p3(to), fd).with_arc(c, ccw), &mut ops);
+                push(tool, Move::new(kind, p3(pos), p3(to), fd).with_arc(c, ccw), ln, &mut ops);
             } else {
                 let (pl, c) = match plane {
                     18 => ((2usize, 0usize, 1usize), [pos[2] + k, pos[0] + i]),
@@ -436,12 +474,12 @@ fn read_nc(path: &str) -> Vec<(i64, Vec<Move>)> {
                 // G18 views from +Y: Z->X is CCW (RS-274), handled by the (z, x) pair.
                 let mut prev = pos;
                 for p in arc_points(pos, to, c, ccw, pl, 0.002) {
-                    push(tool, Move::new(kind, p3(prev), p3(p), fd), &mut ops);
+                    push(tool, Move::new(kind, p3(prev), p3(p), fd), ln, &mut ops);
                     prev = p;
                 }
             }
         } else if to != pos {
-            push(tool, Move::new(kind, p3(pos), p3(to), fd), &mut ops);
+            push(tool, Move::new(kind, p3(pos), p3(to), fd), ln, &mut ops);
         }
         pos = to;
     }
@@ -478,6 +516,8 @@ fn main() {
     // the tool's flute height); None where the project's length is not a flute (a conical record's is its cone).
     let mut cut_lens: Vec<(i64, Option<f64>)> = Vec::new();
     let mut profiled: Vec<i64> = Vec::new();
+    // Per op: each move's 1-based NC line (empty for rows input), so a reported move names its program line.
+    let mut op_lines: Vec<Vec<usize>> = Vec::new();
     let (bounds, cell, ops): ([f64; 6], f64, Vec<(ToolShape, Vec<Move>)>) = if let Some(p) = get("camotics") {
         let proj: Value = serde_json::from_str(&std::fs::read_to_string(&p).unwrap_or_else(|e| die(format!("{p}: {e}"))))
             .unwrap_or_else(|e| die(format!("{p}: {e}")));
@@ -488,7 +528,7 @@ fn main() {
         let cell = get("cell").map(|s| num(&s)).or(proj["resolution"].as_f64()).unwrap_or(0.254);
         let nc = proj["files"][0].as_str().unwrap_or_else(|| die("no NC file".into())).to_string();
         let mut ops = Vec::new();
-        for (t, mv) in read_nc(&nc) {
+        for (t, mv, lines) in read_nc(&nc) {
             let rec = &proj["tools"][t.to_string()];
             let len = rec["length"].as_f64().filter(|l| *l > 0.0 && rec["shape"].as_str() != Some("conical"));
             match profile_atoms(rec) {
@@ -498,6 +538,7 @@ fn main() {
                     // The first atom carries the shank check (its own tip); the rest are the same tool's form.
                     for (k, (ts, d)) in atoms.into_iter().enumerate() {
                         cut_lens.push((t, if k == 0 { len } else { None }));
+                        op_lines.push(lines.clone());
                         ops.push((ts, if d == [0.0; 3] { mv.clone() } else { lifted(&mv, d) }));
                     }
                     continue;
@@ -507,6 +548,7 @@ fn main() {
             match camotics_tool(rec) {
                 Some(ts) => {
                     cut_lens.push((t, len));
+                    op_lines.push(lines);
                     ops.push((ts, mv));
                 }
                 None => {
@@ -709,10 +751,18 @@ fn main() {
         out["closed_mesh"] = write_skyline(&p, &tops, nx, ny, bounds, cell, m.as_deref());
         out["closed_mesh"]["seconds"] = json!(t6.elapsed().as_secs_f64());
     }
+    if let Some(p) = get("move-lines") {
+        let per: Vec<Value> = op_lines.iter().enumerate()
+            .map(|(oi, l)| json!({"op": oi, "tool": cut_lens.get(oi).map(|c| c.0), "nc_lines": l})).collect();
+        std::fs::write(&p, json!({"basis": "per op, in cut order: the 1-based NC line of each move (an arc chorded into several moves repeats its line)", "ops": per}).to_string())
+            .unwrap_or_else(|e| die(format!("{p}: {e}")));
+        out["move_lines"] = json!(p);
+    }
     if strike_len.is_some() {
         let rows: Vec<Value> = strikes.iter().map(|(t, (len, n, w, first, _))| json!({
             "tool": t, "cutting_length_mm": len, "strike_moves": n, "worst_above_flutes_mm": w,
-            "first_op": first.0, "first_move": first.1})).collect();
+            "first_op": first.0, "first_move": first.1,
+            "first_nc_line": op_lines.get(first.0).and_then(|l| l.get(first.1))})).collect();
         let checked: std::collections::BTreeSet<i64> = cut_lens.iter().filter(|c| c.1.is_some()).map(|c| c.0).collect();
         let mut unchecked: Vec<i64> = cut_lens.iter().map(|c| c.0).filter(|t| !checked.contains(t)).collect();
         unchecked.dedup();
