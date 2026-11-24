@@ -96,6 +96,8 @@ impl Tilt {
 #[derive(Clone, Debug, PartialEq)]
 pub enum OpParams {
     Face {
+        /// Signed axial allowance above Cut Z, mm (Journeyman S2).
+        floor_stock: f64,
         stepover: f64,
         clearance_z: Height,
         cut_z: Height,
@@ -126,6 +128,8 @@ pub enum OpParams {
         tilt: Option<Tilt>,
     },
     Contour {
+        /// Signed axial allowance above Bottom Z, mm (Journeyman S2).
+        floor_stock: f64,
         stock_to_leave: f64,
         clearance_z: Height,
         retract_z: Height,
@@ -178,6 +182,8 @@ pub enum OpParams {
         passes: crate::machining2d::WallPasses,
     },
     Pocket {
+        /// Signed axial allowance above Bottom Z, mm (Journeyman S2).
+        floor_stock: f64,
         stepover: f64,
         stock_to_leave: f64,
         clearance_z: Height,

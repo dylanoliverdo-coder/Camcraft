@@ -140,6 +140,7 @@ fn tool(name: &str) -> Tool {
 
 fn contour_op(leave: f64) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: leave,
         clearance_z: Height::fixed(20.0),
         retract_z: Height::fixed(15.0),

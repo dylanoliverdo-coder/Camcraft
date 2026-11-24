@@ -67,6 +67,8 @@ use crate::schema::Operation;
 use crate::verify::{self, VerifyContext, Warning};
 
 mod heights;
+mod floor_stock;
+pub(crate) use floor_stock::floor_stock_depth_refusal;
 pub use heights::*;
 mod heights_sel;
 pub use heights_sel::*;

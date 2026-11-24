@@ -99,6 +99,7 @@ fn top_face(world: &World) -> GeoSel {
 
 fn contour_params() -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(25.0),
         retract_z: Height::fixed(20.0),

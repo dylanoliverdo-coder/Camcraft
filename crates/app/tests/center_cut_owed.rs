@@ -48,7 +48,7 @@ fn op(tool: &str, params: OpParams) -> Operation {
 fn a_stock_face_enters_from_air_for_a_tool_that_is_not_centre_cutting() {
     let (world, _h) = world_with("EM-0800-4FL");
     for (top_z, stepdown) in [(None, None), (Some(Height::fixed(20.0)), Some(1.0))] {
-        let face = OpParams::Face { holes: Default::default(),
+        let face = OpParams::Face { floor_stock: 0.0, holes: Default::default(),
             blend_turns: false,
             tilt: None,
             stepover: 4.0,
@@ -95,7 +95,7 @@ fn an_inner_patch_face_runs_its_entry_out_to_air_for_a_tool_that_is_not_centre_c
     for (top_z, stepdown, climb) in
         [(None, None, true), (None, None, false), (Some(Height::fixed(20.0)), Some(1.0), true)]
     {
-        let params = OpParams::Face { holes: Default::default(),
+        let params = OpParams::Face { floor_stock: 0.0, holes: Default::default(),
             blend_turns: false,
             tilt: None,
             stepover: 4.0,

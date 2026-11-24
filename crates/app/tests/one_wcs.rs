@@ -39,6 +39,7 @@ fn at(x: f64, y: f64, z: f64) -> Location {
 
 fn face() -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,

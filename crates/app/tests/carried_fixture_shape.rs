@@ -44,6 +44,7 @@ const TOOL: &str = "EM-0600-4FL";
 
 fn contour() -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(20.0),
@@ -71,6 +72,7 @@ fn contour() -> OpParams {
 
 fn face(cut_z: f64) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false,

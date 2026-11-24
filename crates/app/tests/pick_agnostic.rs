@@ -35,7 +35,7 @@ use camcraft_app::world::new_world;
 use flecs_ecs::prelude::World;
 
 fn pocket(strategy: PocketStrategy, top: f64, bottom: f64) -> OpParams {
-    OpParams::Pocket { pass_start: Default::default(), rest: None,
+    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         stepover: 4.0,

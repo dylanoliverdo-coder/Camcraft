@@ -107,6 +107,7 @@ fn document(case: Case) -> (World, History) {
 
 fn contour_params() -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(30.0),
         retract_z: Height::fixed(24.0),

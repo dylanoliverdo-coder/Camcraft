@@ -27,6 +27,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             blend_turns,
             holes,
             tilt,
+            ..
         } => {
             if tab == SEC_HEIGHTS {
                 orientation_editor(ui, u, tilt);
@@ -123,6 +124,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             tilt,
             chain_overrides,
             passes,
+            ..
         } => {
             if tab == SEC_GEO {
                 let mut s_idx = match side {
@@ -248,6 +250,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             corner_relief,
             tilt,
             pass_start,
+            ..
         } => {
             if tab == SEC_LEADS {
                 lead_page::leads_tab(ui, u, "p", Some((&mut *entry, helix_radius)), links);

@@ -43,6 +43,7 @@ fn at(x: f64, y: f64, z: f64) -> Location {
 
 fn contour(bottom_z: Height) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(30.0),
         retract_z: Height::fixed(20.0),

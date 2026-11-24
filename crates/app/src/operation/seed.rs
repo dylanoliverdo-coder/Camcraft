@@ -11,6 +11,7 @@ use super::{retype_params, Height, HeightReference, OpParams};
 #[must_use]
 pub fn seed_params(kind: usize) -> OpParams {
     let base = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         stepover: 3.0,

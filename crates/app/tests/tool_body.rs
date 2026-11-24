@@ -83,6 +83,7 @@ fn face_world() -> (World, History) {
             TOOL,
             SrcRef::Stock,
             OpParams::Face {
+                floor_stock: 0.0,
                 holes: Default::default(),
                 tilt: None,
                 blend_turns: false,

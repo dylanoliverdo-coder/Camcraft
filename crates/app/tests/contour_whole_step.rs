@@ -127,6 +127,7 @@ fn world_with_dz(mesh: Mesh, oversized_stock: bool, dz: f64) -> (World, History)
 
 fn contour_params(top_z: Height, stepdown: f64, tab_width: f64, tab_height: f64) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         side: Side::Auto,
         stock_to_leave: 0.0,
         clearance_z: Height::of(HeightReference::TopOfStock, 25.0),

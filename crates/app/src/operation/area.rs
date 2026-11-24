@@ -71,6 +71,9 @@ pub(super) fn pocket_ladder(
     else {
         return Ok(None);
     };
+    let Some(b) = super::floor_stock::shift_bottom(params, b) else {
+        return Ok(None);
+    };
     let mt = stock_top(world, setup, &material.facets, material.top, None);
     Ok(Some((material.facets, ladder_planes(t, mt, b, params.ladder_stepdown(t, b, stepdown)))))
 }
@@ -172,7 +175,7 @@ pub(super) fn whole_model_pocket(
         return None;
     }
     let t = fold_height(world, setup, Some(src), frame, top)?;
-    let b = fold_height(world, setup, Some(src), frame, bottom)?;
+    let b = super::floor_stock::shift_bottom(params, fold_height(world, setup, Some(src), frame, bottom)?)?;
     let (part, part_top) = match material_of(world, setup, src) {
         Ok(m) => (m.facets, m.top),
         Err(e) => return Some(Err(e)),
@@ -220,7 +223,7 @@ pub(super) fn stock_pocket(
         return None;
     }
     let t = fold_height(world, setup, Some(src), frame, top)?;
-    let b = fold_height(world, setup, Some(src), frame, bottom)?;
+    let b = super::floor_stock::shift_bottom(params, fold_height(world, setup, Some(src), frame, bottom)?)?;
     let oz = frame.map_or(0.0, |f| f.origin.z);
     let mt = stock_top(world, setup, &parts, f64::NEG_INFINITY, frame);
     let (parts, stock) = match frame {

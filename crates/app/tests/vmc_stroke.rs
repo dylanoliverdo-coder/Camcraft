@@ -34,6 +34,7 @@ const TOOL: &str = "EM-0600-4FL";
 
 fn contour(clearance: f64) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(clearance),

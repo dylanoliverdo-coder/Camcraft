@@ -63,7 +63,7 @@ fn from_ops() -> RestParams {
 }
 
 fn pocket(stepover: f64, bottom: f64, rest: Option<RestParams>, tilt: Option<Tilt>) -> OpParams {
-    OpParams::Pocket { pass_start: Default::default(),
+    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(),
         rest,
         blend_radius: None,
         links: Links::PLANAR,

@@ -30,6 +30,7 @@ use camcraft_app::world::new_world;
 
 fn face_params(cut_z: f64) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,

@@ -88,6 +88,7 @@ pub fn external(bosses: Vec<Hole>, pitch: Option<f64>, hand: ThreadHand, climb: 
 /// `leave` on the boss's wall.
 pub fn clearing(bottom: f64, leave: f64) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: leave,
         clearance_z: Height::fixed(TOP + 10.0),

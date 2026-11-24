@@ -72,6 +72,7 @@ fn the_machines_pane_lists_an_edm_spindle_and_coolant_by_name() {
 
 fn face() -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,

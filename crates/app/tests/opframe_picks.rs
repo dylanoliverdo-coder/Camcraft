@@ -126,6 +126,7 @@ fn face_edge_chains(world: &World, entity: &str, want_n: [f64; 3], want_off: f64
 
 fn face_params(cut: Height, clearance: f64) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,
@@ -141,7 +142,7 @@ fn face_params(cut: Height, clearance: f64) -> OpParams {
 }
 
 fn pocket_params(top: Height, bottom: Height, stepdown: f64) -> OpParams {
-    OpParams::Pocket { pass_start: Default::default(), rest: None,
+    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         tilt: None,
@@ -193,6 +194,7 @@ fn adaptive_params(top: Height, bottom: Height, stepdown: f64) -> OpParams {
 
 fn contour_params(top: Height, bottom: Height, side: Side) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(40.0),
         retract_z: Height::fixed(30.0),

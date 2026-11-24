@@ -375,7 +375,7 @@ fn tools_and_generated_operations_round_trip() {
             "Face1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(19.5),
@@ -472,7 +472,7 @@ fn arc_move_round_trips() {
             "Skin1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Contour { tilt: None,
+            OpParams::Contour { floor_stock: 0.0, tilt: None,
                 stock_to_leave: 0.0,
                 clearance_z: Height::fixed(20.0),
                 retract_z: Height::fixed(15.0),
@@ -552,7 +552,7 @@ fn a_stated_pose_round_trips_verbatim() {
             "Face1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false,
                 stepover: 5.0,
                 clearance_z: Height::fixed(15.0),
                 cut_z: Height::fixed(9.0),
@@ -968,7 +968,7 @@ fn v5_roundtrips_retract_and_auto() {
             "Pocket1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Pocket { pass_start: Default::default(), rest: None, blend_radius: None, tilt: None,
+            OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None, blend_radius: None, tilt: None,
                 links: camcraft_app::links::Links::PLANAR,
                 stepover: 1.0,
                 stock_to_leave: 0.0,
@@ -1076,7 +1076,7 @@ fn patch_selection_round_trips() {
                 entity: "boss".into(),
                 feature: FeatureSel::Patch(pid),
             }]),
-            OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(4.5),
@@ -1151,7 +1151,7 @@ fn a_selection_round_trips_and_stays_ok() {
         })
         .map(|c| c.id)
         .expect("a horizontal rim edge");
-    let params = OpParams::Contour { tilt: None,
+    let params = OpParams::Contour { floor_stock: 0.0, tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),
         retract_z: Height::fixed(8.0),
@@ -2665,6 +2665,7 @@ fn level_link_choice_round_trips_and_the_default_writes_no_key() {
             ImportModel::from_mesh("part", cube(Point3::ZERO, Point3::new(10.0, 10.0, 5.0))),
         );
         let params = OpParams::Contour {
+            floor_stock: 0.0,
             tilt: None,
             stock_to_leave: 0.0,
             clearance_z: Height::fixed(10.0),
@@ -2755,7 +2756,7 @@ fn side_choice_round_trips_and_a_hand_edited_inside_refuses_at_generate() {
             "C1",
             "EM-0600-4FL",
             SrcRef::Entity("part".into()),
-            OpParams::Contour { tilt: None,
+            OpParams::Contour { floor_stock: 0.0, tilt: None,
                 stock_to_leave: 0.0,
                 clearance_z: Height::fixed(10.0),
                 retract_z: Height::fixed(8.0),
@@ -2831,7 +2832,7 @@ fn side_choice_round_trips_and_a_hand_edited_inside_refuses_at_generate() {
             "C2",
             "EM-0600-4FL",
             SrcRef::Selection(items),
-            OpParams::Contour { tilt: None,
+            OpParams::Contour { floor_stock: 0.0, tilt: None,
                 stock_to_leave: 0.0,
                 clearance_z: Height::fixed(10.0),
                 retract_z: Height::fixed(8.0),
@@ -5635,6 +5636,7 @@ fn contour_wall_passes_round_trip_and_default_when_absent() {
     // A contour with the wall passes set: the wire carries them and the
     // read-back is exactly the same value.
     let params = OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),
@@ -5675,6 +5677,7 @@ fn contour_wall_passes_round_trip_and_default_when_absent() {
     // A contour with the fields at their defaults: the key is absent, so
     // every earlier file reads the single pass it was saved with.
     let plain = OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),

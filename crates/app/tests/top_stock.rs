@@ -44,6 +44,7 @@ fn scene(stock_top: f64, face: Option<f64>) -> World {
     );
     if let Some(cut) = face {
         let params = OpParams::Face {
+            floor_stock: 0.0,
             holes: Default::default(),
             blend_turns: false,
             tilt: None,
@@ -66,6 +67,7 @@ fn scene(stock_top: f64, face: Option<f64>) -> World {
         );
     }
     let params = OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(20.0),
@@ -255,6 +257,7 @@ fn a_narrow_mesh_stock_feature_is_not_acquitted_by_an_unsampled_prior() {
         ),
     );
     let face = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,

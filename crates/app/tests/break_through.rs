@@ -378,6 +378,7 @@ fn issue_2441_through_hole_drill_adds_point_length_and_posts_full_breakthrough()
     let mill = catalog().into_iter().find(|(n, _)| *n == "EM-1000-4FL").map(|(_, t)| t).expect("EM-1000-4FL");
     h.execute(&world, AddTool::new(&world, "EM-1000-4FL", mill).expect("mill"));
     let face = OpParams::Face {
+        floor_stock: 0.0,
         holes: camcraft_app::machining2d::FaceHoles::CutAir,
         tilt: None,
         blend_turns: false,

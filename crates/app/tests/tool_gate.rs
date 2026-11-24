@@ -59,7 +59,7 @@ fn world_with(machine: Option<&str>, tools: &[&str]) -> (World, History) {
 }
 
 fn face() -> OpParams {
-    OpParams::Face { holes: Default::default(),
+    OpParams::Face { floor_stock: 0.0, holes: Default::default(),
         blend_turns: false,
         tilt: None,
         stepover: 3.0,

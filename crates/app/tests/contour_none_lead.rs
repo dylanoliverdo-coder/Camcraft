@@ -34,6 +34,7 @@ fn contour(lead: Lead, lead_out: Option<Lead>, entry: Entry3D) -> OpParams {
     // overlap stated explicitly.
     let approach = Approach { lead_out, ext_in: 0.0, ext_out: 0.0, overlap: 0.0, ..Approach::DEFAULT };
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::of(HeightReference::TopOfStock, 20.5),
         retract_z: Height::of(HeightReference::TopOfStock, 13.5),

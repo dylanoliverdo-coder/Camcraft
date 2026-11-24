@@ -138,6 +138,7 @@ fn a_tool_library_edit_that_widens_a_slot_cutter_is_refused() {
 
 fn face() -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,
         tilt: None,

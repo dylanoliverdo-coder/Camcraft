@@ -13,6 +13,8 @@
 //! rule of published machining practice. No vendor material consulted.
 
 mod common;
+#[path = "contour_auto_level/floor_stock.rs"]
+mod floor_stock;
 
 use common::solid_part::{P2, cap, circle, plate, rect, walls};
 use flecs_ecs::prelude::World;
@@ -110,6 +112,7 @@ fn top_face(world: &World, z: f64) -> Vec<GeoSel> {
 /// Side Auto, model top to model bottom.
 fn auto() -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(30.0),

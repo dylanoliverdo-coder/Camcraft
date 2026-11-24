@@ -63,19 +63,19 @@ fn is_field(h: &H, number: &str) -> bool {
 
 #[test]
 fn tab_and_shift_tab_walk_the_value_fields_and_wrap() {
-    // Heights: Clearance 25, Top 12, Bottom 9 and the stepdown 1, each in
-    // its own group, with combos and group headers between them.
+    // Heights: Clearance 25, Top 12, Bottom 9, stepdown 1 and floor stock 0,
+    // each in its own group, with combos and group headers between them.
     let mut h = on_tab(super::op_tabs::SEC_HEIGHTS);
     click_field(&mut h, "25.0 mm");
     assert!(is_field(&h, "25.0"), "the click focuses the field: {:?}", focused(&h));
-    for next in ["12.0", "9.0", "1.0", "25.0"] {
+    for next in ["12.0", "9.0", "1.0", "0.0", "25.0"] {
         key(&mut h, Key::Tab, Modifiers::NONE);
         assert!(is_field(&h, next), "Tab moves to the {next} field, past the combos and headers: {:?}", focused(&h));
     }
     key(&mut h, Key::Tab, Modifiers::SHIFT);
-    assert!(is_field(&h, "1.0"), "Shift+Tab from the first field wraps to the last: {:?}", focused(&h));
+    assert!(is_field(&h, "0.0"), "Shift+Tab from the first field wraps to the last: {:?}", focused(&h));
     key(&mut h, Key::Tab, Modifiers::SHIFT);
-    assert!(is_field(&h, "9.0"), "Shift+Tab moves back: {:?}", focused(&h));
+    assert!(is_field(&h, "1.0"), "Shift+Tab moves back: {:?}", focused(&h));
     assert!(h.state().pending.is_empty(), "a focus move queues no command");
 }
 

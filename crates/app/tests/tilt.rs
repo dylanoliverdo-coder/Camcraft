@@ -99,7 +99,7 @@ fn rotated_by_90(m: Mesh) -> Mesh {
 /// uncut collar the shank law (rightly) reports as a collision, and a
 /// test that generates a warning per level tests nothing.
 fn pocket(tilt: Option<Tilt>, top_z: f64) -> OpParams {
-    OpParams::Pocket { pass_start: Default::default(), rest: None,
+    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         tilt,
@@ -131,7 +131,7 @@ fn pocket(tilt: Option<Tilt>, top_z: f64) -> OpParams {
 /// recorded in RECOMMENDED.md). A fixture meant to be a rigid parked copy
 /// must therefore choose heights by the door, not by hand.
 fn pocket_parked() -> OpParams {
-    OpParams::Pocket { pass_start: Default::default(), rest: None,
+    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         tilt: Some(tilt90_parked()),
@@ -370,6 +370,7 @@ fn tilt_on_a_picked_selection_refuses_by_name() {
             .expect("a horizontal planar face"),
     );
     let contour = |tilt: Option<Tilt>| OpParams::Contour {
+        floor_stock: 0.0,
         tilt,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),
@@ -455,7 +456,7 @@ fn an_insane_tilt_refuses_at_the_command_door() {
         .expect("box stock"),
     );
     add_tool(&world, &mut history, "EM-0400-2FL");
-    let face = |tilt: Option<Tilt>| OpParams::Face { holes: Default::default(), blend_turns: false,
+    let face = |tilt: Option<Tilt>| OpParams::Face { floor_stock: 0.0, holes: Default::default(), blend_turns: false,
         tilt,
         stepover: 3.0,
         clearance_z: Height::fixed(25.0),
@@ -560,7 +561,7 @@ fn a_tilt_edit_marks_the_operation_stale_and_undo_restores() {
     add_tool(&world, &mut history, "EM-0400-2FL");
     history.execute(
         &world,
-        CreateOperation::new(&world, "F", "EM-0400-2FL", SrcRef::Stock, OpParams::Face { holes: Default::default(), blend_turns: false,
+        CreateOperation::new(&world, "F", "EM-0400-2FL", SrcRef::Stock, OpParams::Face { floor_stock: 0.0, holes: Default::default(), blend_turns: false,
             tilt: None,
             stepover: 3.0,
             clearance_z: Height::fixed(25.0),
@@ -580,7 +581,7 @@ fn a_tilt_edit_marks_the_operation_stale_and_undo_restores() {
         EditOperationParams::new(
             &world,
             "F",
-            OpParams::Face { holes: Default::default(), blend_turns: false,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), blend_turns: false,
                 tilt: Some(Tilt {
                     basis_version: 1,
                     a_deg: 0.0,

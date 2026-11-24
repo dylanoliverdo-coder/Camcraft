@@ -32,6 +32,7 @@ fn skin(climb: bool) -> camcraft_app::schema::Toolpath {
         .expect("catalog entry");
     history.execute(&world, AddTool::new(&world, "EM-0400-2FL", em).expect("tool"));
     let params = OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(20.0),

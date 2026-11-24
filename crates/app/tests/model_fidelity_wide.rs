@@ -45,6 +45,7 @@ fn faced_brick(coarse_mm: Option<f64>) -> World {
 /// A Face op that finishes the stock top exactly.
 fn face_op() -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         stepover: 3.0,
