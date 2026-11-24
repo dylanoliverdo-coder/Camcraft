@@ -594,3 +594,82 @@ fn tabs_with_wall_passes_are_refused_by_name() {
     let why = err.to_string();
     assert!(why.contains("tabs") && why.contains("wall passes"), "{why}");
 }
+
+// ---- Journeyman spec S1, review round 4: the default is the pre-S1
+// path, move for move -------------------------------------------
+
+/// A 40 mm straight open run with air on one side, default passes.
+fn open_run() -> Vec<Point2> {
+    vec![Point2::new(0.0, 0.0), Point2::new(40.0, 0.0)]
+}
+
+fn open_material() -> Region {
+    rect(-10.0, -20.0, 50.0, 0.0)
+}
+
+/// A default `contour_open_run` (3 levels) is, move for move, the
+/// pre-S1 `contour_along_chain` on the same offset ride.
+#[test]
+fn default_open_run_matches_the_pre_s1_single_call() {
+    let mut p = boss_params();
+    p.passes = camcraft_motion::machining2d::WallPasses::default();
+    p.clearance_z = 20.0;
+    p.retract_z = 10.0;
+    p.top_z = 0.0;
+    p.bottom_z = -6.0;
+    p.stepdown = 2.0;
+    let mat = open_material();
+    let section = move |_z: f64| -> Result<Option<Region>, camcraft_motion::machining2d::GenError> { Ok(Some(mat.clone())) };
+    let got = contour_open_run(&open_run(), &p, &section).expect("open passes");
+    // The pre-S1 ride: the chain offset to its air side by r + s.
+    let d = p.tool_diameter * 0.5 + p.stock_to_leave;
+    let mut ride = camcraft_motion::machining2d::offset_run_side(&open_run(), d, true)
+        .expect("the air side")
+        .expect("a ride");
+    ride.reverse();
+    let want = camcraft_motion::machining2d::contour_along_chain(&ride, &p).expect("pre-S1");
+    assert_eq!(got.moves, want.moves, "the default is the pre-S1 single call");
+    // The note `contour_open_run` adds on top of the ride is unchanged.
+    assert!(
+        got.notes.iter().any(|n| n.contains("air side") && n.contains("5.000 mm")),
+        "the pre-S1 air-side note: {:?}",
+        got.notes
+    );
+}
+
+/// A default `contour_open_run_sided` (3 levels) is, move for move, the
+/// pre-S1 `contour_along_chain` on the same offset ride.
+#[test]
+fn default_open_run_sided_matches_the_pre_s1_single_call() {
+    let mut p = boss_params();
+    p.passes = camcraft_motion::machining2d::WallPasses::default();
+    p.clearance_z = 20.0;
+    p.retract_z = 10.0;
+    p.top_z = 0.0;
+    p.bottom_z = -6.0;
+    p.stepdown = 2.0;
+    let stock = open_material();
+    let stock_at = move |_z: f64| -> Result<Option<Region>, camcraft_motion::machining2d::GenError> { Ok(Some(stock.clone())) };
+    let part_at = move |_z: f64| -> Result<Option<Region>, camcraft_motion::machining2d::GenError> { Ok(None) };
+    let got = camcraft_motion::machining2d::contour_open_run_sided(
+        &open_run(),
+        &p,
+        Side::Outside,
+        &stock_at,
+        &part_at,
+    )
+    .expect("open passes");
+    // The pre-S1 ride: the chain offset to the stock's air side by r + s.
+    let d = p.tool_diameter * 0.5 + p.stock_to_leave;
+    let mut ride = camcraft_motion::machining2d::offset_run_side(&open_run(), d, true)
+        .expect("the air side")
+        .expect("a ride");
+    ride.reverse();
+    let want = camcraft_motion::machining2d::contour_along_chain(&ride, &p).expect("pre-S1");
+    assert_eq!(got.moves, want.moves, "the default is the pre-S1 single call");
+    assert!(
+        got.notes.iter().any(|n| n.contains("stock") && n.contains("5.000 mm")),
+        "the pre-S1 stock-side note: {:?}",
+        got.notes
+    );
+}

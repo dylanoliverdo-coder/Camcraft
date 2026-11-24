@@ -51,6 +51,14 @@ impl Default for WallPasses {
 }
 
 impl WallPasses {
+    /// Is this the single roughing pass every file before the option
+    /// held (spec S1, review round 4)? The default path is the pre-S1
+    /// code, byte for byte.
+    #[must_use]
+    pub fn is_default(&self) -> bool {
+        *self == WallPasses::default()
+    }
+
     /// Why these wall passes cannot be honoured, by name; `None` when
     /// they can (spec S1, "Refusals").
     #[must_use]
@@ -348,11 +356,13 @@ pub(crate) fn open_pass_runs(
             let ride = match offset(d)? {
                 Some(r) => r,
                 None => {
-                    // The final pass (w) failing refuses the run exactly
-                    // as before; any other pass is named and dropped.
+                    // The final pass (w) failing refuses the run with the
+                    // pre-S1 offset_run fold error; any other pass is
+                    // named and dropped.
                     if (d - final_offset(p)).abs() <= 1e-9 {
                         return Err(GenError::Invalid(format!(
-                            "the open run's offset (tool radius plus stock to leave) is {d:.3} mm - it must be positive"
+                            "the open run's offset of {d:.3} mm folds onto itself (the run comes back within twice the offset of \
+                             itself) - pick a gentler run or a smaller tool"
                         )));
                     }
                     path.notes.push(format!(

@@ -141,16 +141,39 @@ pub(super) fn emit_band(
     // already cut (a merged pass loop is cut once, at the first base
     // loop that maps to it - spec S1, review round 3).
     let mut cut_pass_loops: std::collections::HashSet<(u64, usize, usize)> = std::collections::HashSet::new();
+    // With the default passes (one roughing pass, no finishing, no
+    // spring) the body runs exactly as it did before S1: no pass band
+    // is built and no loop is mapped (spec S1, review round 4).
+    let single = p.passes.is_default();
     for (si, &(z, li)) in sched.iter().enumerate() {
-      for (pi, pass) in super::contour_passes::passes_at_level(p, &levels, z).into_iter().enumerate() {
+      let passes = if single {
+            vec![super::contour_passes::WallPass { offset: band.offset, finishing: false }]
+        } else {
+            super::contour_passes::passes_at_level(p, &levels, z)
+        };
+      for (pi, pass) in passes.into_iter().enumerate() {
         let pass_band = super::contour_passes::prepare_pass(band, p, pass, lead_notes)?;
         if pass_band.loops.is_empty() {
             continue;
         }
         // Map this base loop to its pass loop; never index one band's
-        // loops with another band's index.
-        let Some(pli) = super::contour_passes::map_loops(&band.loops, &pass_band.loops, inside).get(li).copied().flatten() else {
-            continue;
+        // loops with another band's index. The default's pass band IS
+        // the base band, so the map is the identity.
+        let pli = if single { li } else {
+            let Some(pli) = super::contour_passes::map_loops(&band.loops, &pass_band.loops, inside).get(li).copied().flatten() else {
+                let at = band.loops.get(li).and_then(|l| l.points().first().copied());
+                let note = format!(
+                    "contour: a wall pass at {:.3} mm from the wall has no loop for the ring at ({:.3}, {:.3}) - the pass is dropped there",
+                    pass.offset,
+                    at.map(|q| q.x).unwrap_or(0.0),
+                    at.map(|q| q.y).unwrap_or(0.0)
+                );
+                if !lead_notes.contains(&note) {
+                    lead_notes.push(note);
+                }
+                continue;
+            };
+            pli
         };
         let key = (z.to_bits(), pi, pli);
         if !cut_pass_loops.insert(key) {
@@ -201,7 +224,7 @@ pub(super) fn emit_band(
         let ap = &p.links.approach;
         let picked = pick.filter(|&(pi, _)| pi == li).map(|(_, q)| q);
         let seated = contour_start::seat(pts.clone(), picked, tabbed, prog.is_some(), p, &legal, lead_notes);
-        let alone = !tabbed && picked.is_none() && band.room.is_none() && !(0..band.loops.len()).any(|lj| lj != pli && rz.iter().any(|&q| lad.walks(lj, q)));
+        let alone = !tabbed && picked.is_none() && band.room.is_none() && !(0..band.loops.len()).any(|lj| lj != li && rz.iter().any(|&q| lad.walks(lj, q)));
         let seated = super::tab_clear::level_start(seated, pts, fits.get(&li).filter(|_| alone && !tab_levels[li].is_empty()));
         let ring = Ring::new(seated);
         // The overlap past the start on closed rings (M11.3 C): not on

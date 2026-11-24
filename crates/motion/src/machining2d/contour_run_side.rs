@@ -71,14 +71,19 @@ pub fn contour_open_run(pts: &[Point2], p: &ContourParams, section: &SectionAt) 
     // The tool stands on the side without material. The offset comes back
     // with the run (the material's side) on its left; climb travels with
     // the material on its RIGHT (#1555), so it turns round.
-    let mut path = super::contour_passes::open_pass_runs(p, |d| {
-        let Some(mut r) = offset_run_side(&run, d, !material_left)? else {
-            return Ok(None);
-        };
+    let ride = |d: f64| -> Result<Vec<Point2>, GenError> {
+        let mut r = offset_run(&run, d, !material_left)?;
         r.reverse();
         clear_of_part(&r, p.tool_diameter * 0.5, &levels)?;
-        Ok(Some(r))
-    })?;
+        Ok(r)
+    };
+    let mut path = if p.passes.is_default() {
+        // The default: today's single pass over all levels, exactly the
+        // pre-S1 code (spec S1, review round 4).
+        contour_along_chain(&ride(d)?, p)?
+    } else {
+        super::contour_passes::open_pass_runs(p, |d| ride(d).map(Some))?
+    };
     path.notes.push(format!(
         "contour: the open run is cut on its air side - the tool centre {d:.3} mm off it (tool radius plus stock to leave); Side applies to closed rings only"
     ));
@@ -352,6 +357,16 @@ pub fn offset_run_side(run: &[Point2], d: f64, left: bool) -> Result<Option<Vec<
         return Ok(None);
     }
     Ok(Some(ride))
+}
+
+/// One side of the run's offset at `d`, refusing by name when it folds.
+pub(crate) fn offset_run(run: &[Point2], d: f64, left: bool) -> Result<Vec<Point2>, GenError> {
+    offset_run_side(run, d, left)?.ok_or_else(|| {
+        GenError::Invalid(format!(
+            "the open run's offset of {d:.3} mm folds onto itself (the run comes back within twice the offset of \
+             itself) - pick a gentler run or a smaller tool"
+        ))
+    })
 }
 
 #[cfg(test)]

@@ -16,8 +16,9 @@ use crate::cl::Toolpath;
 use crate::geo2d::{Point2, Region};
 
 use super::contour::{ContourParams, Side};
+use super::contour_chain::contour_along_chain;
 use super::contour_run_side::{
-    LIFT, SectionAt, TOL, Words, clear_of_part, material_side, offset_run_side, simple,
+    LIFT, SectionAt, TOL, Words, clear_of_part, material_side, offset_run, simple,
 };
 use super::face::GenError;
 
@@ -87,16 +88,21 @@ pub fn contour_open_run_sided(
     };
     // `offset_run_side` comes back with the run on its left.
     let reverse = tool_left != material_left;
-    let mut path = super::contour_passes::open_pass_runs(p, |d| {
-        let Some(mut r) = offset_run_side(&run, d, tool_left)? else {
-            return Ok(None);
-        };
+    let ride = |d: f64| -> Result<Vec<Point2>, GenError> {
+        let mut r = offset_run(&run, d, tool_left)?;
         if reverse {
             r.reverse();
         }
         clear_of_part(&r, p.tool_diameter * 0.5, &part_levels)?;
-        Ok(Some(r))
-    })?;
+        Ok(r)
+    };
+    let mut path = if p.passes.is_default() {
+        // The default: today's single pass over all levels, exactly the
+        // pre-S1 code (spec S1, review round 4).
+        contour_along_chain(&ride(d)?, p)?
+    } else {
+        super::contour_passes::open_pass_runs(p, |d| ride(d).map(Some))?
+    };
     path.notes.push(format!(
         "contour: the open run on the stock is cut to its {said} side - the tool centre {d:.3} mm off it (tool radius plus stock to leave)"
     ));
