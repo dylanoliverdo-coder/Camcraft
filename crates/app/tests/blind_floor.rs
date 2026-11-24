@@ -94,7 +94,7 @@ fn contour_op(stepdown: f64, leave: f64) -> OpParams {
         tab_height: 1.0,
         entry: Entry3D::Plunge,
         helix_radius: 1.0,
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         tilt: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
@@ -186,7 +186,7 @@ fn direct_params(stepdown: f64, leave: f64) -> ContourParams {
         tab_height: 1.0,
         entry: Entry3D::Plunge,
         helix_radius: 1.0,
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         passes: camcraft_app::machining2d::WallPasses::default(),
     }
@@ -398,7 +398,7 @@ fn the_gouge_clause_speaks_the_document_s_units() {
 #[test]
 fn a_face_cut_into_the_part_is_a_gouge() {
     let face = |cut: f64| OpParams::Face { floor_stock: 0.0, holes: Default::default(),
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 4.0,
         clearance_z: Height::fixed(30.0),

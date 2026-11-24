@@ -375,7 +375,7 @@ fn tools_and_generated_operations_round_trip() {
             "Face1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(19.5),
@@ -490,7 +490,7 @@ fn arc_move_round_trips() {
                 tab_height: 0.0,
                 entry: camcraft_app::machining3d::Entry3D::Plunge,
                 helix_radius: 1.0,
-                blend_turns: false,
+                blend_turns: false, blend_radius: None,
                 links: camcraft_app::links::Links::PLANAR,
                 chain_overrides: Vec::new(),
                 passes: camcraft_app::machining2d::WallPasses::default(),
@@ -552,7 +552,7 @@ fn a_stated_pose_round_trips_verbatim() {
             "Face1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 5.0,
                 clearance_z: Height::fixed(15.0),
                 cut_z: Height::fixed(9.0),
@@ -1076,7 +1076,7 @@ fn patch_selection_round_trips() {
                 entity: "boss".into(),
                 feature: FeatureSel::Patch(pid),
             }]),
-            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(4.5),
@@ -1169,7 +1169,7 @@ fn a_selection_round_trips_and_stays_ok() {
         tab_height: 0.0,
         entry: camcraft_app::machining3d::Entry3D::Plunge,
         helix_radius: 1.0,
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
         passes: camcraft_app::machining2d::WallPasses::default(),
@@ -2684,7 +2684,7 @@ fn level_link_choice_round_trips_and_the_default_writes_no_key() {
             tab_height: 0.0,
             entry: camcraft_app::machining3d::Entry3D::Plunge,
             helix_radius: 1.0,
-            blend_turns: false,
+            blend_turns: false, blend_radius: None,
             links,
             chain_overrides: Vec::new(),
             passes: camcraft_app::machining2d::WallPasses::default(),
@@ -2774,7 +2774,7 @@ fn side_choice_round_trips_and_a_hand_edited_inside_refuses_at_generate() {
                 tab_height: 0.0,
                 entry: camcraft_app::machining3d::Entry3D::Plunge,
                 helix_radius: 1.0,
-                blend_turns: false,
+                blend_turns: false, blend_radius: None,
                 links: camcraft_app::links::Links::PLANAR,
                 chain_overrides: Vec::new(),
                 passes: camcraft_app::machining2d::WallPasses::default(),
@@ -2850,7 +2850,7 @@ fn side_choice_round_trips_and_a_hand_edited_inside_refuses_at_generate() {
                 tab_height: 0.0,
                 entry: camcraft_app::machining3d::Entry3D::Plunge,
                 helix_radius: 1.0,
-                blend_turns: false,
+                blend_turns: false, blend_radius: None,
                 links: camcraft_app::links::Links::PLANAR,
                 chain_overrides: Vec::new(),
                 passes: camcraft_app::machining2d::WallPasses::default(),
@@ -5505,6 +5505,43 @@ fn finish3d_file_without_gap_link_reads_jump() {
     assert_eq!(gap_link_of(&world), camcraft_app::finishing3d::GapLink::Jump, "absent means jump");
 }
 
+fn waterlines_of(world: &flecs_ecs::prelude::World) -> bool {
+    let e = model::find_by_name(world, "F1").expect("op");
+    let o = model::operation_of(world, &e).expect("operation");
+    let OpParams::Finish3D { waterlines, .. } = &o.params else {
+        panic!("finish3d params expected, got {:?}", o.params);
+    };
+    *waterlines
+}
+
+#[test]
+fn finish3d_waterlines_round_trips_through_save_and_load() {
+    for flag in [false, true] {
+        let world = new_world();
+        let extra = format!(", \"waterlines\": {flag}");
+        project::open(&world, &finish3d_text(&extra)).expect("the waterlines key must read");
+        assert_eq!(waterlines_of(&world), flag);
+        let path = tmp_path(&format!("waterlines_{flag}_rt"));
+        project::save(&world, &path).expect("save");
+        let first = std::fs::read_to_string(&path).expect("read");
+        let world2 = new_world();
+        project::load(&world2, &path).expect("reload");
+        project::save(&world2, &path).expect("resave");
+        let second = std::fs::read_to_string(&path).expect("reread");
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(waterlines_of(&world2), flag, "{flag} saves and loads as {flag}");
+        assert!(first.contains(&format!("\"waterlines\": {flag}")), "{first}");
+        assert_eq!(first, second, "waterlines={flag} round-trips byte-identically");
+    }
+}
+
+#[test]
+fn finish3d_file_without_waterlines_reads_true() {
+    let world = new_world();
+    project::open(&world, &finish3d_text("")).expect("an older finish3d file must read");
+    assert!(waterlines_of(&world), "absent waterlines key defaults to true");
+}
+
 // ---- Atomic project save: a failed save keeps the old file whole ----
 
 /// An empty folder of its own for one atomic-save test.
@@ -5656,6 +5693,7 @@ fn contour_wall_passes_round_trip_and_default_when_absent() {
         entry: camcraft_app::machining3d::Entry3D::Plunge,
         helix_radius: 1.0,
         blend_turns: false,
+        blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
         passes: WallPasses {
@@ -5697,6 +5735,7 @@ fn contour_wall_passes_round_trip_and_default_when_absent() {
         entry: camcraft_app::machining3d::Entry3D::Plunge,
         helix_radius: 1.0,
         blend_turns: false,
+        blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
         passes: WallPasses::default(),

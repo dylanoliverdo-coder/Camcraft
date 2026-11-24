@@ -167,7 +167,7 @@ fn face(cut: f64) -> OpParams {
     OpParams::Face {
         floor_stock: 0.0,
         holes: FaceHoles::CutAir,
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 5.0,
         clearance_z: Height::fixed(35.0),

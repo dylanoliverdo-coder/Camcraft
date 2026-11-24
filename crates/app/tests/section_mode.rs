@@ -97,7 +97,7 @@ fn make_face_world() -> World {
     let params = OpParams::Face {
         floor_stock: 0.0,
         holes: FaceHoles::default(),
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 15.0,
         clearance_z: Height::fixed(25.0),

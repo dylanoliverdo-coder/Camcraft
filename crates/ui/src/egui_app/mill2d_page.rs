@@ -24,7 +24,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             feed,
             plunge_feed,
             climb,
-            blend_turns,
+            blend_turns, blend_radius,
             holes,
             tilt,
             ..
@@ -73,7 +73,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
                 // the status line names every turn left sharp.
                 // #3356: Face rows run edge to edge - no ring order.
                 super::pass_start_row::no_pass_order_row(ui, "face", super::pass_start_row::FACE_NO_PASS_ORDER);
-                check_row(ui, "Arc turns at row ends", blend_turns);
+                super::kind_editors::arc_turn_rows_auto(ui, u, ("Arc turns at row ends", "Arc radius = half the row spacing"), blend_turns, blend_radius);
                 // M13.11: how a row meets a hole in the faced region.
                 // Lift is safe for a bore and a boss alike; cutting
                 // across air is the user's call, islands stay lifted.
@@ -119,7 +119,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             tab_height,
             entry,
             helix_radius,
-            blend_turns,
+            blend_turns, blend_radius,
             links,
             tilt,
             chain_overrides,
@@ -179,7 +179,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
                 // M11.1 B: air-side corners round on one arc where it
                 // is legal; the status line names every corner left
                 // sharp and the corner rest the rounding leaves.
-                check_row(ui, "Arc turns at corners", blend_turns);
+                super::kind_editors::arc_turn_rows(ui, u, "Arc turns at corners", blend_turns, blend_radius);
                 super::contour_pass_rows::wall_pass_rows(ui, u, passes);
             }
             if tab == SEC_LEADS {

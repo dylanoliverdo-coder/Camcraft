@@ -25,7 +25,7 @@ fn face_params(holes: FaceHoles) -> OpParams {
     OpParams::Face {
         floor_stock: 0.0,
         holes,
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 3.0,
         clearance_z: Height::fixed(25.0),

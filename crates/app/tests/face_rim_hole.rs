@@ -67,7 +67,7 @@ fn run_face(world: &World, h: &mut History, cut_z: f64) -> camcraft_app::schema:
     let params = OpParams::Face {
         floor_stock: 0.0,
         holes: FaceHoles::Lift,
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 4.0,
         clearance_z: Height::fixed(30.0),

@@ -61,7 +61,7 @@ fn faced_world() -> (World, History) {
     let face = OpParams::Face {
         floor_stock: 0.0,
         holes: Default::default(),
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 4.0,
         clearance_z: Height::fixed(20.0),
@@ -144,7 +144,7 @@ fn contour_inside(entry: Entry3D, top: f64) -> OpParams {
         tab_height: 0.0,
         entry,
         helix_radius: 1.0,
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
         passes: camcraft_app::machining2d::WallPasses::default(),

@@ -47,6 +47,7 @@ fn params(lead: Lead, links: Links) -> ContourParams {
         entry: Entry3D::Plunge,
         helix_radius: 1.0,
         blend_turns: false,
+        blend_radius: None,
         links,
         passes: camcraft_motion::machining2d::WallPasses::default(),
     }

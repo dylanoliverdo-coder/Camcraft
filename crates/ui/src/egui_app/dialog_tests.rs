@@ -50,7 +50,7 @@ pub(super) fn pocket(entry: Entry3D) -> OpParams {
 
 pub(super) fn face() -> OpParams {
     OpParams::Face { floor_stock: 0.0, holes: Default::default(),
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 3.0,
         clearance_z: Height::fixed(25.0),

@@ -7,12 +7,14 @@
 //! the full tool width, never cross the part wall and cut the band whole.
 //!
 //! Gate map: covers camcraft_motion::machining2d (pass_start, level_rings,
-//! level_order, pocket, pocket_avoid, ladder_links) and
+//! level_order, ring_side, pocket, pocket_avoid, ladder_links) and
 //! camcraft_geometry::geo2d (clip_line).
 //! Provenance: our own regression of the second read on PR #3353; no
 //! vendor material consulted.
 
 mod common;
+#[path = "pass_start_levels/one_ring_set.rs"]
+mod one_ring_set;
 
 use camcraft_motion::cl::Toolpath;
 use camcraft_motion::entry::Entry3D;

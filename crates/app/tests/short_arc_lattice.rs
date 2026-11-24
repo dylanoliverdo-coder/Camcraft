@@ -56,6 +56,7 @@ fn contour() -> OpParams {
         entry: camcraft_app::machining3d::Entry3D::Plunge,
         helix_radius: 1.0,
         blend_turns: false,
+        blend_radius: None,
         links: Links::PLANAR,
         chain_overrides: Vec::new(),
         passes: camcraft_app::machining2d::WallPasses::default(),

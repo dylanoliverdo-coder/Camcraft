@@ -214,7 +214,7 @@ fn a_drill_through_an_undercut_lip_is_a_gouge_and_never_posts() {
 #[test]
 fn facing_under_an_overhanging_slab_is_a_gouge_and_never_posts() {
     let face = OpParams::Face { floor_stock: 0.0, holes: Default::default(),
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 4.0,
         clearance_z: Height::fixed(30.0),
@@ -264,7 +264,7 @@ fn the_solid_law_on_the_users_part_is_silent_and_cheap() {
         tab_height: 1.0,
         entry: camcraft_app::machining3d::Entry3D::Plunge,
         helix_radius: 1.0,
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         passes: camcraft_app::machining2d::WallPasses::default(),
     };

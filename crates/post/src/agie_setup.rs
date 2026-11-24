@@ -3,7 +3,8 @@
 //! This encoder references an existing ISO geometry file for one closed punch.
 //! The caller must verify the nominal contour, its lead from the threading hole,
 //! and the compensated cuts against the stock, installed travel and fixtures.
-//! The piece uses stock top Z0, 20 mm steel 0001, Berco Cut 0.25 and a 1 mm separation.
+//! The piece uses stock top Z0, steel 0001, Berco Cut 0.25 and a 1 mm separation.
+//! The stock thickness must be one of the measured QN2 heights in [`QN2_OFFSETS_UM`].
 //!
 //! Place the SBL script and SBR resource manifest beside the ISO, with the same
 //! stem and their respective extensions. Import the ISO geometry into ISO Sys.
@@ -21,6 +22,7 @@
 //!     stock_min_um: [-40_000, -30_000],
 //!     stock_max_um: [40_000, 30_000],
 //!     start_hole_um: [-30_000, 0],
+//!     height_um: 20_000,
 //! };
 //! let files = setup.encode()?;
 //! assert_eq!(files.sbr, "AGIE.USING_CCSEP20.ISO IMPORT CCSEP20.ISO;\r\n");
@@ -31,6 +33,25 @@
 mod inspection;
 mod publish;
 pub use inspection::{INSPECTION_RECEIPT, InspectionProfile, InspectionSegment};
+
+/// Wire-centre offsets in µm of the rough pass and the three trims on a
+/// straight outside face, for each measured stock thickness in mm. Offline
+/// Agie Control plots of steel 0001, Berco Cut 0.25 and quality CCB030 (#2954).
+/// No other thickness has a measurement, and none is interpolated.
+pub const QN2_OFFSETS_UM: [(u16, [u16; 4]); 4] = [
+    (15, [245, 155, 140, 134]),
+    (20, [245, 155, 140, 134]),
+    (40, [260, 170, 140, 130]),
+    (80, [266, 176, 143, 133]),
+];
+
+/// The measured QN2 offsets for a stock thickness in µm, if it is qualified.
+pub fn qn2_offsets_um(height_um: i32) -> Option<[u16; 4]> {
+    QN2_OFFSETS_UM
+        .iter()
+        .find(|(mm, _)| i32::from(*mm) * 1000 == height_um)
+        .map(|(_, offsets)| *offsets)
+}
 
 /// Setup coordinates for a closed punch with a predrilled 2 mm start hole.
 /// XY coordinates are integer micrometres in the same work frame as the ISO.
@@ -44,6 +65,8 @@ pub struct PunchSetup20<'a> {
     pub stock_max_um: [i32; 2],
     /// Centre of the threading hole [X, Y].
     pub start_hole_um: [i32; 2],
+    /// Stock thickness below the stock top Z0. Must be in [`QN2_OFFSETS_UM`].
+    pub height_um: i32,
 }
 
 /// The two native setup files. Save their ASCII bytes with the supplied CRLF endings.
@@ -54,7 +77,7 @@ pub struct SetupFiles {
     /// Import manifest referring to the caller's ISO geometry.
     pub sbr: String,
     /// Operator checks for the installed effective work technology.
-    pub controller_review: &'static str,
+    pub controller_review: String,
 }
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
@@ -69,17 +92,24 @@ pub enum SetupError {
     InvalidStock,
     #[error("Place the complete 2 mm start hole inside the stock.")]
     HoleOutsideStock,
+    #[error(
+        "Use a stock thickness of 15, 20, 40 or 80 mm. Other thicknesses have no measured QN2 offsets."
+    )]
+    UnqualifiedHeight,
 }
 
 impl PunchSetup20<'_> {
     /// Encode one native work with zero erosion steps on import.
     ///
     /// # Errors
-    /// Refuses invalid file stems, stock bounds and threading-hole positions.
+    /// Refuses invalid file stems, stock bounds, threading-hole positions and
+    /// stock thicknesses without measured offsets.
     pub fn encode(&self) -> Result<SetupFiles, SetupError> {
         if !valid_stem(self.stem) {
             return Err(SetupError::InvalidStem);
         }
+        let [rough, trim1, trim2, trim3] =
+            qn2_offsets_um(self.height_um).ok_or(SetupError::UnqualifiedHeight)?;
         for (axis, stroke_um) in [350_000, 250_000].into_iter().enumerate() {
             let min = i64::from(self.stock_min_um[axis]);
             let max = i64::from(self.stock_max_um[axis]);
@@ -94,14 +124,21 @@ impl PunchSetup20<'_> {
         Ok(SetupFiles {
             sbl: piece(self),
             sbr: format!("AGIE.USING_{0}.ISO IMPORT {0}.ISO;\r\n", self.stem),
-            controller_review: concat!(
-                "Import the ISO into ISO Sys and keep its SBR beside the SBL during script import. ",
-                "Select the newly created piece. Earlier pieces can retain their steps on repeat import. ",
-                "Match this work's ISO resource, geometry and start hole to the setup. Confirm zero steps. ",
-                "Verify steel 0001, Berco Cut 0.25 and 20 mm. CCB030 requests Ra 0.30, Te 1.50, ",
-                "Tkm 1.00 and three disabled options. Check the effective values and both visible options ",
-                "on this work. Assign the matching TECCUT row. Check offsets of 245, 155, 140 and ",
-                "134 µm in order before GRAFICHECK and FORMALCHECK.",
+            controller_review: format!(
+                concat!(
+                    "Import the ISO into ISO Sys and keep its SBR beside the SBL during script import. ",
+                    "Select the newly created piece. Earlier pieces can retain their steps on repeat import. ",
+                    "Match this work's ISO resource, geometry and start hole to the setup. Confirm zero steps. ",
+                    "Verify steel 0001, Berco Cut 0.25 and {height} mm. CCB030 requests Ra 0.30, Te 1.50, ",
+                    "Tkm 1.00 and three disabled options. Check the effective values and both visible options ",
+                    "on this work. Assign the matching TECCUT row. Check offsets of {rough}, {trim1}, {trim2} and ",
+                    "{trim3} µm in order before GRAFICHECK and FORMALCHECK.",
+                ),
+                height = self.height_um / 1000,
+                rough = rough,
+                trim1 = trim1,
+                trim2 = trim2,
+                trim3 = trim3,
             ),
         })
     }
@@ -149,13 +186,14 @@ fn piece(setup: &PunchSetup20<'_>) -> String {
     let [xmin, ymin] = setup.stock_min_um.map(i64::from);
     let [xmax, ymax] = setup.stock_max_um.map(i64::from);
     let stem = setup.stem;
+    let height = mm(i64::from(setup.height_um));
     let group = format!("\"{stem}\"");
     let work = format!("{group},\"CUT1\"");
     let work_context = format!("{work},NULL");
     let hole_context = format!("{work},\"stp1\"");
     let mut lines = vec!["'$Include \"jescript.sbh\"".into(), "sub SetOrigin".into()];
     for (field, value) in [
-        ("ID_HEIGHT", "20.000".into()),
+        ("ID_HEIGHT", height.clone()),
         ("ID_NOMEOBJ", stem.into()),
         ("ID_MATERIAL", "0001".into()),
         ("ID_THREAD", "Berco Cut 0.25".into()),
@@ -167,7 +205,7 @@ fn piece(setup: &PunchSetup20<'_>) -> String {
         ("ID_DIMB", mm(ymax - ymin)),
         ("ID_POSPOSX", mm(xmin)),
         ("ID_POSPOSY", mm(ymin)),
-        ("ID_POSPOSZ", "-20.000".into()),
+        ("ID_POSPOSZ", mm(-i64::from(setup.height_um))),
         ("ID_VALSECP", "3.0".into()),
         ("ID_VALRETP", "30.0".into()),
     ] {
@@ -210,10 +248,11 @@ fn piece(setup: &PunchSetup20<'_>) -> String {
             "  ok=JE_AttribObject(WORK,SETATTR,je_piece,{work_context},ID_QUALITY,je_q1,je_dim)"
         ),
     );
+    let work_height = format!("\"{height}\"");
     for (field, value) in [
         ("ID_THREAD", "\"Berco Cut 0.25\""),
         ("ID_ENTRYMODE", "c_entper"),
-        ("ID_HEIGHT", "\"20.000\""),
+        ("ID_HEIGHT", work_height.as_str()),
         ("ID_POSX", "\"0\""),
         ("ID_POSY", "\"0\""),
         ("ID_SEPCUT", "\"1.0\""),

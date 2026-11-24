@@ -38,7 +38,7 @@ fn fixture_proj() -> World {
     history.execute(&world, cmd.expect("box stock"));
     let tool = catalog().into_iter().find(|(n, _)| *n == "EM-0400-2FL").map(|(_, t)| t).expect("catalog entry");
     history.execute(&world, AddTool::new(&world, "EM-0400-2FL", tool).expect("catalog tool"));
-    let params = OpParams::Face { floor_stock: 0.0, holes: Default::default(), blend_turns: false,
+    let params = OpParams::Face { floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 3.0,
         clearance_z: Height::fixed(25.0),

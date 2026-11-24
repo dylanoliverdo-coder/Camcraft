@@ -96,9 +96,6 @@ pub(crate) fn agie_job(world: &World, op: &Operation, name: &str) -> Result<agie
     if job.hs.top != Some(hi.z) || job.hs.bottom != Some(lo.z) || oz != hi.z {
         return Err("The native wire EDM job requires a through cut from stock top to bottom and the setup Z origin at stock top".into());
     }
-    if hi.z - lo.z != 20.0 {
-        return Err("This Berco Cut 0.25 QN2 recipe requires 20 mm stock thickness".into());
-    }
     // Guide heights and posted stock Z are in the setup frame (stock top Z0).
     if edm.lower_guide_z.is_some_and(|z| z > lo.z - oz)
         || edm.upper_guide_z.is_some_and(|z| z < 0.0)

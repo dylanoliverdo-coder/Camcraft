@@ -86,7 +86,7 @@ fn tool_job(order: [&str; 2]) -> (World, History) {
         let face = OpParams::Face {
             floor_stock: 0.0,
             holes: Default::default(),
-            blend_turns: false,
+            blend_turns: false, blend_radius: None,
             tilt: None,
             stepover: 3.0,
             clearance_z: Height::fixed(25.0),

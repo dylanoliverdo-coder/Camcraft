@@ -26,7 +26,7 @@
 
 use std::collections::HashMap;
 
-use crate::geometry::{Point3, Triangle};
+use crate::geometry::{Aabb, Point3, Triangle};
 
 use super::field::SdfField;
 use super::kernel::StockError;
@@ -85,7 +85,20 @@ pub fn extract_at(f: &SdfField, step: f64) -> Result<Vec<Triangle>, StockError> 
 /// surface reaching the grid's pad, a fold no quad ring closes) is never
 /// returned: the marching mesh of the same samples stands in, logged.
 pub fn extract_with(f: &SdfField, step: f64, method: IsoMethod) -> Result<Vec<Triangle>, StockError> {
-    let g = sample(f, step)?;
+    polygonize(sample(f, step, None)?, method)
+}
+
+/// Extract only the part of the solid inside `clip`: the sampled value is
+/// the CSG intersection `max(d, d_box)` of the field with the box, so the
+/// box's faces close the mesh where it cuts the solid (a closed piece, as a
+/// consumer cropping a cut to a region of interest needs). The grid spans
+/// the field's bounds met with the box, so a small box on a large field
+/// stays inside the sample budget. A box missing the field refuses by name.
+pub fn extract_clipped(f: &SdfField, step: f64, method: IsoMethod, clip: Aabb) -> Result<Vec<Triangle>, StockError> {
+    polygonize(sample(f, step, Some(clip))?, method)
+}
+
+fn polygonize(g: Grid, method: IsoMethod) -> Result<Vec<Triangle>, StockError> {
     match method {
         IsoMethod::Marching => Ok(marching(&g)),
         IsoMethod::Dual => {
@@ -127,17 +140,96 @@ impl Grid {
     }
 }
 
-/// Sample the field on the extraction lattice; refusals by name.
-pub(crate) fn sample(f: &SdfField, step: f64) -> Result<Grid, StockError> {
+/// Marching tetrahedra over the clipped lattice, streamed two z layers at
+/// a time: memory grows with one layer, not the whole grid, so a box too
+/// large for the sample budget at the field's own cell still extracts at
+/// that cell (the budget guards a dense pack held whole; this holds two
+/// layers). Same lattice, same values and same tetrahedra as `marching`
+/// over `sample`, so the mesh is the one `extract_clipped(.., Marching, ..)`
+/// would give, closed by the box faces. Layers are sampled on the
+/// machine's threads.
+pub fn extract_clipped_streamed(f: &SdfField, step: f64, clip: Aabb) -> Result<Vec<Triangle>, StockError> {
+    let (lo, n, value) = lattice(f, step, Some(clip))?;
+    let at = |s: [usize; 3]| Point3::new(lo.x + s[0] as f64 * step, lo.y + s[1] as f64 * step, lo.z + s[2] as f64 * step);
+    let (nx, ny) = (n[0] + 1, n[1] + 1);
+    let threads = std::thread::available_parallelism().map_or(1, |t| t.get()).min(ny).max(1);
+    let layer = |k: usize| -> Result<Vec<f64>, StockError> {
+        let mut out = vec![0.0f64; nx * ny];
+        let rows_per = ny.div_ceil(threads);
+        let bad = std::sync::Mutex::new(None);
+        std::thread::scope(|sc| {
+            for (t, chunk) in out.chunks_mut(rows_per * nx).enumerate() {
+                let (at, value, bad) = (&at, &value, &bad);
+                sc.spawn(move || {
+                    for (r, row) in chunk.chunks_mut(nx).enumerate() {
+                        let j = t * rows_per + r;
+                        for (i, slot) in row.iter_mut().enumerate() {
+                            let p = at([i, j, k]);
+                            match value(p) {
+                                Some(v) => *slot = v,
+                                None => {
+                                    *bad.lock().unwrap() = Some(p);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        match bad.into_inner().unwrap() {
+            Some(p) => Err(StockError::Invalid(format!("iso-surface: the field answered NaN at {p:?} - no surface to extract"))),
+            None => Ok(out),
+        }
+    };
+    let mut out = Vec::new();
+    let mut below = layer(0)?;
+    for k in 0..n[2] {
+        let above = layer(k + 1)?;
+        let val = |s: [usize; 3]| if s[2] == k { below[s[1] * nx + s[0]] } else { above[s[1] * nx + s[0]] };
+        for j in 0..n[1] {
+            for i in 0..n[0] {
+                let mut p = [Point3::ZERO; 8];
+                let mut v = [0.0f64; 8];
+                for (c, o) in CORNER.iter().enumerate() {
+                    let s = [i + o[0], j + o[1], k + o[2]];
+                    p[c] = at(s);
+                    v[c] = val(s);
+                }
+                if v.iter().all(|x| *x < 0.0) || v.iter().all(|x| *x >= 0.0) {
+                    continue;
+                }
+                for t in TETS {
+                    tet(&mut out, t.map(|c| p[c]), t.map(|c| v[c]));
+                }
+            }
+        }
+        below = above;
+    }
+    Ok(out)
+}
+
+/// The extraction lattice (origin, cells per axis) and its value at a
+/// point (the field met with the clip box; None where the field is NaN).
+#[allow(clippy::type_complexity)]
+fn lattice<'a>(f: &'a SdfField, step: f64, clip: Option<Aabb>) -> Result<(Point3, [usize; 3], impl Fn(Point3) -> Option<f64> + Sync + 'a), StockError> {
     let refuse = |s: String| Err(StockError::Invalid(format!("iso-surface: {s}")));
     if !(step.is_finite() && step > 0.0) {
         return refuse(format!("the sample step must be finite and positive, not {step}"));
     }
-    let b = f.bounds();
-    // The field's values are exact at its cell CENTRES (`distance` reads
-    // the cell a point falls in), so the sample grid stands on them: a
-    // grid on the cell faces would read each face sample from whichever
-    // neighbour the rounding picked and bias the surface by half a cell.
+    let mut b = f.bounds();
+    if let Some(c) = clip {
+        if !(c.min.is_finite() && c.max.is_finite()) {
+            return refuse("the clip box is not finite".into());
+        }
+        b = Aabb {
+            min: Point3::new(b.min.x.max(c.min.x), b.min.y.max(c.min.y), b.min.z.max(c.min.z)),
+            max: Point3::new(b.max.x.min(c.max.x), b.max.y.min(c.max.y), b.max.z.min(c.max.z)),
+        };
+        if b.min.x > b.max.x || b.min.y > b.max.y || b.min.z > b.max.z {
+            return refuse("the clip box misses the field's bounds".into());
+        }
+    }
     let cell = f.cell();
     let centre = |v: f64| ((v / cell).floor() - 1.0 + 0.5) * cell;
     let lo = Point3::new(centre(b.min.x), centre(b.min.y), centre(b.min.z));
@@ -145,7 +237,6 @@ pub(crate) fn sample(f: &SdfField, step: f64) -> Result<Grid, StockError> {
     if !(lo.is_finite() && span.iter().all(|s| s.is_finite() && *s >= 0.0)) {
         return refuse("the field's bounds are not a finite box".into());
     }
-    // Cells per axis, padded a cell past the solid on both sides.
     let mut n = [0usize; 3];
     for (k, s) in span.iter().enumerate() {
         let c = (s / step).ceil() + 1.0;
@@ -154,6 +245,26 @@ pub(crate) fn sample(f: &SdfField, step: f64) -> Result<Grid, StockError> {
         }
         n[k] = c as usize;
     }
+    let value = move |p: Point3| {
+        let v = f.distance(p);
+        if v.is_nan() {
+            return None;
+        }
+        Some(match clip {
+            Some(c) => {
+                let o = [c.min.x - p.x, p.x - c.max.x, c.min.y - p.y, p.y - c.max.y, c.min.z - p.z, p.z - c.max.z];
+                o.into_iter().fold(v, f64::max)
+            }
+            None => v,
+        })
+    };
+    Ok((lo, n, value))
+}
+
+/// Sample the field on the extraction lattice; refusals by name.
+pub(crate) fn sample(f: &SdfField, step: f64, clip: Option<Aabb>) -> Result<Grid, StockError> {
+    let refuse = |s: String| Err(StockError::Invalid(format!("iso-surface: {s}")));
+    let (lo, n, value) = lattice(f, step, clip)?;
     let samples = (n[0] + 1)
         .checked_mul(n[1] + 1)
         .and_then(|v| v.checked_mul(n[2] + 1))
@@ -166,10 +277,9 @@ pub(crate) fn sample(f: &SdfField, step: f64) -> Result<Grid, StockError> {
         for j in 0..=n[1] {
             for i in 0..=n[0] {
                 let p = g.at([i, j, k]);
-                let v = f.distance(p);
-                if v.is_nan() {
+                let Some(v) = value(p) else {
                     return refuse(format!("the field answered NaN at {p:?} - no surface to extract"));
-                }
+                };
                 g.d.push(v);
             }
         }
@@ -279,6 +389,53 @@ mod tests {
         // the tetrahedral split, so within 5% of 480.
         assert!(v > 0.0, "outward-facing: {v}");
         assert!((v - 480.0).abs() < 0.05 * 480.0, "volume {v} vs 480");
+    }
+
+    #[test]
+    fn a_clip_box_extracts_the_closed_piece_inside_it() {
+        let m = cube(Point3::new(0.0, 0.0, 0.0), Point3::new(10.0, 8.0, 6.0));
+        let f = SdfField::from_mesh(&m.facets, 0.5, FIELD_BAND).unwrap();
+        // A slab 3 wide in x, reaching past the solid in y and z: the piece is 3 x 8 x 6.
+        let clip = Aabb { min: Point3::new(2.0, -1.0, -1.0), max: Point3::new(5.0, 9.0, 7.0) };
+        let tris = extract_clipped(&f, 0.5, IsoMethod::Marching, clip).unwrap();
+        assert_eq!(open_edges(&tris), 0, "the box faces close the piece");
+        let v = volume(&tris);
+        assert!((v - 144.0).abs() < 0.08 * 144.0, "piece volume {v} vs 144");
+        let xs = tris.iter().flat_map(|t| [t.a.x, t.b.x, t.c.x]);
+        let (lo, hi) = xs.fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), x| (l.min(x), h.max(x)));
+        assert!(lo > 1.4 && hi < 5.6, "the piece stays inside the box in x: {lo}..{hi}");
+        // The full field at a fine step is past the budget; the clipped grid is not.
+        let wide = cube(Point3::new(0.0, 0.0, 0.0), Point3::new(100.0, 100.0, 10.0));
+        let g = SdfField::from_mesh(&wide.facets, 1.0, FIELD_BAND).unwrap();
+        assert!(extract_at(&g, 0.05).is_err(), "the whole field at this step is past the budget");
+        let small = Aabb { min: Point3::new(10.0, 10.0, 5.0), max: Point3::new(12.0, 12.0, 11.0) };
+        let piece = extract_clipped(&g, 0.05, IsoMethod::Marching, small).unwrap();
+        assert_eq!(open_edges(&piece), 0, "the clipped piece of the wide field is closed");
+        let away = Aabb { min: Point3::new(900.0, 900.0, 900.0), max: Point3::new(901.0, 901.0, 901.0) };
+        assert!(extract_clipped(&g, 0.05, IsoMethod::Marching, away).is_err(), "a box off the field refuses");
+    }
+
+    #[test]
+    fn the_streamed_clip_is_the_dense_marching_mesh_and_skips_the_budget() {
+        let m = cube(Point3::new(0.0, 0.0, 0.0), Point3::new(10.0, 8.0, 6.0));
+        let f = SdfField::from_mesh(&m.facets, 0.5, FIELD_BAND).unwrap();
+        let clip = Aabb { min: Point3::new(2.0, -1.0, -1.0), max: Point3::new(5.0, 9.0, 4.0) };
+        let dense = extract_clipped(&f, 0.5, IsoMethod::Marching, clip).unwrap();
+        let streamed = extract_clipped_streamed(&f, 0.5, clip).unwrap();
+        assert_eq!(dense.len(), streamed.len(), "same lattice, same tetrahedra");
+        for (a, b) in dense.iter().zip(&streamed) {
+            assert_eq!([a.a, a.b, a.c], [b.a, b.b, b.c]);
+        }
+        assert_eq!(open_edges(&streamed), 0);
+        // A box past the dense budget at this step still streams.
+        let wide = cube(Point3::new(0.0, 0.0, 0.0), Point3::new(100.0, 100.0, 10.0));
+        let g = SdfField::from_mesh(&wide.facets, 1.0, FIELD_BAND).unwrap();
+        let big = Aabb { min: Point3::new(-1.0, -1.0, 8.0), max: Point3::new(101.0, 101.0, 11.0) };
+        assert!(extract_clipped(&g, 0.1, IsoMethod::Marching, big).is_err(), "dense refuses past the budget");
+        let piece = extract_clipped_streamed(&g, 0.1, big).unwrap();
+        assert_eq!(open_edges(&piece), 0, "streamed piece closed");
+        let v = volume(&piece);
+        assert!((v - 100.0 * 100.0 * 2.0).abs() < 0.03 * 20000.0, "slab volume {v} vs 20000");
     }
 
     #[test]

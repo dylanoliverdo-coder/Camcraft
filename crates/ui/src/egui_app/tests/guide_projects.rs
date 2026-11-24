@@ -181,7 +181,7 @@ pub(super) fn build_workholding_world() -> World {
     let top_clr = Height::of(HeightReference::TopOfStock, 12.0);
     create_and_gen(&world, &mut h, "Face1", "EM-1000-4FL", SrcRef::Stock, OpParams::Face {
         floor_stock: 0.0,
-        holes: Default::default(), blend_turns: false, tilt: None, stepover: 6.0,
+        holes: Default::default(), blend_turns: false, blend_radius: None, tilt: None, stepover: 6.0,
         clearance_z: top_clr, cut_z: Height::of(HeightReference::TopOfModel, 0.0),
         top_z: Some(Height::of(HeightReference::TopOfStock, 0.0)), stepdown: Some(1.0),
         feed: 1400.0, plunge_feed: 350.0, climb: true,
@@ -194,7 +194,7 @@ pub(super) fn build_workholding_world() -> World {
         bottom_z: Height::of(HeightReference::TopOfModel, -4.0),
         stepdown: 2.0, feed: 1200.0, plunge_feed: 300.0, climb: true, side: Side::Outside,
         lead: Lead::Arc { radius: 4.0 }, tolerance: 0.01, tab_count: 0, tab_width: 8.0,
-        tab_height: 3.0, entry: Entry3D::Plunge, helix_radius: 1.0, blend_turns: false,
+        tab_height: 3.0, entry: Entry3D::Plunge, helix_radius: 1.0, blend_turns: false, blend_radius: None,
         links: Links::PLANAR, tilt: None, chain_overrides: Vec::new(),
         passes: camcraft_app::machining2d::WallPasses::default(),
     });
@@ -232,6 +232,7 @@ pub(super) fn build_3d_world() -> World {
         // #1713: the guide walkthrough posts without gap links - the
         // Jump link is the pre-gap-link behaviour, as the text states.
         gap_link: camcraft_app::finishing3d::GapLink::Jump,
+        waterlines: true,
         pass_start: camcraft_app::machining2d::PassStart::Auto,
     });
     world
@@ -259,7 +260,7 @@ pub(super) fn build_multiaxis_world() -> World {
     set_wcs(&world, &mut h, [100.0, 0.0, 20.0], "wcs2");
     create_and_gen(&world, &mut h, "Indexed Face1", "EM-0600-4FL", SrcRef::Stock, OpParams::Face {
         floor_stock: 0.0,
-        holes: Default::default(), blend_turns: false,
+        holes: Default::default(), blend_turns: false, blend_radius: None,
         // Preserve the persisted legacy basis of this documented unsafe example.
         tilt: Some(Tilt { basis_version: 0, a_deg: 0.0, b_deg: 20.0, origin: [100.0, 0.0, 20.0] }),
         stepover: 3.5, clearance_z: Height::fixed(30.0), cut_z: Height::fixed(18.0),

@@ -53,6 +53,7 @@ fn contour(lead: Lead, lead_out: Option<Lead>, entry: Entry3D) -> OpParams {
         entry,
         helix_radius: 1.0,
         blend_turns: false,
+        blend_radius: None,
         tilt: None,
         links: Links { approach, ..Links::PLANAR },
         chain_overrides: Vec::new(),

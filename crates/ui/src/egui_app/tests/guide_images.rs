@@ -277,7 +277,7 @@ fn render_all_guide_images() {
         let OpParams::Contour {
             stock_to_leave, clearance_z, retract_z, top_z, bottom_z, stepdown,
             feed, plunge_feed, climb, side, tolerance, tab_count, tab_width,
-            tab_height, entry, helix_radius, blend_turns, links, tilt, passes, ..
+            tab_height, entry, helix_radius, blend_turns, blend_radius, links, tilt, passes, ..
         } = base_contour
         else {
             panic!("2D Contour1 should be OpParams::Contour");
@@ -286,7 +286,7 @@ fn render_all_guide_images() {
             floor_stock: 0.0,
             stock_to_leave, clearance_z, retract_z, top_z, bottom_z, stepdown,
             feed, plunge_feed, climb, side, lead, tolerance, tab_count, tab_width,
-            tab_height, entry, helix_radius, blend_turns, links, tilt, passes,
+            tab_height, entry, helix_radius, blend_turns, blend_radius, links, tilt, passes,
             chain_overrides: Vec::new(),
         };
         edit_and_generate(&mut h, "2D Contour1", contour_with_lead(Lead::Arc { radius: 6.0 }));

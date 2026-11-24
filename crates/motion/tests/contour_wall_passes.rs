@@ -60,6 +60,7 @@ fn boss_params() -> ContourParams {
         entry: camcraft_motion::machining3d::Entry3D::Plunge,
         helix_radius: 1.0,
         blend_turns: false,
+        blend_radius: None,
         links: Links::PLANAR,
         passes: camcraft_motion::machining2d::WallPasses {
             rough_passes: 2,

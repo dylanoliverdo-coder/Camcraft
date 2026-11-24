@@ -135,12 +135,13 @@ impl StartSide {
     }
 
     /// The warning for cuts after the first ring that still take the
-    /// full tool width (#3316): `n` of them, the first at `(x, y)`.
+    /// full tool width (#3316), by the flanks law (#3788): `n` of them,
+    /// the first at `(x, y)`.
     #[must_use]
     pub fn narrow_note(&self, n: usize, x: f64, y: f64) -> String {
         format!(
             "{PASS_START_NOTE} {}: {n} cut(s) take the full tool width where the area is narrower than the \
-             tool plus one stepover, or where a wall hides the start side; the first is at X {x:.3}, Y {y:.3}",
+             tool plus one stepover, where a wall hides the start side, or where two rings meet at a corner; the first is at X {x:.3}, Y {y:.3}",
             self.start.label()
         )
     }

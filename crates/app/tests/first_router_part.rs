@@ -202,7 +202,7 @@ fn build_demo_world() -> flecs_ecs::prelude::World {
         top_z: Height::of(HeightReference::TopOfStock, 0.0), bottom_z: Height::of(HeightReference::BottomOfStock, 0.0),
         stepdown: 4.0, feed: 1800.0, plunge_feed: 400.0, climb: true, side: Side::Outside,
         lead: Lead::Arc { radius: 3.0 }, tolerance: 0.01, tab_count: 4, tab_width: 8.0, tab_height: 3.0,
-        entry: Entry3D::Plunge, helix_radius: 1.0, blend_turns: false, tilt: None, links: Links::PLANAR,
+        entry: Entry3D::Plunge, helix_radius: 1.0, blend_turns: false, blend_radius: None, tilt: None, links: Links::PLANAR,
         chain_overrides: Vec::new(),
         passes: camcraft_app::machining2d::WallPasses::default(),
     };

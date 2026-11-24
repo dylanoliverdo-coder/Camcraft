@@ -155,16 +155,40 @@ fn the_mounted_agie_post_writes_nominal_geometry_and_preserves_existing_jobs() {
 }
 
 #[test]
+fn qualified_qn2_heights_set_both_piece_and_work_with_stock_top_at_zero() {
+    for height in [15., 20., 40., 80.] {
+        let world = punch(height, [2., 3., height], [-30., 0.]);
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().join("HEIGHT");
+        posting::post_mounts_with_script_options(&world, &dest, Some(&separation(1.0))).unwrap();
+        let sbl = fs::read_to_string(dest.join("HEIGHT.SBL")).unwrap();
+        let height_field = format!("ID_HEIGHT,\"{height:.3}\"");
+        for context in ["JE_AttribObject(PIECE,", "JE_AttribObject(WORK,"] {
+            assert!(
+                sbl.lines()
+                    .any(|line| line.contains(context) && line.contains(&height_field))
+            );
+        }
+        assert!(sbl.contains(&format!("ID_POSPOSZ,\"-{height:.3}\"")));
+        assert!(sbl.contains("ID_POSX,\"-32.000\"") && sbl.contains("ID_POSY,\"-3.000\""));
+    }
+}
+
+#[test]
 fn an_incompatible_plate_or_datum_writes_no_agie_job() {
     for (height, origin, expected) in [
         (12.0, 12.0, "thickness"),
         (25.0, 25.0, "thickness"),
+        (39.999, 39.999, "thickness"),
+        (40.001, 40.001, "thickness"),
         (20.0, 0.0, "stock top"),
+        (80.0, 20.0, "stock top"),
     ] {
         let world = punch(height, [0.0, 0.0, origin], [-30.0, 0.0]);
         let tmp = tempfile::tempdir().unwrap();
         let dest = tmp.path().join("REFUSED");
-        let why = posting::post_mounts(&world, &dest).unwrap_err();
+        let why = posting::post_mounts_with_script_options(&world, &dest, Some(&separation(1.0)))
+            .unwrap_err();
         assert!(why.contains(expected), "{why}");
         assert!(!dest.exists());
     }

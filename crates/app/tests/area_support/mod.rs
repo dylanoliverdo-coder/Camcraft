@@ -86,7 +86,7 @@ pub fn contour(top: f64, bottom: f64, want: Side) -> OpParams {
 
 pub fn face(cut: f64) -> OpParams {
     OpParams::Face { floor_stock: 0.0, holes: Default::default(),
-        blend_turns: false,
+        blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 6.0,
         clearance_z: Height::fixed(40.0),
