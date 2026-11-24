@@ -1245,3 +1245,30 @@ mod progressive_tests {
         assert_eq!((r["unmeasured_mm2"].as_f64(), r["before_first_toolpath_on_cut_mm2"].as_f64()), (Some(0.0), Some(2.0)));
     }
 }
+
+#[cfg(test)]
+mod per_move_tests {
+    use super::*;
+
+    /// The strike check cuts one move per call: the stock must be the bulk cut's to the bit, and 4000 calls must stay
+    /// linear (each call used to copy the whole cut history: quadratic in the moves).
+    #[test]
+    fn one_move_per_call_is_the_bulk_cut() {
+        let moves: Vec<Move> = (0..4000).map(|k| {
+            let (y, z) = (0.25 + (k % 200) as f64 * 0.1, 9.0 - (k / 200) as f64 * 0.2);
+            Move::new(MoveKind::Feed, Point3::new(-1.0, y, z), Point3::new(21.0, y, z), Some(500.0))
+        }).collect();
+        fn op(m: &[Move]) -> SimOp<'_> { SimOp { moves: m, radius: 0.5, ball: false, cone: None, corner: None } }
+        let mut bulk = Stock::block(Backend::Column, 0.0, 0.0, 20.0, 20.0, 10.0, 0.1).unwrap();
+        bulk.simulate(&[op(&moves)]).unwrap();
+        let mut each = Stock::block(Backend::Column, 0.0, 0.0, 20.0, 20.0, 10.0, 0.1).unwrap();
+        let t = Instant::now();
+        for m in &moves { each.simulate(&[op(std::slice::from_ref(m))]).unwrap(); }
+        let secs = t.elapsed().as_secs_f64();
+        for i in 0..200 { for j in 0..200 {
+            let (x, y) = (0.05 + i as f64 * 0.1, 0.05 + j as f64 * 0.1);
+            assert_eq!(bulk.top(x, y).to_bits(), each.top(x, y).to_bits(), "column ({x}, {y})");
+        } }
+        assert!(secs < 10.0, "4000 one-move calls took {secs} s");
+    }
+}
