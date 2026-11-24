@@ -9,6 +9,9 @@ export CARGO_TARGET_DIR="${JM_TARGET:-$PWD/target-jm}"
 CARGO="${CARGO:-cargo}"
 # Reproducible: no absolute build paths in the binary.
 export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$PWD=camcraft --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=cargo"
+# Windows (MSVC link.exe): /Brepro replaces the link time stamps and the PDB GUID with hashes of the content, so
+# two builds of one commit are byte-identical (without it 24 bytes differed: PE and debug-directory stamps, GUID).
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) RUSTFLAGS="$RUSTFLAGS -C link-arg=/Brepro" ;; esac
 CMD=("$CARGO" build --release --locked -p camcraft-sim --bin journeyman-job)
 if [ -n "${JM_LANE_JOB:-}" ]; then
   python "$JM_LANE_JOB" --name camcraft-jm-build --process-gb 8 --job-gb 12 -- "${CMD[@]}"

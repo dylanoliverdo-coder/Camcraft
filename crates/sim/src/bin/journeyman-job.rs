@@ -110,46 +110,22 @@ fn write_stl(path: &str, tris: &[Triangle]) {
     std::fs::write(path, b).unwrap_or_else(|e| die(format!("cannot write {path}: {e}")));
 }
 
-/// The column stock as a closed solid: per material column a top and a bottom quad, and vertical walls where
-/// neighbours differ, each wall split at every height standing on its two corner lines so no edge has a T-junction.
-/// A saddle corner (two diagonal columns above the other two over a band) would put four faces on one edge; it is
-/// resolved first by raising the higher of the two low columns to the lower of the two high ones (material is only
-/// ever added, never removed, and the count and volume are reported). `m` is an optional row-major 4x4 applied to
-/// every vertex (the job's setup-to-part matrix).
+/// The column stock as a closed solid: per material column a top and a bottom face, and vertical walls where
+/// neighbours differ, each wall split at every height standing on its two end lines so no edge has a T-junction.
+/// A saddle corner (two diagonal columns above the other two over a band) would put four faces on one edge. It is
+/// split, not raised: a sliver (a right triangle with legs of a sixteenth of a cell, standing on the higher of the
+/// two low columns, from its top up to the lower of the two high ones) joins the two high columns at the corner, so
+/// the corner edge carries two faces. No cell height changes; the material added is the slivers' volume, reported.
+/// `m` is an optional row-major 4x4 applied to every vertex (the job's setup-to-part matrix).
 fn write_skyline(path: &str, tops: &[f64], nx: usize, ny: usize, b: [f64; 6], cell: f64, m: Option<&[f64]>) -> Value {
+    use std::collections::HashMap;
     use std::io::{Seek, SeekFrom, Write};
     let [x0, y0, z0, x1, y1, z1] = b;
     // Heights are taken at f32 (the STL's precision) so two heights the file cannot tell apart are one height here.
     let q = |v: f64| v as f32 as f64;
     let (z0, z1) = (q(z0), q(z1));
-    let mut h: Vec<f64> = tops.iter().map(|&t| if t.is_finite() && q(t) > z0 { q(t).min(z1) } else { z0 }).collect();
-    let (mut raised, mut raise_max, mut raise_vol, mut sweeps) = (0usize, 0.0f64, 0.0f64, 0usize);
+    let h: Vec<f64> = tops.iter().map(|&t| if t.is_finite() && q(t) > z0 { q(t).min(z1) } else { z0 }).collect();
     let id = |i: usize, j: usize| j * nx + i;
-    loop {
-        sweeps += 1;
-        let mut changed = false;
-        for j in 1..ny {
-            for i in 1..nx {
-                let (ka, kb, kc, kd) = (id(i - 1, j - 1), id(i, j - 1), id(i - 1, j), id(i, j));
-                let (a, bb, c, d) = (h[ka], h[kb], h[kc], h[kd]);
-                let fix = if a.min(d) > bb.max(c) {
-                    Some((if bb >= c { kb } else { kc }, a.min(d)))
-                } else if bb.min(c) > a.max(d) {
-                    Some((if a >= d { ka } else { kd }, bb.min(c)))
-                } else {
-                    None
-                };
-                if let Some((k, to)) = fix {
-                    raise_max = raise_max.max(to - h[k]);
-                    raise_vol += (to - h[k]) * cell * cell;
-                    h[k] = to;
-                    raised += 1;
-                    changed = true;
-                }
-            }
-        }
-        if !changed || sweeps >= 200 { break; }
-    }
     let xs: Vec<f64> = (0..=nx).map(|i| if i == nx { x1.min(x0 + nx as f64 * cell) } else { x0 + i as f64 * cell }).collect();
     let ys: Vec<f64> = (0..=ny).map(|j| if j == ny { y1.min(y0 + ny as f64 * cell) } else { y0 + j as f64 * cell }).collect();
     let cellh = |i: isize, j: isize| -> f64 {
@@ -162,6 +138,44 @@ fn write_skyline(path: &str, tops: &[f64], nx: usize, ny: usize, b: [f64; 6], ce
         v.dedup();
         v
     };
+    // Saddles and their slivers. A station is a sliver's corner on one of its owner's two edges (eps from the
+    // saddle corner): every face that meets its vertical line splits there.
+    let eps = cell / 16.0;
+    struct Sliver { corner: (usize, usize), owner: (usize, usize), lo: f64, hi: f64, st: [usize; 2] }
+    struct Station { p: [f64; 2], along: f64, heights: Vec<f64>, sliver: usize }
+    let mut slivers: Vec<Sliver> = Vec::new();
+    let mut stations: Vec<Station> = Vec::new();
+    // Edge keys: (0, i, j) horizontal y = ys[j], x from xs[i] to xs[i + 1]; (1, i, j) vertical x = xs[i], y from ys[j].
+    let mut on_edge: HashMap<(u8, usize, usize), Vec<usize>> = HashMap::new();
+    let sorted = |mut v: Vec<f64>| { v.sort_by(|a, b| a.partial_cmp(b).unwrap()); v.dedup(); v };
+    for j in 1..ny {
+        for i in 1..nx {
+            let (a, bb, c, d) = (h[id(i - 1, j - 1)], h[id(i, j - 1)], h[id(i - 1, j)], h[id(i, j)]);
+            let pick = if a.min(d) > bb.max(c) {
+                Some((if bb >= c { (i, j - 1) } else { (i - 1, j) }, a.min(d)))
+            } else if bb.min(c) > a.max(d) {
+                Some((if a >= d { (i - 1, j - 1) } else { (i, j) }, bb.min(c)))
+            } else {
+                None
+            };
+            let Some(((li, lj), hi)) = pick else { continue };
+            let s = slivers.len();
+            let lo = h[id(li, lj)];
+            let (ex, ekey) = if li == i { (xs[i] + eps, (0u8, i, j)) } else { (xs[i] - eps, (0u8, i - 1, j)) };
+            let across_h = h[id(li, if lj == j { j - 1 } else { j })];
+            stations.push(Station { p: [ex, ys[j]], along: ex, heights: sorted(vec![lo, hi, across_h]), sliver: s });
+            on_edge.entry(ekey).or_default().push(stations.len() - 1);
+            let (ey, vkey) = if lj == j { (ys[j] + eps, (1u8, i, j)) } else { (ys[j] - eps, (1u8, i, j - 1)) };
+            let across_v = h[id(if li == i { i - 1 } else { i }, lj)];
+            stations.push(Station { p: [xs[i], ey], along: ey, heights: sorted(vec![lo, hi, across_v]), sliver: s });
+            on_edge.entry(vkey).or_default().push(stations.len() - 1);
+            slivers.push(Sliver { corner: (i, j), owner: (li, lj), lo, hi, st: [stations.len() - 2, stations.len() - 1] });
+        }
+    }
+    for v in on_edge.values_mut() {
+        v.sort_by(|a, b| stations[*a].along.partial_cmp(&stations[*b].along).unwrap());
+    }
+    let own_at: HashMap<(usize, usize), usize> = slivers.iter().enumerate().map(|(k, s)| (s.corner, k)).collect();
     let xf = |p: [f64; 3]| -> [f32; 3] {
         match m {
             Some(m) => [
@@ -187,6 +201,8 @@ fn write_skyline(path: &str, tops: &[f64], nx: usize, ny: usize, b: [f64; 6], ce
         w.write_all(&rec).unwrap();
         n += 1;
     };
+    let empty: Vec<usize> = Vec::new();
+    let edge_stations = |k: (u8, usize, usize)| on_edge.get(&k).unwrap_or(&empty);
     let mut volume = 0.0;
     for j in 0..ny {
         for i in 0..nx {
@@ -194,13 +210,44 @@ fn write_skyline(path: &str, tops: &[f64], nx: usize, ny: usize, b: [f64; 6], ce
             if z <= z0 { continue; }
             let (xa, xb, ya, yb) = (xs[i], xs[i + 1], ys[j], ys[j + 1]);
             volume += (z - z0) * (xb - xa) * (yb - ya);
-            tri(&mut w, [xa, ya, z], [xb, ya, z], [xb, yb, z]);
-            tri(&mut w, [xa, ya, z], [xb, yb, z], [xa, yb, z]);
-            tri(&mut w, [xa, ya, z0], [xb, yb, z0], [xb, ya, z0]);
-            tri(&mut w, [xa, ya, z0], [xa, yb, z0], [xb, yb, z0]);
+            let keys = [(0u8, i, j), (1u8, i + 1, j), (0u8, i, j + 1), (1u8, i, j)];
+            if keys.iter().all(|k| edge_stations(*k).is_empty()) {
+                tri(&mut w, [xa, ya, z], [xb, ya, z], [xb, yb, z]);
+                tri(&mut w, [xa, ya, z], [xb, yb, z], [xa, yb, z]);
+                tri(&mut w, [xa, ya, z0], [xb, yb, z0], [xb, ya, z0]);
+                tri(&mut w, [xa, ya, z0], [xa, yb, z0], [xb, yb, z0]);
+                continue;
+            }
+            // Top and bottom as fans from the cell centre over the boundary loop (CCW from +z), so every station
+            // on this cell's edges is a vertex. The top skips a corner where this cell owns a sliver (its two
+            // stations cut that corner off); the bottom carries only the stations of slivers that stand on z0.
+            let cs = [[xa, ya], [xb, ya], [xb, yb], [xa, yb]];
+            let ks = [(i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)];
+            let (mut top, mut bot) = (Vec::new(), Vec::new());
+            for k in 0..4 {
+                let owned = own_at.get(&ks[k]).is_some_and(|s| slivers[*s].owner == (i, j));
+                if !owned { top.push(cs[k]); }
+                bot.push(cs[k]);
+                let list = edge_stations(keys[k]);
+                let ordered: Vec<usize> = if k >= 2 { list.iter().rev().copied().collect() } else { list.clone() };
+                for s in ordered {
+                    let sl = &slivers[stations[s].sliver];
+                    top.push(stations[s].p);
+                    if sl.owner != (i, j) && sl.lo <= z0 { bot.push(stations[s].p); }
+                }
+            }
+            let c = [(xa + xb) / 2.0, (ya + yb) / 2.0];
+            for k in 0..top.len() {
+                let (p, r) = (top[k], top[(k + 1) % top.len()]);
+                tri(&mut w, [c[0], c[1], z], [p[0], p[1], z], [r[0], r[1], z]);
+            }
+            for k in 0..bot.len() {
+                let (p, r) = (bot[k], bot[(k + 1) % bot.len()]);
+                tri(&mut w, [c[0], c[1], z0], [r[0], r[1], z0], [p[0], p[1], z0]);
+            }
         }
     }
-    // One wall: corner lines p (heights la) and q (heights lb), between lo and hi, facing `out`.
+    // One wall: end lines p (heights la) and q (heights lb), between lo and hi, facing `out`.
     let mut wall = |w: &mut std::io::BufWriter<std::fs::File>, p: [f64; 2], q: [f64; 2], la: &[f64], lb: &[f64], lo: f64, hi: f64, out: [f64; 2]| {
         let a: Vec<f64> = la.iter().copied().filter(|z| *z >= lo && *z <= hi).collect();
         let bq: Vec<f64> = lb.iter().copied().filter(|z| *z >= lo && *z <= hi).collect();
@@ -221,29 +268,148 @@ fn write_skyline(path: &str, tops: &[f64], nx: usize, ny: usize, b: [f64; 6], ce
             if flip { tri(w, u, s, v) } else { tri(w, u, v, s) }
         }
     };
-    for j in 0..ny {
-        for i in 0..=nx {
-            let (ha, hb) = (cellh(i as isize - 1, j as isize), cellh(i as isize, j as isize));
-            if ha == hb { continue; }
-            let out = if ha > hb { [1.0, 0.0] } else { [-1.0, 0.0] };
-            wall(&mut w, [xs[i], ys[j]], [xs[i], ys[j + 1]], &corner(i, j), &corner(i, j + 1), ha.min(hb), ha.max(hb), out);
+    // Every cell edge, split at its stations. On the piece between a saddle corner and its sliver's station the
+    // owner's side stands at the sliver's top.
+    struct Pt { p: [f64; 2], heights: Vec<f64>, corner: Option<(usize, usize)>, sliver: Option<usize> }
+    for kind in 0..2u8 {
+        let (ni, nj) = if kind == 0 { (nx, ny + 1) } else { (nx + 1, ny) };
+        for j in 0..nj {
+            for i in 0..ni {
+                // Sides a (below / left) and b (above / right); `out` when a stands higher.
+                let (ca, cb, k1, p1, out) = if kind == 0 {
+                    ((i as isize, j as isize - 1), (i as isize, j as isize), (i + 1, j), [xs[i + 1], ys[j]], [0.0, 1.0])
+                } else {
+                    ((i as isize - 1, j as isize), (i as isize, j as isize), (i, j + 1), [xs[i], ys[j + 1]], [1.0, 0.0])
+                };
+                let list = edge_stations((kind, i, j));
+                let (ha0, hb0) = (cellh(ca.0, ca.1), cellh(cb.0, cb.1));
+                if ha0 == hb0 && list.is_empty() { continue; }
+                let mut pts = vec![Pt { p: [xs[i], ys[j]], heights: corner(i, j), corner: Some((i, j)), sliver: None }];
+                for s in list {
+                    pts.push(Pt { p: stations[*s].p, heights: stations[*s].heights.clone(), corner: None, sliver: Some(stations[*s].sliver) });
+                }
+                pts.push(Pt { p: p1, heights: corner(k1.0, k1.1), corner: Some(k1), sliver: None });
+                for seg in pts.windows(2) {
+                    let (mut ha, mut hb) = (ha0, hb0);
+                    for (st, other) in [(&seg[0], &seg[1]), (&seg[1], &seg[0])] {
+                        if let (Some(s), Some(k)) = (st.sliver, other.corner) {
+                            let sl = &slivers[s];
+                            if sl.corner == k {
+                                let o = (sl.owner.0 as isize, sl.owner.1 as isize);
+                                if o == ca { ha = sl.hi } else if o == cb { hb = sl.hi }
+                            }
+                        }
+                    }
+                    if ha == hb { continue; }
+                    let o = if ha > hb { out } else { [-out[0], -out[1]] };
+                    wall(&mut w, seg[0].p, seg[1].p, &seg[0].heights, &seg[1].heights, ha.min(hb), ha.max(hb), o);
+                }
+            }
         }
     }
-    for j in 0..=ny {
-        for i in 0..nx {
-            let (ha, hb) = (cellh(i as isize, j as isize - 1), cellh(i as isize, j as isize));
-            if ha == hb { continue; }
-            let out = if ha > hb { [0.0, 1.0] } else { [0.0, -1.0] };
-            wall(&mut w, [xs[i], ys[j]], [xs[i + 1], ys[j]], &corner(i, j), &corner(i + 1, j), ha.min(hb), ha.max(hb), out);
+    // The slivers' own faces: the top at the band's top, the face across the owner cell, and a bottom on z0.
+    let oriented = |a: [f64; 3], b2: [f64; 3], c: [f64; 3], want: [f64; 3]| {
+        let (u, v) = ([b2[0] - a[0], b2[1] - a[1], b2[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
+        let nrm = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+        if nrm[0] * want[0] + nrm[1] * want[1] + nrm[2] * want[2] < 0.0 { (a, c, b2) } else { (a, b2, c) }
+    };
+    let mut sliver_vol = 0.0;
+    for sl in &slivers {
+        let p = [xs[sl.corner.0], ys[sl.corner.1]];
+        let (e1, e2) = (stations[sl.st[0]].p, stations[sl.st[1]].p);
+        let (a, b2, c) = oriented([p[0], p[1], sl.hi], [e1[0], e1[1], sl.hi], [e2[0], e2[1], sl.hi], [0.0, 0.0, 1.0]);
+        tri(&mut w, a, b2, c);
+        let out = [(e1[0] + e2[0]) / 2.0 - p[0], (e1[1] + e2[1]) / 2.0 - p[1], 0.0];
+        let (a, b2, c) = oriented([e1[0], e1[1], sl.lo], [e2[0], e2[1], sl.lo], [e2[0], e2[1], sl.hi], out);
+        tri(&mut w, a, b2, c);
+        let (a, b2, c) = oriented([e1[0], e1[1], sl.lo], [e2[0], e2[1], sl.hi], [e1[0], e1[1], sl.hi], out);
+        tri(&mut w, a, b2, c);
+        if sl.lo <= z0 {
+            let (a, b2, c) = oriented([p[0], p[1], z0], [e1[0], e1[1], z0], [e2[0], e2[1], z0], [0.0, 0.0, -1.0]);
+            tri(&mut w, a, b2, c);
         }
+        sliver_vol += 0.5 * eps * eps * (sl.hi - sl.lo);
     }
     w.flush().unwrap();
     let mut f = w.into_inner().unwrap();
     f.seek(SeekFrom::Start(80)).unwrap();
     f.write_all(&(n as u32).to_le_bytes()).unwrap();
-    json!({"path": path, "facets": n, "volume_mm3": volume, "saddle_cells_raised": raised,
-           "saddle_raise_max_mm": raise_max, "saddle_raise_mm3": raise_vol, "saddle_sweeps": sweeps,
+    let band_max = slivers.iter().map(|s| s.hi - s.lo).fold(0.0f64, f64::max);
+    json!({"path": path, "facets": n, "volume_mm3": volume + sliver_vol, "saddles": slivers.len(),
+           "saddle_band_max_mm": band_max, "saddle_sliver_mm": eps, "saddle_sliver_mm3": sliver_vol,
+           "saddle_cells_raised": 0, "saddle_raise_max_mm": 0.0,
+           "saddle_basis": "each saddle corner split by a sliver (right triangle, legs a sixteenth of a cell) from the higher low column's top to the lower high column's top; no cell raised",
            "frame": if m.is_some() { "part (setup-to-part matrix applied)" } else { "setup" }})
+}
+
+#[cfg(test)]
+mod skyline_tests {
+    use super::write_skyline;
+    use std::collections::HashMap;
+
+    fn read(path: &std::path::Path) -> Vec<[[f32; 3]; 3]> {
+        let b = std::fs::read(path).unwrap();
+        let n = u32::from_le_bytes(b[80..84].try_into().unwrap()) as usize;
+        assert_eq!(b.len(), 84 + 50 * n);
+        (0..n).map(|t| {
+            let r = &b[84 + 50 * t..];
+            let v = |k: usize, l: usize| f32::from_le_bytes(r[12 + 12 * k + 4 * l..16 + 12 * k + 4 * l].try_into().unwrap());
+            [[v(0, 0), v(0, 1), v(0, 2)], [v(1, 0), v(1, 1), v(1, 2)], [v(2, 0), v(2, 1), v(2, 2)]]
+        }).collect()
+    }
+
+    /// Closed and oriented: every directed edge (by exact vertex) once, and its reverse once; no zero-area facet;
+    /// returns the enclosed volume.
+    fn closed_volume(tris: &[[[f32; 3]; 3]]) -> f64 {
+        let key = |p: [f32; 3]| (p[0].to_bits(), p[1].to_bits(), p[2].to_bits());
+        let mut edges: HashMap<_, i32> = HashMap::new();
+        let mut vol = 0.0;
+        for t in tris {
+            let d = |a: usize, b: usize| [(t[b][0] - t[a][0]) as f64, (t[b][1] - t[a][1]) as f64, (t[b][2] - t[a][2]) as f64];
+            let (u, v) = (d(0, 1), d(0, 2));
+            let cr = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+            assert!(cr.iter().map(|c| c * c).sum::<f64>() > 0.0, "zero-area facet {t:?}");
+            for k in 0..3 {
+                *edges.entry((key(t[k]), key(t[(k + 1) % 3]))).or_default() += 1;
+            }
+            let p = |k: usize| [t[k][0] as f64, t[k][1] as f64, t[k][2] as f64];
+            let (a, b, c) = (p(0), p(1), p(2));
+            vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6.0;
+        }
+        for (&(a, b), &n) in &edges {
+            assert_eq!(n, 1, "directed edge used {n} times");
+            assert_eq!(edges.get(&(b, a)).copied(), Some(1), "edge without its twin (open or T-junction)");
+        }
+        vol
+    }
+
+    #[test]
+    fn random_skylines_with_saddles_are_closed_and_keep_their_volume() {
+        let dir = std::env::temp_dir();
+        let mut seed: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut saddles = 0;
+        for case in 0..60 {
+            let (nx, ny) = (3 + case % 9, 2 + case % 7);
+            let levels = [f64::NEG_INFINITY, 1.0, 2.5, 4.0, 18.3];
+            let tops: Vec<f64> = (0..nx * ny).map(|_| {
+                seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17;
+                levels[(seed % levels.len() as u64) as usize]
+            }).collect();
+            let cell = 0.254;
+            let b = [-1.0, 2.0, 0.0, -1.0 + nx as f64 * cell, 2.0 + ny as f64 * cell, 20.0];
+            let path = dir.join(format!("jm-skyline-test-{}-{case}.stl", std::process::id()));
+            let rep = write_skyline(path.to_str().unwrap(), &tops, nx, ny, b, cell, None);
+            let vol = closed_volume(&read(&path));
+            std::fs::remove_file(&path).ok();
+            let cells: f64 = tops.iter().map(|t| if t.is_finite() { t.min(20.0) } else { 0.0 }).sum::<f64>() * cell * cell;
+            let want = rep["volume_mm3"].as_f64().unwrap();
+            assert!((vol - want).abs() < 1e-3 * want.max(1.0), "case {case}: mesh {vol} vs reported {want}");
+            assert!((want - cells - rep["saddle_sliver_mm3"].as_f64().unwrap()).abs() < 1e-6, "case {case}");
+            assert_eq!(rep["saddle_cells_raised"].as_u64(), Some(0));
+            saddles += rep["saddles"].as_u64().unwrap();
+        }
+        assert!(saddles > 20, "the random grids must exercise saddles ({saddles})");
+    }
 }
 
 /// Rim copies of a band's cone (see `profile_atoms`).
