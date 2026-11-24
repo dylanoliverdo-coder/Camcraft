@@ -47,6 +47,7 @@ fn contour_op(equal: bool) -> OpParams {
         tilt: None,
         chain_overrides: Vec::new(),
         links: Links { approach: Approach { equal_steps: equal, ..Approach::DEFAULT }, ..Links::PLANAR },
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

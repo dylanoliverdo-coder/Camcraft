@@ -46,6 +46,7 @@ fn contour(top_z: Height) -> OpParams {
         tilt: None,
         links: Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

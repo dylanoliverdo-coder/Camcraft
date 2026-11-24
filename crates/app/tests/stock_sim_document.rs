@@ -216,6 +216,7 @@ fn missing_pieces_refuse_by_name() {
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     let cmd = CreateOperation::new(&world, "Contour1", "EM-0600-4FL", SrcRef::Entity("part".into()), params);
     history.execute(&world, cmd.expect("create"));

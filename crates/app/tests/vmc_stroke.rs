@@ -55,6 +55,7 @@ fn contour(clearance: f64) -> OpParams {
         blend_turns: false,
         links: Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

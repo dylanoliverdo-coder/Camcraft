@@ -124,6 +124,125 @@ impl CornerReliefDto {
     }
 }
 
+/// The file mirror of `machining2d::WallPasses` (Journeyman spec S1):
+/// the wall-pass controls of one Contour, one key `passes`. Every field
+/// is additive and written only when it differs from the single pass, so
+/// an older file reads the pass it was saved with and a default save
+/// stays byte-identical (the `ThreadPassesDto` pattern).
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct WallPassesDto {
+    /// Roughing passes; absent is one.
+    #[serde(default = "default_rough_passes", skip_serializing_if = "is_one")]
+    pub rough_passes: u32,
+    /// Distance between two roughing passes, mm (absent: 0).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub rough_spacing: f64,
+    /// Finishing passes after the roughing ones (absent: none).
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub finish_passes: u32,
+    /// Distance between two finishing passes, mm (absent: 0).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub finish_spacing: f64,
+    /// Repeats of the final pass (absent: none).
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub spring_passes: u32,
+    /// The levels the finishing and spring passes run on (absent: `every`).
+    #[serde(default, skip_serializing_if = "FinishLevelDto::is_every")]
+    pub finish_level: FinishLevelDto,
+}
+
+fn default_rough_passes() -> u32 {
+    1
+}
+
+fn is_one(v: &u32) -> bool {
+    *v == 1
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero_u32(v: &u32) -> bool {
+    *v == 0
+}
+
+/// The file mirror of `machining2d::FinishLevel` (spec S1): `every` is
+/// the default and is never written.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FinishLevelDto {
+    #[default]
+    Every,
+    Last,
+}
+
+impl FinishLevelDto {
+    fn is_every(&self) -> bool {
+        *self == FinishLevelDto::Every
+    }
+}
+
+impl From<crate::machining2d::WallPasses> for WallPassesDto {
+    fn from(p: crate::machining2d::WallPasses) -> Self {
+        WallPassesDto {
+            rough_passes: p.rough_passes,
+            rough_spacing: p.rough_spacing,
+            finish_passes: p.finish_passes,
+            finish_spacing: p.finish_spacing,
+            spring_passes: p.spring_passes,
+            finish_level: match p.finish_level {
+                crate::machining2d::FinishLevel::Every => FinishLevelDto::Every,
+                crate::machining2d::FinishLevel::Last => FinishLevelDto::Last,
+            },
+        }
+    }
+}
+
+impl From<WallPassesDto> for crate::machining2d::WallPasses {
+    fn from(d: WallPassesDto) -> Self {
+        crate::machining2d::WallPasses {
+            rough_passes: d.rough_passes,
+            rough_spacing: d.rough_spacing,
+            finish_passes: d.finish_passes,
+            finish_spacing: d.finish_spacing,
+            spring_passes: d.spring_passes,
+            finish_level: match d.finish_level {
+                FinishLevelDto::Every => crate::machining2d::FinishLevel::Every,
+                FinishLevelDto::Last => crate::machining2d::FinishLevel::Last,
+            },
+        }
+    }
+}
+
+impl Default for WallPassesDto {
+    /// The single roughing pass every file before the option held.
+    fn default() -> Self {
+        WallPassesDto {
+            rough_passes: 1,
+            rough_spacing: 0.0,
+            finish_passes: 0,
+            finish_spacing: 0.0,
+            spring_passes: 0,
+            finish_level: FinishLevelDto::Every,
+        }
+    }
+}
+
+impl WallPassesDto {
+    /// The serde skip test: the single pass stays off the wire.
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    fn is_default(&self) -> bool {
+        self.rough_passes == 1
+            && self.rough_spacing == 0.0
+            && self.finish_passes == 0
+            && self.finish_spacing == 0.0
+            && self.spring_passes == 0
+            && self.finish_level == FinishLevelDto::Every
+    }
+}
+
 /// The file mirror of `operation::OpParams`, tool-free by the same rule as
 /// the domain type: the diameter lives in the tool, never a parameter.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -210,6 +329,11 @@ pub enum ParamsDto {
         /// sketch contours; absent on every pre-v74 file.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         chain_overrides: Vec<ChainOverrideDto>,
+        /// Wall passes per level (Journeyman spec S1): absent is one
+        /// roughing pass and none of the rest - the single pass every
+        /// earlier file held.
+        #[serde(default, skip_serializing_if = "WallPassesDto::is_default")]
+        passes: WallPassesDto,
     },
     Pocket {
         /// M11.2 level transitions and links: absent is the kind's earlier shape.

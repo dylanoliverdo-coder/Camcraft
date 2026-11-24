@@ -84,6 +84,7 @@ fn contour_params() -> OpParams {
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 
@@ -2519,6 +2520,7 @@ fn a_closed_chain_routes_the_boundary_path_not_a_centerline() {
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     history.execute(
         &world,
@@ -3340,6 +3342,7 @@ fn selection_notes_report_stitching_and_extension() {
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     let notes = operation::selection_notes(&world, None, &items, &contour);
     assert!(
@@ -3388,6 +3391,7 @@ fn contour_at(side: Side, z: f64) -> OpParams {
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

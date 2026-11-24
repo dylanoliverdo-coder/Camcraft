@@ -265,6 +265,7 @@ fn the_solid_law_on_the_users_part_is_silent_and_cheap() {
         helix_radius: 1.0,
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     let t = contour_on_part(&region, &m.facets, &p).expect("contour");
     let g = ToolGeom { radius: 5.0, nose_radius: 0.0, flute_len: 22.0, shank_radius: 5.0, shank_len: 40.0, holder_radius: 22.0, holder_len: 35.0 };

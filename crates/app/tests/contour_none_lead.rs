@@ -55,6 +55,7 @@ fn contour(lead: Lead, lead_out: Option<Lead>, entry: Entry3D) -> OpParams {
         tilt: None,
         links: Links { approach, ..Links::PLANAR },
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

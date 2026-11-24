@@ -58,6 +58,7 @@ fn contour_params(comp: Compensation) -> OpParams {
         blend_turns: false,
         links: Links { approach: Approach { compensation: comp, ..Approach::DEFAULT }, ..Links::PLANAR },
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

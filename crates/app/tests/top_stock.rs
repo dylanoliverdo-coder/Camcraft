@@ -87,6 +87,7 @@ fn scene(stock_top: f64, face: Option<f64>) -> World {
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     history.execute(
         &world,

@@ -202,6 +202,7 @@ fn a_lathe_shuts_the_mill_door_and_a_millturn_opens_both() {
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     let Err(err) = CreateOperation::new(&world, "C1", "EM-0400-2FL", SrcRef::Stock, contour.clone())
     else {

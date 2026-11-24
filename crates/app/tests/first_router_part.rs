@@ -202,6 +202,7 @@ fn build_demo_world() -> flecs_ecs::prelude::World {
         lead: Lead::Arc { radius: 3.0 }, tolerance: 0.01, tab_count: 4, tab_width: 8.0, tab_height: 3.0,
         entry: Entry3D::Plunge, helix_radius: 1.0, blend_turns: false, tilt: None, links: Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     h.execute(&world, CreateOperation::new(&world, "2D Contour1", "EM-0600-4FL", SrcRef::Selection(contour_picks), contour_params).expect("contour op"));
     h.execute(&world, EditOperationParams::with_coolant(&world, "2D Contour1", CoolantMode::Off).expect("dry contour"));
