@@ -34,7 +34,7 @@
 //!   --out-closed-stl <file>     column arm: write the stock as a closed mesh
 //!   --matrix a,b,...            16 numbers, row-major: setup-to-part for --out-closed-stl
 //!   --move-lines <file.json>    camotics input: write each op's per-move NC line numbers
-//!   --progressive <spec.json>   column arm: after each operation (JOURNEYMAN OPERATION ID n in
+//!   --progressive <spec.json>   column or field arm: after each operation (JOURNEYMAN OPERATION ID n in
 //!                               the NC), read sample points of each placed part copy against
 //!                               the stock; per-operation surface on the cut / past the line
 //!   --tool flat|ball|bull D [corner]   rows input only
@@ -734,6 +734,7 @@ struct Progressive {
     copies: Vec<PartCopy>,
     order: Vec<i64>,           // operation ids, program order
     bounds: [f64; 4],          // the whole stock's x0 x1 y0 y1: beyond them there is no material
+    field: bool,               // the stock is the field arm (signed distance), not columns
 }
 
 const BEFORE: u32 = u32::MAX - 1;
@@ -760,7 +761,7 @@ impl Progressive {
         }
         let mut order = Vec::new();
         for id in op_ids.iter().flatten() { if !order.contains(id) { order.push(*id); } }
-        Progressive { line, z0, copies, order, bounds: [f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY] }
+        Progressive { line, z0, copies, order, bounds: [f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY], field: false }
     }
 
     /// Read every sample whose point lies in this X tile against the tile's stock; `at` is the evaluation index.
@@ -780,10 +781,16 @@ impl Progressive {
                 let (qi, qo) = (q(-1.0), q(1.0));
                 // a point in another X tile of the stock is not read here; one beyond the stock has no material
                 if (!in_tile(qi[0]) && !beyond(qi)) || (!in_tile(qo[0]) && !beyond(qo)) { c.unmeasured[k] = true; continue; }
-                // Gone: beyond the stock, below its bottom, or above the column's top (no top: off the grid, unmeasured).
+                // Gone: beyond the stock, below its bottom, or above the column's top (no top: off the grid,
+                // unmeasured); on the field arm, outside the material (signed distance >= 0; NaN: unmeasured).
                 let mut off = false;
                 let mut gone = |r: [f64; 3]| -> bool {
                     if r[2] < z0 || beyond(r) { return true; }
+                    if let Some(f) = stock.field() {
+                        let d = f.distance(Point3::new(r[0], r[1], r[2]));
+                        if d.is_nan() { off = true; return true; }
+                        return d >= 0.0;
+                    }
                     let t = stock.top(r[0], r[1]);
                     if t.is_nan() { off = true; return true; }
                     !(r[2] < t)
@@ -834,7 +841,8 @@ impl Progressive {
                 "before_first_toolpath_past_mm2": before_past}));
         }
         json!({"line_mm": self.line, "operations": self.order, "copies": copies,
-               "basis": "column stock (one material height per column) after each operation; a surface sample is past the line when the material line_mm inside it is gone, on the cut when the material line_mm outside is gone and the inside stands; areas are the samples' own; a face is entered at its first sample past the line, cut to size at the first operation that puts some of it on the cut while none of it is past; volume into a copy not measured"})
+               "stock": if self.field { "field" } else { "column" },
+               "basis": "column stock (one material height per column; on the field arm: the signed-distance solid, material where the distance is negative) after each operation; a surface sample is past the line when the material line_mm inside it is gone, on the cut when the material line_mm outside is gone and the inside stands; areas are the samples' own; a face is entered at its first sample past the line, cut to size at the first operation that puts some of it on the cut while none of it is past; volume into a copy not measured"})
     }
 }
 
@@ -1006,7 +1014,7 @@ fn main() {
     }
     // tool number -> (cutting length, strike moves, worst excess mm, first (op, move), the moves seen across X tiles)
     let mut strikes: BTreeMap<i64, (f64, usize, f64, (usize, usize), std::collections::BTreeSet<(usize, usize)>)> = BTreeMap::new();
-    let mut prog = get("progressive").map(|p| Progressive { bounds: [x0, x1, y0, y1], ..Progressive::load(&p, z0, &op_ids) });
+    let mut prog = get("progressive").map(|p| Progressive { bounds: [x0, x1, y0, y1], field: matches!(backend, Backend::Field { .. }), ..Progressive::load(&p, z0, &op_ids) });
     for tx in 0..ntx {
         let (i0, i1) = (tx * per, ((tx + 1) * per).min(nx));
         let (tx0, tx1) = (x0 + i0 as f64 * cell, x0 + i1 as f64 * cell);
@@ -1076,6 +1084,21 @@ fn main() {
                         if let Err(e) = stock.simulate(&one) { sim = Err(e.to_string()); break 'ops; }
                     }
                     // The last atom of an operation: read every copy against the stock it leaves.
+                    if let (Some(p), Some(id)) = (prog.as_mut(), op_ids.get(oi).copied().flatten()) {
+                        if oi + 1 == ops.len() || op_ids.get(oi + 1).copied().flatten() != Some(id) {
+                            let at = p.order.iter().position(|x| *x == id).unwrap_or(0) as u32;
+                            p.eval(&stock, tx0, tx1, last_tile, at);
+                        }
+                    }
+                }
+            }
+            // --progressive on the field arm: the same cut op by op, each copy read against the field's material
+            // (signed distance) after the last atom of every operation.
+            (Stock::Field(_), _) if prog.is_some() => {
+                let last_tile = tx + 1 == ntx;
+                if let Some(p) = prog.as_mut() { p.eval(&stock, tx0, tx1, last_tile, BEFORE); }
+                for oi in 0..ops.len() {
+                    if let Err(e) = stock.simulate(&sim_ops[oi..oi + 1]) { sim = Err(e.to_string()); break; }
                     if let (Some(p), Some(id)) = (prog.as_mut(), op_ids.get(oi).copied().flatten()) {
                         if oi + 1 == ops.len() || op_ids.get(oi + 1).copied().flatten() != Some(id) {
                             let at = p.order.iter().position(|x| *x == id).unwrap_or(0) as u32;
@@ -1277,14 +1300,25 @@ mod progressive_tests {
     /// (face 2, 27 samples). Operation 10 faces to z 5, 20 cuts the wall to z 2, 30 dips to z 4 over x 5-10.
     #[test]
     fn three_operations_read_in_order() {
+        three_operations_on(Backend::Column);
+    }
+
+    /// The field arm reads the same count from its signed-distance solid on the same upright cut.
+    #[test]
+    fn three_operations_read_in_order_on_the_field_arm() {
+        three_operations_on(Backend::Field { band: FIELD_BAND });
+    }
+
+    fn three_operations_on(backend: Backend) {
         let mut s = Vec::new();
         for x in [6.0, 7.0, 8.0, 12.0, 13.0, 14.0] { for y in 6..15 { s.push([x as f32, y as f32, 5.0, 0.0, 0.0, 1.0, 1.0, f32::from_bits(1)]); } }
         for z in [2.5f32, 3.5, 4.5] { for y in 6..15 { s.push([15.0, y as f32, z, 1.0, 0.0, 0.0, 1.0, f32::from_bits(2)]); } }
         let n = s.len();
-        let mut p = Progressive { line: 0.3, z0: 0.0, order: vec![10, 20, 30], bounds: [0.0, 20.0, 0.0, 20.0],
+        let field = matches!(backend, Backend::Field { .. });
+        let mut p = Progressive { line: 0.3, z0: 0.0, order: vec![10, 20, 30], bounds: [0.0, 20.0, 0.0, 20.0], field,
             copies: vec![PartCopy { key: "a".into(), s, past: vec![NEVER; n], on: vec![NEVER; n], unmeasured: vec![false; n],
                                     seen: vec![false; n] }] };
-        let mut stock = Stock::block(Backend::Column, 0.0, 0.0, 20.0, 20.0, 10.0, 0.1).unwrap();
+        let mut stock = Stock::block(backend, 0.0, 0.0, 20.0, 20.0, 10.0, 0.1).unwrap();
         p.eval(&stock, 0.0, 20.0, true, BEFORE);
         pass(&mut stock, &[-1.0, 1.0, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0, 17.0, 19.0, 21.0], 5.0);
         p.eval(&stock, 0.0, 20.0, true, 0);
@@ -1307,7 +1341,7 @@ mod progressive_tests {
     #[test]
     fn a_sample_off_the_stock_is_unmeasured() {
         let s = vec![[30.0f32, 5.0, 5.0, 0.0, 0.0, 1.0, 2.0, f32::from_bits(1)], [5.0, 5.0, 5.0, 0.0, 0.0, 1.0, 1.0, f32::from_bits(1)]];
-        let mut p = Progressive { line: 0.3, z0: 0.0, order: vec![10], bounds: [0.0, 20.0, 0.0, 20.0],
+        let mut p = Progressive { line: 0.3, z0: 0.0, order: vec![10], bounds: [0.0, 20.0, 0.0, 20.0], field: false,
             copies: vec![PartCopy { key: "a".into(), s, past: vec![NEVER; 2], on: vec![NEVER; 2], unmeasured: vec![false; 2],
                                     seen: vec![false; 2] }] };
         let stock = Stock::block(Backend::Column, 0.0, 0.0, 20.0, 20.0, 10.0, 0.1).unwrap();
@@ -1321,7 +1355,7 @@ mod progressive_tests {
     #[test]
     fn a_face_on_the_stock_side_is_on_the_cut_before_any_toolpath() {
         let s = vec![[20.0f32, 5.0, 5.0, 1.0, 0.0, 0.0, 1.0, f32::from_bits(1)], [0.0, 5.0, 5.0, -1.0, 0.0, 0.0, 1.0, f32::from_bits(2)]];
-        let mut p = Progressive { line: 0.3, z0: 0.0, order: vec![10], bounds: [0.0, 20.0, 0.0, 20.0],
+        let mut p = Progressive { line: 0.3, z0: 0.0, order: vec![10], bounds: [0.0, 20.0, 0.0, 20.0], field: false,
             copies: vec![PartCopy { key: "a".into(), s, past: vec![NEVER; 2], on: vec![NEVER; 2], unmeasured: vec![false; 2],
                                     seen: vec![false; 2] }] };
         let stock = Stock::block(Backend::Column, 0.0, 0.0, 20.0, 20.0, 10.0, 0.1).unwrap();
