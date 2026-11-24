@@ -5765,7 +5765,7 @@ fn adaptive_finish_passes_round_trip_refusals_and_undo() {
     let mut history = History::default();
     let dir = std::env::temp_dir().join(format!("cc_s5_rt_{}", std::process::id()));
     let _ = std::fs::create_dir_all(&dir);
-    let _ = history.execute(&world, SetStock::new(&world, StockShape::Box { dx: 60.0, dy: 40.0, dz: 10.0 }, Default::default()).expect("stock"));
+    history.execute(&world, SetStock::new(&world, StockShape::Box { dx: 60.0, dy: 40.0, dz: 10.0 }, Default::default()).expect("stock"));
     let mut short_tool = catalog_tool("EM-0600-4FL");
     short_tool.diameter = 10.0;
     short_tool.flute_len = 5.0;
@@ -5806,5 +5806,47 @@ fn adaptive_finish_passes_round_trip_refusals_and_undo() {
     // `finish_level = Last` with 5 mm flute on 10 mm wall must refuse by name at GenerateOperation.
     let err = GenerateOperation::new(&world, "A1").err().expect("short flute must refuse at generate");
     assert!(err.to_string().contains("flute"), "refusal must name flute: {err}");
+
+    // Rest machining + active finishing passes must be refused by name at command creation.
+    let mut with_rest = set.clone();
+    if let OpParams::Adaptive2D { rest, .. } = &mut with_rest {
+        *rest = Some(camcraft_app::machining2d::RestParams {
+            source: camcraft_app::machining2d::RestSource::PreviousOperations,
+            previous_tool_diameter: 0.0,
+            previous_corner_radius: 0.0,
+            previous_stock_to_leave: 0.0,
+            allowance: 0.0,
+        });
+    }
+    let rest_err = CreateOperation::new(&world, "A_REST", "T_SHORT", SrcRef::Stock, with_rest)
+        .err()
+        .expect("rest + active finish must refuse");
+    assert!(
+        rest_err.to_string().contains("wall finishing passes"),
+        "rest refusal must name wall finishing passes: {rest_err}"
+    );
+
+    // End-to-end multi-level `finish_level = Last` with sufficient flute length:
+    // GenerateOperation + verify_bodies must succeed with ZERO RapidInStock and ZERO Gouge warnings.
+    let mut tall_tool = catalog_tool("EM-0600-4FL");
+    tall_tool.diameter = 10.0;
+    tall_tool.flute_len = 15.0;
+    history.execute(&world, AddTool::new(&world, "T_TALL", tall_tool).expect("add tall tool"));
+    history.execute(&world, CreateOperation::new(&world, "A_LAST", "T_TALL", SrcRef::Stock, set).expect("create A_LAST"));
+    history.execute(&world, GenerateOperation::new(&world, "A_LAST").expect("generate A_LAST"));
+    let op_e = model::find_by_name(&world, "A_LAST").expect("A_LAST entity");
+    let cache = model::toolpath_of(&world, &op_e).expect("A_LAST toolpath cache");
+    assert!(!cache.path.moves.is_empty(), "A_LAST must emit moves");
+    for w in &cache.warnings {
+        assert!(
+            !matches!(
+                w,
+                camcraft_app::verify::Warning::RapidInStock { .. }
+                    | camcraft_app::verify::Warning::Gouge { .. }
+                    | camcraft_app::verify::Warning::Crossing { .. }
+            ) && !w.blocks_post(),
+            "multi-level FinishLevel::Last must produce no rapid-in-stock, gouge, crossing, or blocking warning: {w:?}"
+        );
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }

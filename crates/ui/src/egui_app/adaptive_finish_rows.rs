@@ -12,9 +12,13 @@ use camcraft_app::machining2d::{AdaptiveFinish, FinishLevel};
 /// count, spacing (when finishing passes > 0), finish level (when finishing or
 /// spring passes > 0), and spring pass count.
 pub(super) fn adaptive_finish_rows(ui: &mut Ui, u: Unit, finish: &mut AdaptiveFinish) {
+    let prev_passes = finish.finish_passes;
     let mut count = f64::from(finish.finish_passes);
     prop_row(ui, "Finishing passes", |ui| num_plain(ui, &mut count));
     finish.finish_passes = count.clamp(0.0, 64.0).round().max(0.0) as u32;
+    if prev_passes == 0 && finish.finish_passes > 0 && finish.finish_spacing <= 0.0 {
+        finish.finish_spacing = 0.25;
+    }
     if finish.finish_passes > 0 {
         prop_row(ui, "Finishing spacing", |ui| num(ui, u, &mut finish.finish_spacing));
     }
