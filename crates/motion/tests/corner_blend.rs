@@ -68,6 +68,7 @@ fn cp(side: Side, climb: bool, blend: bool) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: blend,
         links: camcraft_motion::links::Links::PLANAR,
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     }
 }
 

@@ -1,0 +1,194 @@
+//! The wall passes of one level (Journeyman spec S1): a contour rides
+//! several offsets of its chain per level, the farthest first and the
+//! final offset `w` last, with the finishing and spring passes beyond.
+//! Provenance: Journeyman spec S1
+//! (docs/journeyman/specs/S1-wall-passes.md); offset curves after
+//! M. Held, *On the Computational Geometry of Pocket Machining*,
+//! LNCS 500, Springer 1991, and R. T. Farouki and C. A. Neff, "Analytic
+//! properties of plane offset curves", CAGD 7 (1990) 83-99; no vendor
+//! parameters, text or code.
+
+use super::contour_params::ContourParams;
+
+/// The wall-pass controls of one 2D Contour: the roughing, finishing and
+/// spring passes and the levels they run on (spec S1). The default is
+/// today's single pass at the final offset, byte for byte.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WallPasses {
+    /// Roughing passes at each level; `1` is today's single pass.
+    pub rough_passes: u32,
+    /// Distance between two roughing passes (mm); read only when
+    /// `rough_passes` > 1.
+    pub rough_spacing: f64,
+    /// Finishing passes after the roughing ones; `0` is none.
+    pub finish_passes: u32,
+    /// Distance between two finishing passes, and between the last
+    /// roughing pass and the first finishing one (mm); read only when
+    /// `finish_passes` > 0.
+    pub finish_spacing: f64,
+    /// Repeats of the final pass, at the final offset `w`.
+    pub spring_passes: u32,
+    /// The levels the finishing and spring passes run on.
+    pub finish_level: FinishLevel,
+}
+
+impl Default for WallPasses {
+    /// The single roughing pass every file before the option held.
+    fn default() -> Self {
+        WallPasses {
+            rough_passes: 1,
+            rough_spacing: 0.0,
+            finish_passes: 0,
+            finish_spacing: 0.0,
+            spring_passes: 0,
+            finish_level: FinishLevel::Every,
+        }
+    }
+}
+
+impl WallPasses {
+    /// Why these wall passes cannot be honoured, by name; `None` when
+    /// they can (spec S1, "Refusals").
+    #[must_use]
+    pub fn refusal(&self) -> Option<String> {
+        if !(self.rough_spacing.is_finite() && self.finish_spacing.is_finite()) {
+            return Some("parameters must be finite".into());
+        }
+        if self.rough_passes > 1 && !(self.rough_spacing > 0.0) {
+            return Some(format!(
+                "roughing passes: {} passes need a positive spacing (set to {:.3} mm)",
+                self.rough_passes, self.rough_spacing
+            ));
+        }
+        if self.finish_passes > 0 && !(self.finish_spacing > 0.0) {
+            return Some(format!(
+                "finishing passes: {} passes need a positive spacing (set to {:.3} mm)",
+                self.finish_passes, self.finish_spacing
+            ));
+        }
+        if self.rough_passes > MAX_WALL_PASSES
+            || self.finish_passes > MAX_WALL_PASSES
+            || self.spring_passes > MAX_WALL_PASSES
+        {
+            return Some(format!(
+                "wall passes: at most {MAX_WALL_PASSES} roughing, {MAX_WALL_PASSES} finishing and \
+                 {MAX_WALL_PASSES} spring passes are supported"
+            ));
+        }
+        None
+    }
+}
+
+/// The most passes of one kind a level may ask for: more cuts nothing a
+/// smaller count did not.
+pub const MAX_WALL_PASSES: u32 = 64;
+
+/// The levels a contour's finishing and spring passes run on (spec S1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum FinishLevel {
+    /// At every level: the roughing passes, then the finishing and
+    /// spring passes, on every level. Every file before the option.
+    #[default]
+    Every,
+    /// Only at the last level: the levels above it carry only the
+    /// roughing passes.
+    Last,
+}
+
+/// The last (lowest) cut level of `p`'s ladder, for the flute law.
+pub fn contour_last_level(p: &ContourParams) -> Result<f64, super::face::GenError> {
+    let zs = p.levels()?;
+    zs.last()
+        .copied()
+        .ok_or_else(|| super::face::GenError::Invalid("the contour has no cut level".into()))
+}
+
+/// The finishing pass's flute law (spec S1, "Order and levels"): a
+/// finishing pass cuts the whole wall height with the side of the tool,
+/// so the tool's flute length must cover `top_z - bottom_z`. `Err`
+/// names the shortfall.
+pub fn contour_flute_covers_wall(p: &ContourParams, flute_len: f64) -> Result<(), super::face::GenError> {
+    let wall = p.top_z - p.bottom_z;
+    if !(flute_len.is_finite() && flute_len > 0.0) {
+        return Err(super::face::GenError::Invalid(
+            "the tool states no flute length, so the wall height a finishing pass cuts is unknown".into(),
+        ));
+    }
+    if flute_len + 1e-9 < wall {
+        return Err(super::face::GenError::Invalid(format!(
+            "finishing pass: the wall is {wall:.3} mm tall but the tool's flute is {flute_len:.3} mm long - \
+             a finishing pass at the last level cuts the whole wall with the side of the tool; use a tool \
+             with a flute at least {wall:.3} mm long"
+        )));
+    }
+    Ok(())
+}
+
+/// One pass of a level, in cut order: its offset from the wall (the
+/// tool centre's distance) and whether it is a finishing pass.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct WallPass {
+    /// The tool centre's distance from the wall, mm (`w + d`).
+    pub offset: f64,
+    /// `true` for a finishing or spring pass: it runs only where
+    /// `finish_level` says, and reads the flute law.
+    pub finishing: bool,
+}
+
+/// The tool centre's distance from the wall at the final offset `w`:
+/// the tool radius plus the stock to leave.
+pub(crate) fn final_offset(p: &ContourParams) -> f64 {
+    p.tool_diameter * 0.5 + p.stock_to_leave
+}
+
+/// Every pass of one level, in cut order (spec S1 "Offsets"): the
+/// roughing passes farthest first, then the finishing passes, then the
+/// spring passes at the final offset. The level filter is applied by the
+/// caller from [`level_runs_finishing`].
+pub(crate) fn level_passes(p: &ContourParams) -> Vec<WallPass> {
+    let w = final_offset(p);
+    let wp = p.passes;
+    let (nr, dr, nf, df, ns) = (
+        wp.rough_passes,
+        wp.rough_spacing,
+        wp.finish_passes,
+        wp.finish_spacing,
+        wp.spring_passes,
+    );
+    let mut out = Vec::with_capacity(nr as usize + nf as usize + ns as usize);
+    for i in 1..=nr {
+        out.push(WallPass { offset: w + nf as f64 * df + (nr - i) as f64 * dr, finishing: false });
+    }
+    for j in 1..=nf {
+        out.push(WallPass { offset: w + (nf - j) as f64 * df, finishing: true });
+    }
+    for _ in 0..ns {
+        out.push(WallPass { offset: w, finishing: true });
+    }
+    out
+}
+
+/// Whether `z` (one of `levels`, descending) runs the finishing and
+/// spring passes: every level, or only the last one (the lowest).
+pub(crate) fn level_runs_finishing(p: &ContourParams, levels: &[f64], z: f64) -> bool {
+    match p.passes.finish_level {
+        FinishLevel::Every => true,
+        FinishLevel::Last => levels.last().is_some_and(|&last| z.to_bits() == last.to_bits()),
+    }
+}
+
+/// The passes of level `z` of `levels`, after the level filter.
+pub(crate) fn passes_at_level(p: &ContourParams, levels: &[f64], z: f64) -> Vec<WallPass> {
+    if level_runs_finishing(p, levels, z) {
+        level_passes(p)
+    } else {
+        let w = final_offset(p);
+        let wp = p.passes;
+        (1..=wp.rough_passes)
+            .map(|i| WallPass {
+                offset: w + wp.finish_passes as f64 * wp.finish_spacing + (wp.rough_passes - i) as f64 * wp.rough_spacing,
+                finishing: false,
+            })
+            .collect()
+    }
+}

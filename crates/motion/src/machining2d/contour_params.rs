@@ -133,6 +133,10 @@ pub struct ContourParams {
     /// every file before the option (the old `level_link` stay-down ramp
     /// is level Keep down with a Ramp transition).
     pub links: Links,
+    /// Wall passes per level (Journeyman spec S1): the roughing,
+    /// finishing and spring passes. The default is today's single pass,
+    /// byte for byte.
+    pub passes: super::contour_passes::WallPasses,
 }
 
 impl ContourParams {
@@ -180,6 +184,12 @@ impl ContourParams {
         }
         if self.tolerance <= 0.0 {
             return Err(GenError::Invalid("tolerance must be positive".into()));
+        }
+        // Wall passes (spec S1): a count the generator cannot honour is
+        // refused by name, and a spacing asked for with its count at the
+        // default is not a spacing at all.
+        if let Some(why) = self.passes.refusal() {
+            return Err(GenError::Invalid(why));
         }
         match self.lead {
             Lead::None => {}

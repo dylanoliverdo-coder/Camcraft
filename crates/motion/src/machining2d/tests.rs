@@ -144,6 +144,7 @@ fn contour_side(side: Side) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: false,
         links: crate::links::Links::PLANAR,
+        passes: crate::machining2d::WallPasses::default(),
     }
 }
 

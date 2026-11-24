@@ -41,6 +41,7 @@ fn params(lead: Lead, climb: bool, comp: Compensation) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: false,
         links: Links { approach: Approach { compensation: comp, ..Approach::DEFAULT }, ..Links::PLANAR },
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     }
 }
 

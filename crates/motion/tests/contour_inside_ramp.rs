@@ -50,6 +50,7 @@ fn params(climb: bool) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: false,
         links: Links::PLANAR,
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     }
 }
 
