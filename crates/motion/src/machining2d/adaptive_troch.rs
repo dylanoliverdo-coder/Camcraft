@@ -142,8 +142,23 @@ pub(super) fn trochoidal_inside(
     t: &AdaptiveTrochParams,
     keepout: Option<&Region>,
 ) -> Result<Toolpath, GenError> {
+    trochoidal_inside_finish(region, p, t, keepout, None)
+}
+
+/// [`trochoidal_inside`] with optional wall finishing passes (Journeyman spec
+/// S5; Held 1991, Stori & Wright 2000; no vendor parameters, text or code).
+pub(super) fn trochoidal_inside_finish(
+    region: &Region,
+    p: &PocketParams,
+    t: &AdaptiveTrochParams,
+    keepout: Option<&Region>,
+    finish: Option<&super::adaptive::AdaptiveFinish>,
+) -> Result<Toolpath, GenError> {
     // The Adaptive doors (finite numbers, the load in (0, 50] % of D).
-    let p = &PocketParams { strategy: PocketStrategy::Adaptive, ..*p };
+    let p_orig = &PocketParams { strategy: PocketStrategy::Adaptive, ..*p };
+    let extra = finish.map_or(0.0, |f| f.clearing_gap(p_orig));
+    let p = &PocketParams { stock_to_leave: p_orig.stock_to_leave + extra, ..*p_orig };
+    p_orig.validate()?;
     p.validate()?;
     t.validate()?;
     if p.optimal_load < 0.04 {
@@ -169,6 +184,15 @@ pub(super) fn trochoidal_inside(
     if center.is_empty() {
         return Err(GenError::Invalid(format!("{WHO}: no cutter position stays clear of the protected items")));
     }
+    let center_final = if extra > 0.0 {
+        let c = super::pocket::non_sliver_center(region, r + p_orig.stock_to_leave)?;
+        match keepout {
+            Some(ko) if !ko.is_empty() => c.difference(ko)?,
+            _ => c,
+        }
+    } else {
+        center.clone()
+    };
     let planned = plan_all_lanes(region, &center, p, t)?;
     let reach = if p.stock_to_leave > 0.0 { region.offset(-p.stock_to_leave)? } else { region.clone() };
     let (clean, final_cleared) =
@@ -197,6 +221,16 @@ pub(super) fn trochoidal_inside(
             emit_level(&mut bld, &lay.lay, &lay.tp, z, from, true, lay.open).map_err(|e| renamed(e).with_ghost_moves(bld.moves()))?;
         }
         emit_cleanup(&mut bld, &clean, p, z, above, hop);
+        if let Some(f) = finish
+            && f.is_active()
+            && super::adaptive::level_runs_finishing(f, &zs, z)
+        {
+            let at = bld.at();
+            let fin_passes = super::adaptive::plan_finish_rings(region, p_orig, f, keepout, Point2::new(at.x, at.y))?;
+            let fin_runs: Vec<Vec<super::arcs::Seg>> =
+                fin_passes.iter().map(|ring| super::arcs::fit_arcs(ring, super::ARC_FIT_TOL)).collect();
+            super::adaptive::emit_troch_finish_level(&mut bld, &fin_passes, &fin_runs, &center_final, p_orig, z, above);
+        }
         above = z;
     }
     let at = bld.at();
@@ -239,7 +273,7 @@ pub(super) fn trochoidal_inside(
     }
 
     let path = bld.finish();
-    check_path(&path, &center)?;
+    check_path(&path, &center_final)?;
     if t.max_engagement != DEFAULT_MAX_ENGAGEMENT {
         let spec = crate::quality::QualitySpec::new(p.tool_diameter);
         let mut stock = crate::quality::stock_for(region, p.top_z, p.bottom_z, p.tool_diameter, &spec)

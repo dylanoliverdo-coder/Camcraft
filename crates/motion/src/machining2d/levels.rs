@@ -330,6 +330,19 @@ impl WalkState {
         Self { first: true, last_cut_z: None, above: top_z, st: LinkState::default() }
     }
 
+    /// Resume a walk already at cut plane `z` with material top `above`
+    /// (Journeyman spec S5; Held 1991, Stori & Wright 2000; no vendor
+    /// parameters, text or code).
+    pub(super) fn resumed_at(z: f64, above: f64) -> Self {
+        Self { first: false, last_cut_z: Some(z), above, st: LinkState::default() }
+    }
+
+    /// Record planar cuts already made at the current level so subsequent
+    /// stay-down links cannot cross them (Journeyman spec S5).
+    pub(super) fn add_level_cuts(&mut self, cuts: &[Vec<Point2>]) {
+        self.st.add_cuts(cuts);
+    }
+
     pub(super) fn finish(&self, b: &mut PathBuilder, m: &Motion) {
         self.st.tally.say(b, "level/pass");
         if let Some(n) = m.links.approach.engagement_note()

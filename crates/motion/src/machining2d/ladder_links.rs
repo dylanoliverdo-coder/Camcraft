@@ -49,6 +49,13 @@ impl LinkState {
     pub(super) fn begin_level(&mut self, cuts: Cuts) {
         self.level = cuts;
     }
+
+    /// Record additional planar cuts on the current level (e.g. clearing
+    /// passes before wall finishing passes, Journeyman spec S5; Held 1991,
+    /// Stori & Wright 2000; no vendor parameters, text or code).
+    pub(super) fn add_cuts(&mut self, cuts: &[Vec<Point2>]) {
+        self.level.extend(cuts.iter().cloned());
+    }
 }
 
 /// A descent onto `lv.pass[0]` at `lv.z`, traversing at `tz`: the
