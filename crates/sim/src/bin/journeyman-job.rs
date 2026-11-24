@@ -22,8 +22,9 @@
 //!   --parts <spec.json>         several parts against the one cut: {"parts": [{"key", "stl"}]};
 //!                               each part's deviate under vs_parts[key]
 //!   --tol <mm>                  deviate tolerance (default 0.0254)
-//!   --out-stl <file>            field arm only: write the stock surface
-//!   --out-box x0,y0,z0,x1,y1,z1 with --out-stl: write only the stock inside this box (mm, marching
+//!   --capabilities              print what this build can do (JSON) and stop
+//!   --out-stl <file>            field arm only: write the stock surface, clipped to the blank
+//!   --out-box x0,y0,z0,x1,y1,z1 with --out-stl: write only the stock inside this box and the blank (mm, marching
 //!                               tetrahedra streamed by layer at the field cell), closed by
 //!                               the box faces (a large stock whose whole grid is past the sample budget)
 //!   --shank <mm>                field arm only: cut with this tool length above the tip
@@ -846,6 +847,11 @@ impl Progressive {
     }
 }
 
+/// oriented-path: --camotics cuts a project's oriented `path` (indexed / posed moves) on the field arm, --max-seg
+/// pieces; field-blank-clip: the field arm's --out-stl is clipped to the blank; field-progressive: --progressive
+/// counts on the field arm.
+const CAPABILITIES: [&str; 3] = ["oriented-path", "field-blank-clip", "field-progressive"];
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut opt: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -865,6 +871,11 @@ fn main() {
     }
     let get = |k: &str| opt.get(k).and_then(|v| v.first()).cloned();
     let num = |s: &str| s.parse::<f64>().unwrap_or_else(|_| die(format!("not a number: {s}")));
+    if opt.contains_key("capabilities") {
+        // What this build can do, for the build record (journeyman/record.py) and the lane's engine choice.
+        println!("{}", json!({"capabilities": CAPABILITIES}));
+        return;
+    }
     let backend = match get("backend").as_deref() {
         None | Some("column") => Backend::Column,
         Some("field") => Backend::Field { band: FIELD_BAND },
@@ -1262,17 +1273,21 @@ fn main() {
     if let Some(p) = get("out-stl") {
         let t5 = Instant::now();
         match stocks[0].field().filter(|_| stocks.len() == 1) {
-            Some(f) => match match get("out-box") {
-                Some(s) => {
-                    let v: Vec<f64> = s.split(',').map(num).collect();
-                    if v.len() != 6 {
+            // The field block runs ten spans below the top (the stock is open below on both arms), so the closed
+            // mesh is always clipped to the blank; --out-box narrows it further.
+            Some(f) => match {
+                let mut v = vec![x0, y0, z0, x1, y1, z1];
+                if let Some(s) = get("out-box") {
+                    let b: Vec<f64> = s.split(',').map(num).collect();
+                    if b.len() != 6 {
                         die(format!("--out-box wants 6 numbers xmin,ymin,zmin,xmax,ymax,zmax, not {s}"));
                     }
-                    let clip = Aabb { min: Point3::new(v[0], v[1], v[2]), max: Point3::new(v[3], v[4], v[5]) };
-                    out["mesh_box_mm"] = json!(v);
-                    iso::extract_clipped_streamed(f, f.cell(), clip)
+                    for k in 0..3 { v[k] = v[k].max(b[k]); v[k + 3] = v[k + 3].min(b[k + 3]); }
+                    if (0..3).any(|k| v[k] >= v[k + 3]) { die(format!("--out-box {s} does not meet the blank")); }
                 }
-                None => iso::extract(f),
+                let clip = Aabb { min: Point3::new(v[0], v[1], v[2]), max: Point3::new(v[3], v[4], v[5]) };
+                out["mesh_box_mm"] = json!(v);
+                iso::extract_clipped_streamed(f, f.cell(), clip)
             } {
                 Ok(tris) => {
                     write_stl(&p, &tris);
