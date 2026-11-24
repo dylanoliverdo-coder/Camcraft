@@ -27,7 +27,7 @@ use crate::cl::{Move, Toolpath};
 use crate::schema::Operation;
 use crate::verify;
 
-use super::generate::{contain_into, stock_to_leave_of, DepthLaw};
+use super::generate::{contain_with_drill, stock_to_leave_of, DepthLaw};
 use super::{keep_law, mark_law};
 
 /// Whether `op`'s kind can read parts beside its source at all - a cheap
@@ -85,6 +85,9 @@ fn part_problem(world: &World, name: &str, op: &Operation, path: &Toolpath, know
     let cutter = super::thread_op::root_cutter(cutter, &job.tool, &job.params);
     let stl = stock_to_leave_of(&job.params);
     let excess = job.material.excess;
+    // Kept parts never inherit the source part's chamfer permission.
+    let drill = super::drill_chamfer::DrillProbe::of(&job.params, &job.tool);
+    let drill = drill.as_ref().map(|probe| (probe.tip_radius, &[][..]));
     // Generation's split (`generate::run_job_arms`): on a stock source an
     // Engrave or Trace marks the parts (budgeted), a Drill, Bore or Thread
     // takes the containment law with its declared holes' walls excused
@@ -120,9 +123,9 @@ fn part_problem(world: &World, name: &str, op: &Operation, path: &Toolpath, know
                         Law::Mark => {
                             mark_law::mark_into(&mut w, judged, &facets, c, budget, excess, job.material.file_tolerance);
                         }
-                        Law::Hole => contain_into(&mut w, judged, &facets, c, DepthLaw::Contain, stl, excess, job.material.file_tolerance, &job.params, bores),
+                        Law::Hole => contain_with_drill(&mut w, judged, &facets, c, DepthLaw::Contain, stl, excess, job.material.file_tolerance, &job.params, bores, drill),
                         _ => {
-                            contain_into(&mut w, judged, &facets, c, DepthLaw::Keep, stl, excess, job.material.file_tolerance, &job.params, &[]);
+                            contain_with_drill(&mut w, judged, &facets, c, DepthLaw::Keep, stl, excess, job.material.file_tolerance, &job.params, &[], drill);
                             super::keep_law::note_stock_chamfer_gouges(&job.params, job.part_solid, &mut w);
                         }
                     }

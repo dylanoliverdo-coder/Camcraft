@@ -16,6 +16,7 @@ pub fn wire_tool(diameter: f64) -> Tool {
         kind: ToolKind::Wire,
         diameter,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: 0.0,
         pitch: 0.0,
         pitch_min: 0.0,

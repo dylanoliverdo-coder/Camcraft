@@ -415,6 +415,8 @@ pub struct ToolDto {
     /// inert 0.0 both fields were behaviorally equal to before.
     #[serde(default)]
     pub tip_angle: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub tip_diameter: f64,
     #[serde(default)]
     pub pitch: f64,
     /// #894 addition, additive (no version step): a single-form thread
@@ -635,6 +637,7 @@ impl ToolDto {
             diameter: t.diameter,
             corner_r: t.corner_r,
             tip_angle: t.tip_angle,
+            tip_diameter: t.tip_diameter,
             pitch: t.pitch,
             pitch_min: t.pitch_min,
             thread_hand: t.thread_hand,
@@ -708,6 +711,7 @@ impl ToolDto {
             diameter: self.diameter,
             corner_r: self.corner_r,
             tip_angle: self.tip_angle,
+            tip_diameter: self.tip_diameter,
             pitch: self.pitch,
             pitch_min: self.pitch_min,
             thread_hand: self.thread_hand,

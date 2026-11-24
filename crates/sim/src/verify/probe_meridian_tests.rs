@@ -22,6 +22,10 @@ fn cases() -> Vec<(&'static str, Tool)> {
         ("short bull", mill(ToolKind::BullNose, 10.0, 3.0, 0.0, 2.0)),
         ("drill", mill(ToolKind::Drill, 8.0, 0.0, 118.0, 30.0)),
         ("chamfer", mill(ToolKind::Taper, 10.0, 0.0, 90.0, 20.0)),
+        ("truncated chamfer", Tool {
+            tip_diameter: 0.5,
+            ..mill(ToolKind::Taper, 12.0, 0.0, 90.0, 20.0)
+        }),
         ("tall cone", mill(ToolKind::Taper, 10.0, 0.0, 30.0, 5.0)),
         ("t-slot", cutter(ToolKind::TSlot, 20.0, 5.0, 10.0, 10.0, 0.0)),
         ("keyseat", cutter(ToolKind::Keyseat, 25.0, 3.0, 10.0, 15.0, 0.0)),
@@ -44,7 +48,7 @@ fn same_solid(name: &str, m: &MeridianAtom, c: &Atom) {
 fn meridian_atoms_match_cutter_atoms_for_each_mill_kind() {
     for (name, tool) in cases() {
         let m = tool.meridian().unwrap_or_else(|e| panic!("{name}: {e}"));
-        let cut = Cutter::of(&tool).atoms();
+        let cut = Cutter::of(&tool).atoms_with_flat(tool.tip_diameter * 0.5);
         for bound in [Bound::Outer, Bound::Inner] {
             let atoms = m.atoms(bound, 1e-3).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert!(!atoms.is_empty() && atoms.len() <= cut.len(), "{name}: {} atoms vs {}", atoms.len(), cut.len());
@@ -58,4 +62,30 @@ fn meridian_atoms_match_cutter_atoms_for_each_mill_kind() {
             }
         }
     }
+}
+
+
+#[test]
+fn truncated_cone_lift_starts_at_the_physical_tip_flat() {
+    let tool = Tool { tip_diameter: 0.5, ..mill(ToolKind::Taper, 12.0, 0.0, 90.0, 20.0) };
+    let cut = Cutter::of(&tool);
+    assert_eq!(cut.lift_at_with_flat(0.25, 0.25), 0.0);
+    assert!((cut.lift_at_with_flat(1.25, 0.25) - 1.0).abs() <= TOL);
+    assert!((cut.tip_height_with_flat(0.25) - 5.75).abs() <= TOL);
+}
+
+#[test]
+fn chamfer_grant_requires_the_declared_axis_depth_and_cone() {
+    use crate::cl::{Move, MoveKind};
+    use crate::geo2d::Point2;
+    use crate::geometry::Point3;
+
+    let tool = Tool { tip_diameter: 0.5, ..mill(ToolKind::Taper, 12.0, 0.0, 90.0, 20.0) };
+    let cutter = Cutter::of(&tool);
+    let zone = super::HoleChamfer::new(Point2::new(0.0, 0.0), 0.0, 2.5, 0.5, -2.75).expect("mouth");
+    let cut = |x, z| Move::new(MoveKind::Plunge, Point3::new(0.0, 0.0, 0.0), Point3::new(x, 0.0, z), Some(80.0));
+    assert!(zone.holds(&cut(0.0, -2.75), &cutter, 0.25));
+    assert!(!zone.holds(&cut(0.0, -2.80), &cutter, 0.25));
+    assert!(!zone.holds(&cut(0.05, -2.75), &cutter, 0.25));
+    assert!(!zone.holds(&cut(0.0, -2.75), &cutter, 0.0));
 }

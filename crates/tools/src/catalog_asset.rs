@@ -81,6 +81,8 @@ struct Def {
     #[serde(default)]
     tip_angle: f64,
     #[serde(default)]
+    tip_diameter: f64,
+    #[serde(default)]
     pitch: f64,
     /// A single-form thread mill's finest pitch (#894).
     #[serde(default)]
@@ -151,6 +153,7 @@ impl Def {
             diameter: self.diameter,
             corner_r: self.corner_r,
             tip_angle: self.tip_angle,
+            tip_diameter: self.tip_diameter,
             pitch: self.pitch,
             pitch_min: self.pitch_min,
             thread_hand: self.thread_hand,

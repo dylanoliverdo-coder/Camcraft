@@ -140,6 +140,7 @@ pub(crate) fn base_tool(kind: ToolKind, diameter_mm: f64) -> Tool {
         kind,
         diameter: diameter_mm,
         corner_r,
+        tip_diameter: 0.0,
         tip_angle,
         pitch: 0.0,
         pitch_min: 0.0,

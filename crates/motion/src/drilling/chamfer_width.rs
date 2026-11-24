@@ -29,6 +29,9 @@ fn cone_depth(
         return Err(format!("the tool's included cone angle {angle} must be between 0 and 180 degrees"));
     }
 
+    if !tip_diameter.is_finite() || tip_diameter < 0.0 || tip_diameter >= body_diameter {
+        return Err(format!("tip diameter {tip_diameter} mm must be non-negative and smaller than the tool body"));
+    }
     let diameter = hole_diameter + 2.0 * width;
     if diameter > body_diameter {
         return Err(format!("chamfer diameter {diameter:.3} mm exceeds the tool body diameter {body_diameter:.3} mm"));
@@ -49,8 +52,7 @@ pub fn chamfer_tip_z(hole: &Hole, tool: &Tool, width: f64) -> Result<f64, String
     if !matches!(tool.kind, ToolKind::Drill | ToolKind::Taper) {
         return Err("the selected tool has no cutting cone".into());
     }
-    // Both supported tool kinds model a sharp point.
-    let depth = cone_depth(2.0 * hole.radius, width, tool.diameter, tool.tip_angle, 0.0)?;
+    let depth = cone_depth(2.0 * hole.radius, width, tool.diameter, tool.tip_angle, tool.tip_diameter)?;
     let bottom = hole.entry_z - depth;
     if !bottom.is_finite() || bottom >= hole.entry_z {
         return Err("the calculated tip depth is unusable".into());

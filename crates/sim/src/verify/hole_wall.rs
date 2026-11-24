@@ -123,7 +123,7 @@ pub fn hole_is_round(facets: &[Triangle], c: [f64; 2], reach: f64, z_lo: f64, z_
 
 /// The nearest distance from `c` to the facet's projection on the XY
 /// plane: 0 when `c` lies inside it, else the nearest edge's.
-fn nearest(t: &[[f64; 3]; 3], c: [f64; 2]) -> f64 {
+pub(super) fn nearest(t: &[[f64; 3]; 3], c: [f64; 2]) -> f64 {
     let p = |k: usize| [t[k][0], t[k][1]];
     let o = |a: [f64; 2], b: [f64; 2]| (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
     let (e1, e2, e3) = (o(p(0), p(1)), o(p(1), p(2)), o(p(2), p(0)));

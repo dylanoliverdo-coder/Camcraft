@@ -111,6 +111,9 @@ pub fn is_mark_kind(params: &OpParams) -> bool {
 pub struct SimMark {
     pub budget: f64,
     pub target: Option<Vec<Triangle>>,
+    /// An independently bounded nominal sweep, when the operation
+    /// declares one. Ordinary marks use their own cached sweep.
+    pub(crate) nominal_moves: Option<Vec<crate::cl::Move>>,
 }
 
 /// The mark budget operation `op` declares, for the program sim's
@@ -172,7 +175,7 @@ pub fn target_facets(world: &flecs_ecs::prelude::World, op: &Operation) -> Optio
 #[must_use]
 pub fn sim_mark_of(world: &flecs_ecs::prelude::World, op: &Operation, cutter_r: f64) -> Option<SimMark> {
     let budget = budget_of(world, op, cutter_r)?;
-    Some(SimMark { budget, target: target_facets(world, op) })
+    Some(SimMark { budget, target: target_facets(world, op), nominal_moves: None })
 }
 
 /// `facets` lowered by `by` along Z: the part as a mark of that depth

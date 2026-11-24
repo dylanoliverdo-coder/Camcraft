@@ -187,6 +187,13 @@ pub fn drill_point_length(tool: &Tool) -> Result<f64, crate::machining2d::GenErr
             tool.diameter
         )));
     }
+    let tip_radius = tool.tip_diameter * 0.5;
+    if !(tip_radius.is_finite() && tip_radius >= 0.0 && tip_radius < r) {
+        return Err(crate::machining2d::GenError::Invalid(format!(
+            "tip diameter {} mm must be non-negative and smaller than tool diameter",
+            tool.tip_diameter
+        )));
+    }
     let angle = tool.tip_angle;
     if !angle.is_finite() || angle <= 0.0 || angle > 180.0 {
         return Err(crate::machining2d::GenError::Invalid(format!(
@@ -202,7 +209,7 @@ pub fn drill_point_length(tool: &Tool) -> Result<f64, crate::machining2d::GenErr
             "drill tip angle {angle} produces no usable point cone"
         )));
     }
-    Ok(r / tan_half)
+    Ok((r - tip_radius) / tan_half)
 }
 
 /// Tip travel past a through hole's floor (`floor_z`) for `through_clear`

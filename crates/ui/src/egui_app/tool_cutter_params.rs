@@ -46,8 +46,13 @@ pub(super) fn params_block(ui: &mut Ui, state: &mut State, u: Unit) {
         ui.end_row();
         ui.label("flutes");
         len_cell(ui, u, &mut t.flute_len);
-        ui.label("");
-        ui.label("");
+        if matches!(t.tool_kind(), ToolKind::Drill | ToolKind::Taper) {
+            ui.label("tip Ø");
+            len_cell(ui, u, &mut t.tip_diameter);
+        } else {
+            ui.label("");
+            ui.label("");
+        }
         ui.end_row();
         ui.label("shank Ø");
         len_cell(ui, u, &mut t.shank_d);

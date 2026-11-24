@@ -77,6 +77,7 @@ pub(super) fn tangency(
     rest: &Rest,
     lift: f64,
     chord_tol: f64,
+    (tip, chamfers): (f64, &[super::HoleChamfer]),
     warns: &mut Vec<Warning>,
 ) {
     let r = cx.tool.radius;
@@ -84,7 +85,9 @@ pub(super) fn tangency(
     // them at the plain tolerance, every other loop tightened.
     let rims: Vec<&Loop> = cx.region.loops().iter().filter(|l| cx.is_rim(l)).collect();
     let leave = (-cx.stock_to_leave).max(0.0);
-    let radius = radius::Radius::new(path, cx);
+    let radius = radius::Radius::new(path, cx, tip);
+    let cutter = super::Cutter::judged(cx.tool, cx.cutter);
+    let grants = if path.moves.iter().all(|m| m.axis.is_none()) { chamfers } else { &[] };
     let zones = super::corner_relief::valid_zones(cx.corner_reliefs, r, cx.stock_to_leave, cx.gouge_tol, cx.stock);
     for (i, m) in path.moves.iter().enumerate() {
         if m.kind == MoveKind::Rapid {
@@ -92,7 +95,16 @@ pub(super) fn tangency(
         }
         let r = radius.at(m);
         let (tight, plain) = ((r - leave - cx.tightened(cx.gouge_tol)).max(0.0), (r - leave - cx.gouge_tol).max(0.0));
-        let floor_of = |l: &Loop| if rims.iter().any(|x| std::ptr::eq(*x, l)) { plain } else { tight };
+        let grant = grants.iter().find(|h| h.holds(m, &cutter, tip));
+        let floor_of = |l: &Loop| {
+            if grant.is_some_and(|h| h.is_rim(l)) {
+                0.0
+            } else if rims.iter().any(|x| std::ptr::eq(*x, l)) {
+                plain
+            } else {
+                tight
+            }
+        };
         let section = cx.model.map(|f| rest.islands_at(f, m.from.z.min(m.to.z) + lift));
         if let Some(None) = section {
             warns.push(Warning::Gouge { at: i }); // cannot prove the slice
@@ -400,7 +412,7 @@ mod tests {
         let run = |moves: Vec<Move>| {
             let path = Toolpath { moves, ..Toolpath::default() };
             let mut warns = Vec::new();
-            tangency(&path, &cx, &Rest::new(&path, &cx, cx.gouge_tol, &[]), 0.0, cx.gouge_tol, &mut warns);
+            tangency(&path, &cx, &Rest::new(&path, &cx, cx.gouge_tol, &[]), 0.0, cx.gouge_tol, (0.0, &[]), &mut warns);
             warns
         };
         // At z 10, (-18.227, -5) is 1.773 mm inside the open x = -20 rim: clean.

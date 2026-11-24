@@ -6753,6 +6753,7 @@ fn stub_tool() -> Tool {
         kind: camcraft_app::tools::ToolKind::BallNose,
         diameter: 8.0,
         corner_r: 4.0,
+        tip_diameter: 0.0,
         tip_angle: 0.0,
         pitch: 0.0,
         nose_radius: 0.0,

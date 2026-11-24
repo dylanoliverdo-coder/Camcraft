@@ -1199,6 +1199,7 @@ pub struct ToolUi {
     /// Included degrees of a drill's conical point; inert on the other
     /// kinds (the same rule the app's `Tool` field follows).
     pub tip_angle: f64,
+    pub tip_diameter: f64,
     /// Thread pitch, mm per turn; the tap cycle feeds at rpm x pitch.
     pub pitch: f64,
     /// A single-form thread mill's finest pitch (#894); inert elsewhere.
@@ -1292,6 +1293,7 @@ impl ToolUi {
             diameter: t.diameter,
             corner_r: t.corner_r,
             tip_angle: t.tip_angle,
+            tip_diameter: t.tip_diameter,
             pitch: t.pitch,
             pitch_min: t.pitch_min,
             thread_hand: t.thread_hand,
@@ -1378,6 +1380,11 @@ impl ToolUi {
             diameter: self.diameter,
             corner_r: self.corner_r,
             tip_angle: self.tip_angle,
+            tip_diameter: if matches!(self.tool_kind(), ToolKind::Drill | ToolKind::Taper) {
+                self.tip_diameter
+            } else {
+                0.0
+            },
             pitch: self.pitch,
             pitch_min: self.pitch_min,
             thread_hand: self.thread_hand,

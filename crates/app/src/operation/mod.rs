@@ -235,6 +235,7 @@ mod cross_part;
 mod cross_spindle;
 mod cross_stock;
 mod cross_traverse;
+pub(crate) mod drill_chamfer;
 mod drill_reach;
 mod bore_reach;
 use camcraft_motion::break_through;

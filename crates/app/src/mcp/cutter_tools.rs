@@ -23,7 +23,7 @@ use serde_json::{Map, Value, json};
 
 pub(super) const TOOLS: &[Tool] = &[
     Tool { name: "get_tool_cutter_profile", description: "A milling tool's cutter, neck and shank as a spun half-outline: points [z, r, arc] from the tip (z = 0, on the axis) up to the shank top, arc = 0 for a straight segment else the signed radius of an arc to the next point (positive bulges away from the axis). \"drawn\" says whether it is a hand-drawn outline or the one the tool's numbers draw. Turning tools have none (they are not spun profiles).", schema: s_get, run: get_cutter },
-    Tool { name: "set_tool_cutter_params", description: "Edit a milling tool by the parameters its cutter outline is drawn from - any of diameter, corner_r, tip_angle (drill point / chamfer cone, degrees), flute_len, shank_d, shank_len (mm) - and optionally its neck. A drawn outline is carried onto the new numbers (the tip regenerated from the kind, a drawn neck kept above the new flute top, the shank top moved), so outline and numbers keep agreeing. \"neck\": {diameter, length} draws a straight neck from the flute top; null drops the drawn outline (back to the numbers' own); omitted keeps whatever is drawn. Every tool-edit and cutter refusal by name. One undoable step for numbers and outline together.", schema: s_params, run: set_params },
+    Tool { name: "set_tool_cutter_params", description: "Edit a milling tool by the parameters its cutter outline is drawn from - any of diameter, corner_r, tip_angle (drill point / chamfer cone, degrees), tip_diameter, flute_len, shank_d, shank_len (mm) - and optionally its neck. A drawn outline is carried onto the new numbers (the tip regenerated from the kind, a drawn neck kept above the new flute top, the shank top moved), so outline and numbers keep agreeing. \"neck\": {diameter, length} draws a straight neck from the flute top; null drops the drawn outline (back to the numbers' own); omitted keeps whatever is drawn. Every tool-edit and cutter refusal by name. One undoable step for numbers and outline together.", schema: s_params, run: set_params },
     Tool { name: "set_tool_cutter_profile", description: "Set a milling tool's drawn cutter outline (points [z, r, arc] tip-up, closed to the axis at both ends), or clear it with points null (back to the outline its numbers draw). It must agree with the tool's numbers: start at the tip, reach exactly the stated diameter within the flute length, end at flute + shank length, never be wider than the cutter or shank above the flutes, not fold over itself - else refused by name. Toolpaths keep reading the numbers; the collision checks and the simulation read a drawn neck where it is narrower than the stated shank (never wider). One undoable step.", schema: s_set, run: set_cutter },
 ];
 
@@ -61,7 +61,7 @@ fn set_cutter(env: &mut Env, a: &Map<String, Value>) -> Result<Value, String> {
 }
 
 /// The shape numbers `set_tool_cutter_params` takes, mm (tip_angle deg).
-const PARAMS: [&str; 6] = ["diameter", "corner_r", "tip_angle", "flute_len", "shank_d", "shank_len"];
+const PARAMS: [&str; 7] = ["diameter", "corner_r", "tip_angle", "tip_diameter", "flute_len", "shank_d", "shank_len"];
 
 fn set_params(env: &mut Env, a: &Map<String, Value>) -> Result<Value, String> {
     let name = req_str(a, "tool")?;
@@ -79,6 +79,7 @@ fn set_params(env: &mut Env, a: &Map<String, Value>) -> Result<Value, String> {
             "diameter" => next.diameter = x,
             "corner_r" => next.corner_r = x,
             "tip_angle" => next.tip_angle = x,
+            "tip_diameter" => next.tip_diameter = x,
             "flute_len" => next.flute_len = x,
             "shank_d" => next.shank_d = x,
             "shank_len" => next.shank_len = x,
@@ -140,8 +141,8 @@ fn s_params() -> Value {
     obj(
         json!({
             "tool": { "type": "string", "description": "The document tool's name (a milling tool)." },
-            "params": { "type": "object", "description": "Any of diameter, corner_r, tip_angle, flute_len, shank_d, shank_len - mm, tip_angle in degrees; the others keep their value.",
-                "properties": { "diameter": { "type": "number" }, "corner_r": { "type": "number" }, "tip_angle": { "type": "number" }, "flute_len": { "type": "number" }, "shank_d": { "type": "number" }, "shank_len": { "type": "number" } } },
+            "params": { "type": "object", "description": "Any of diameter, corner_r, tip_angle, tip_diameter, flute_len, shank_d, shank_len - mm, tip_angle in degrees; the others keep their value.",
+                "properties": { "diameter": { "type": "number" }, "corner_r": { "type": "number" }, "tip_angle": { "type": "number" }, "tip_diameter": { "type": "number" }, "flute_len": { "type": "number" }, "shank_d": { "type": "number" }, "shank_len": { "type": "number" } } },
             "neck": { "type": ["object", "null"], "description": "{diameter, length} mm: a straight neck up from the flute top, below the shank's diameter and inside its length; null drops the drawn outline; omitted keeps the drawn one, carried onto the new numbers.",
                 "properties": { "diameter": { "type": "number" }, "length": { "type": "number" } } }
         }),

@@ -210,6 +210,7 @@ fn verdicts() -> Vec<(&'static str, Vec<Warning>)> {
         kind,
         diameter: d,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: tip,
         pitch,
         nose_radius: 0.0,

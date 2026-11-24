@@ -91,6 +91,7 @@ fn drill_retract() -> String {
         kind: ToolKind::Drill,
         diameter: 6.0,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: 118.0,
         pitch: 0.0,
         nose_radius: 0.0,
