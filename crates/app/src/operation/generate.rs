@@ -2641,8 +2641,10 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             ..
         } => {
             let chamfering = *chamfer_width > 0.0;
-            if (chamfering || tool.tip_diameter > 0.0) && (!cross.is_empty() || lathe_axial) {
-                return Err(GenError::Invalid("Chamfer width and tip diameter require mill Z holes".into()));
+            if (chamfering || tool.tip_diameter > 0.0)
+                && (!cross.is_empty() || lathe_axial || frame.is_some())
+            {
+                return Err(GenError::Invalid("Chamfer width and tip diameter require upright mill Z holes".into()));
             }
             // #1557: the stated break-through drives the mill's Z holes;
             // the turret's axial and radial holes keep their own exit.

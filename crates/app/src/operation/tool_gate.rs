@@ -176,6 +176,35 @@ pub(crate) fn operation_tool_refusal(world: &World, params: &OpParams, tool: &st
     tool_refusal(world, params.kind().info(), tool)
 }
 
+/// An edit of a Drill using S6 tool geometry must keep it supported.
+pub(crate) fn edited_drill_tool_refusal(world: &World, params: &OpParams, name: &str) -> Option<String> {
+    if !matches!(params, OpParams::Drill { .. }) {
+        return None;
+    }
+    let tool = model::find_by_name(world, name).and_then(|e| model::tool_of(world, &e))?;
+    if tool.kind == ToolKind::Taper && !accepts_for_params(params, tool.kind) {
+        return Some(format!("'{name}' requires a positive Chamfer width and mill Z holes"));
+    }
+    flat_tip_refusal(params, &tool)
+}
+
+/// Preflight a replacement definition against every operation that uses it.
+pub(crate) fn replacement_refusal(world: &World, name: &str, prev: &Tool, next: &Tool) -> Option<String> {
+    if let Some(why) = retype_refusal(world, name, prev.kind, next.kind) {
+        return Some(why);
+    }
+    if prev.tip_diameter == next.tip_diameter || next.tip_diameter == 0.0 {
+        return None;
+    }
+    model::named_entities(world).into_iter().find_map(|(label, entity)| {
+        let op = model::operation_of(world, &entity)?;
+        if op.tool != name {
+            return None;
+        }
+        flat_tip_refusal(&op.params, next).map(|why| format!("'{name}' is mounted on {label}: {why}"))
+    })
+}
+
 /// Why a tool's definition cannot change kind from `prev` to `next`:
 /// an operation that names it would be left holding a tool its family
 /// cannot cut with. A kind-keeping edit (diameter, lengths) is never

@@ -23,8 +23,12 @@ const SEGS: usize = 64;
 const FANUC: &str = include_str!("../../../assets/posts/fanuc.cps");
 
 /// Revolve an outward-wound meridian into a closed solid with a blind bore.
-fn bored_blank(floor: f64) -> Mesh {
-    let meridian = [(0.0, 0.0), (10.0, 0.0), (10.0, TOP), (BORE, TOP), (BORE, floor), (0.0, floor)];
+fn bored_blank(floor: f64, tessellated_top: bool) -> Mesh {
+    let mut meridian = vec![(0.0, 0.0), (10.0, 0.0), (10.0, TOP)];
+    if tessellated_top {
+        meridian.push((BORE + 0.125, TOP));
+    }
+    meridian.extend([(BORE, TOP), (BORE, floor), (0.0, floor)]);
     let point = |j: usize, radius: f64, z: f64| {
         let angle = std::f64::consts::TAU * j as f64 / SEGS as f64;
         Point3::new(radius * angle.cos(), radius * angle.sin(), z)
@@ -61,6 +65,7 @@ struct ChamferFixture {
     tip_diameter: f64,
     floor: f64,
     center_x: f64,
+    tessellated_top: bool,
 }
 
 fn configured_spot_with_chamfer(
@@ -69,7 +74,7 @@ fn configured_spot_with_chamfer(
     let world = new_world();
     let mut history = History::default();
     let floor = chamfer.map_or(FLOOR, |c| c.floor);
-    history.execute(&world, ImportModel::from_mesh("blank", bored_blank(floor)));
+    history.execute(&world, ImportModel::from_mesh("blank", bored_blank(floor, chamfer.is_some_and(|c| c.tessellated_top))));
     history.execute(
         &world,
         SetStock::new(&world, StockShape::Box { dx: 20.0, dy: 20.0, dz: stock_top }, Location::default()).expect("stock"),
@@ -180,7 +185,7 @@ fn spot_cone_below_extra_stock_that_cuts_the_part_blocks_post() {
 }
 
 const CHAMFER: ChamferFixture = ChamferFixture {
-    width: 0.5, tip_diameter: 0.5, floor: FLOOR, center_x: 0.0,
+    width: 0.5, tip_diameter: 0.5, floor: FLOOR, center_x: 0.0, tessellated_top: false,
 };
 
 #[test]
@@ -195,6 +200,33 @@ fn a_truncated_chamfer_mill_cuts_and_posts_the_declared_mouth() {
     let _ = std::fs::remove_file(&nc);
     let posted = posted.expect("the bounded chamfer posts");
     assert!(posted.program.contains("G81") || posted.program.contains("G82"));
+}
+
+#[test]
+fn a_subdivided_top_and_fitted_bore_do_not_hold_the_chamfer_post() {
+    let geometry = ChamferFixture { center_x: 0.0002, tessellated_top: true, ..CHAMFER };
+    let (world, _) = configured_spot_with_chamfer(2.0, TOP, 12.0, 90.0, Some(geometry));
+    let entity = model::find_by_name(&world, "Spot").expect("spot operation");
+    let cached = model::toolpath_of(&world, &entity).expect("spot path");
+    assert_eq!(operation::status_of(&world, &entity), OpStatus::Ok, "{:?}", cached.warnings);
+    assert!(!cached.warnings.iter().any(Warning::blocks_post), "{:?}", cached.warnings);
+    let nc = nc_path("chamfer-split");
+    let posted = posting::post_script(&world, &nc, FANUC);
+    let _ = std::fs::remove_file(&nc);
+    posted.expect("an annulus subdivided across its width is still the top face");
+}
+
+#[test]
+fn turning_chamfer_width_off_requires_a_compatible_tool() {
+    use camcraft_app::commands::EditOperationParams;
+
+    let (world, _) = configured_spot_with_chamfer(2.0, TOP, 12.0, 90.0, Some(CHAMFER));
+    let entity = model::find_by_name(&world, "Spot").expect("spot operation");
+    let mut params = model::operation_of(&world, &entity).expect("spot parameters").params;
+    let OpParams::Drill { chamfer_width, .. } = &mut params else { panic!("Drill parameters") };
+    *chamfer_width = 0.0;
+    let refused = EditOperationParams::new(&world, "Spot", params).err().expect("turning width off needs a Drill tool");
+    assert!(refused.to_string().contains("positive Chamfer width"), "{refused}");
 }
 
 #[test]

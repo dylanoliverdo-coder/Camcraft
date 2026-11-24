@@ -14,7 +14,7 @@ impl Hole {
     /// A chamfer may also start from a point location with no bore diameter.
     #[must_use]
     pub fn is_usable_for_chamfer(&self) -> bool {
-        self.all_finite() && self.radius >= 0.0 && self.floor_z < self.entry_z
+        self.all_finite() && self.radius >= 0.0 && (self.radius == 0.0 || self.floor_z < self.entry_z)
     }
 }
 

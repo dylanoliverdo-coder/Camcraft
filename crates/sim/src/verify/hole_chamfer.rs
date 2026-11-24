@@ -13,6 +13,11 @@ use super::probe::{Atom, Cutter, Prof};
 // to decide whether a move is the declared operation.
 const EPS: f64 = 1e-6;
 
+// A fitted ring and the facets that supplied it can differ by more than
+// the CL lattice. Accept up to one micron of radial fit error while
+// keeping the commanded axis, depth and top plane at their exact limits.
+const RING_FIT: f64 = 0.001;
+
 /// An explicitly requested chamfer at a single, upright hole mouth.
 /// The bottom is computed from the tool and width before verification,
 /// independently of the moves being judged.
@@ -79,16 +84,17 @@ impl HoleChamfer {
         let center = [self.xy.x, self.xy.y];
         let coords = vertices.map(|v| [v.x, v.y, v.z]);
         let radii = vertices.map(|v| (v.x - self.xy.x).hypot(v.y - self.xy.y));
-        let on_bore = |r: f64| (r - self.bore).abs() <= EPS;
-        if vertices.iter().all(|v| (v.z - self.top).abs() <= EPS) {
-            let near = nearest(&coords, center);
-            return near >= self.bore - WALL_SAG && near <= self.bore + EPS
-                && (self.bore == 0.0 || radii.iter().copied().any(on_bore));
-        }
         let normal = (tri.b - tri.a).cross(tri.c - tri.a);
+        if vertices.iter().all(|v| (v.z - self.top).abs() <= EPS) {
+            // A tessellator can split the top annulus into triangles
+            // that do not share a vertex with the bore edge. The sweep
+            // already bounds the cut to the declared cone and mouth.
+            return normal.z > 0.0 && nearest(&coords, center) >= (self.bore - WALL_SAG).max(0.5 * self.bore);
+        }
         let len = normal.dot(normal).sqrt();
-        self.bore > 0.0 && len > EPS && normal.z.abs() <= EPS * len
-            && radii.into_iter().all(on_bore)
+        let toward_axis = normal.x * (self.xy.x - tri.a.x) + normal.y * (self.xy.y - tri.a.y);
+        self.bore > 0.0 && len > EPS && normal.z.abs() <= EPS * len && toward_axis > 0.0
+            && radii.into_iter().all(|r| (r - self.bore).abs() <= RING_FIT)
             && facet_sag(&coords, center).is_some_and(|s| s <= WALL_SAG)
     }
 }

@@ -73,7 +73,8 @@ fn chamfer_width_changes_depth_without_rewriting_the_cycle_choice() {
 #[test]
 fn an_oversize_chamfer_skips_only_that_hole_and_names_its_position() {
     let tool = spot_tool(90.0);
-    let holes = [hole(-9.0, -9.0, 5.75), hole(9.0, 9.0, 0.0)];
+    let point = Hole { floor_z: 0.0, ..hole(9.0, 9.0, 0.0) };
+    let holes = [hole(-9.0, -9.0, 5.75), point];
     let path = drilling::drill(&params(&tool, &holes, 1.0)).expect("the point still spots");
     assert_eq!(path.cycles.len(), 1);
     assert_eq!(path.cycles[0].xy, holes[1].xy);
