@@ -243,6 +243,10 @@ pub(crate) fn entry_status_lines(notes: &[String]) -> Vec<String> {
             out.push(format!("warning: {n}"));
             continue;
         }
+        if n.starts_with(camcraft_app::finishing3d::WATERLINES_OFF_NOTE) {
+            out.push(format!("warning: {n}"));
+            continue;
+        }
         let fix = if n.contains("not centre-cutting") {
             "fix: a centre-cutting tool, or a Helix / Ramp entry that fits"
         } else if n.contains("second dive") {
@@ -267,6 +271,12 @@ mod top_stock_tests {
     #[test]
     fn the_top_stock_note_is_a_visible_warning_not_an_entry_fallback() {
         let note = format!("{} top Z5.000, stock Z10.000 - raise Top or face first", camcraft_app::operation::TOP_STOCK_WARNING);
+        assert_eq!(super::entry_status_lines(std::slice::from_ref(&note)), vec![format!("warning: {note}")]);
+    }
+
+    #[test]
+    fn the_waterlines_off_note_is_a_visible_warning() {
+        let note = format!("{} 6 steep flank facet(s) (>45 deg) left uncut", camcraft_app::finishing3d::WATERLINES_OFF_NOTE);
         assert_eq!(super::entry_status_lines(std::slice::from_ref(&note)), vec![format!("warning: {note}")]);
     }
 }

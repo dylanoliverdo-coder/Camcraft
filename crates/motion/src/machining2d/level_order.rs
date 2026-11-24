@@ -15,6 +15,7 @@
 use crate::geo2d::{Point2, Region};
 
 use super::face::GenError;
+use super::level_flanks::{Material, full_width_at};
 use super::pass_start::{PassStart, StartSide};
 use super::pocket_hsm::components;
 use super::ring::dist;
@@ -27,10 +28,6 @@ pub(super) const WALL: u32 = u32::MAX;
 /// How near (in tool radii) a join or lead-in chord's centre must stay to
 /// a cut already walked: inside that cut's swath, a tenth of a radius in.
 const SWATH: f64 = 0.9;
-
-/// A centre separation (in tool radii) from every earlier cut at or past
-/// which a cut takes the full tool width.
-const FULL_WIDTH: f64 = 1.9;
 
 /// One ring piece: its ring index (0 on the start side, [`WALL`] for the
 /// walls), its points in walking order, and whether it is a whole ring
@@ -101,6 +98,8 @@ pub(super) fn order(pieces: Vec<Piece>, center: &Region, tool_r: f64, side: &Sta
     let planned: Vec<&[Point2]> = seq.iter().map(|p| p.pts.as_slice()).collect();
     let reach = SWATH * tool_r;
     let step = 0.25 * tool_r;
+    // #3788: the full-width law is the flanks law of the meter.
+    let material = Material::new(center, side.stock.as_ref(), tool_r)?;
     let mut done: Vec<Cut> = Vec::new();
     let mut passes: Vec<Vec<Point2>> = Vec::new();
     let mut cur: Vec<Point2> = Vec::new();
@@ -111,7 +110,7 @@ pub(super) fn order(pieces: Vec<Piece>, center: &Region, tool_r: f64, side: &Sta
         if p.core {
         } else if p.level == 0 {
             wall_first = wall_first || on_wall(&p.pts, side.stock.as_ref(), tool_r, step);
-        } else if let Some(at) = full_width_at(&p.pts, &done, side.stock.as_ref(), tool_r, step) {
+        } else if let Some(at) = full_width_at(&samples(&p.pts, step), &material, tool_r, |q, d| done.iter().rev().any(|c| c.near(q, d))) {
             narrow = Some(narrow.map_or((1, at), |(n, first)| (n + 1, first)));
         }
         let join = match (cur.last(), p.pts.first()) {
@@ -140,7 +139,11 @@ pub(super) fn order(pieces: Vec<Piece>, center: &Region, tool_r: f64, side: &Sta
                     cur = vec![q];
                     cur.extend(p.pts.iter().copied());
                 } else {
-                    if let Some(&s) = p.pts.first().filter(|_| p.level > 0 && !p.core && side.start == PassStart::Outside) {
+                    // #3744: round a part, Outside walks Inside's ring set,
+                    // whose pieces end on no part wall: it enters as Inside
+                    // does, with no dead-end ramp (#3748 retires the rest).
+                    let dead_end = side.start == PassStart::Outside && !side.around_part;
+                    if let Some(&s) = p.pts.first().filter(|_| p.level > 0 && !p.core && dead_end) {
                         ramp_starts.push(s);
                     }
                     cur = p.pts.clone();
@@ -265,17 +268,9 @@ fn lead_in(s: Point2, center: &Region, planned: &[&[Point2]], done: &[Cut], reac
 
 /// A start ring stands on a wall when its disc lies wholly in the stock
 /// somewhere (with no footprint known, everything is stock).
-fn on_wall(pts: &[Point2], stock: Option<&Region>, tool_r: f64, step: f64) -> bool {
+pub(super) fn on_wall(pts: &[Point2], stock: Option<&Region>, tool_r: f64, step: f64) -> bool {
     let Some(s) = stock else { return true };
     samples(pts, step).iter().any(|&q| s.contains(q) && edge_dist(q, s) >= 0.9 * tool_r)
-}
-
-/// The first sample of `pts` whose centre stands in the stock with no
-/// cut within [`FULL_WIDTH`] radii: a cut of the full tool width.
-fn full_width_at(pts: &[Point2], done: &[Cut], stock: Option<&Region>, tool_r: f64, step: f64) -> Option<Point2> {
-    samples(pts, step).into_iter().find(|&q| {
-        stock.is_none_or(|s| s.contains(q)) && !done.iter().rev().any(|c| c.near(q, FULL_WIDTH * tool_r))
-    })
 }
 
 /// Points along the walk `pts` no farther apart than `step`, both ends

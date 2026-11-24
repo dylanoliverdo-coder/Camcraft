@@ -130,7 +130,7 @@ impl ParamsDto {
                 feed,
                 plunge_feed,
                 climb,
-                blend_turns,
+                blend_turns, blend_radius,
                 holes,
                 tilt,
             } => ParamsDto::Face {
@@ -142,7 +142,7 @@ impl ParamsDto {
                 climb: *climb,
                 top_z: (*top_z).map(Into::into),
                 stepdown: *stepdown,
-                blend_turns: *blend_turns,
+                blend_turns: *blend_turns, blend_radius: *blend_radius,
                 holes: (*holes).into(),
                 tilt: (*tilt).map(Into::into),
             },
@@ -164,7 +164,7 @@ impl ParamsDto {
                 side,
                 entry,
                 helix_radius,
-                blend_turns,
+                blend_turns, blend_radius,
                 links,
                 tilt,
                 chain_overrides,
@@ -201,7 +201,7 @@ impl ParamsDto {
                     Entry3D::Arc => EntryDto::Arc,
                 },
                 helix_radius: *helix_radius,
-                blend_turns: *blend_turns,
+                blend_turns: *blend_turns, blend_radius: *blend_radius,
                 // The old keys where they say it all, else `links`.
                 level_link: contour_links_dto(links).0,
                 ramp_angle: contour_links_dto(links).1,
@@ -590,6 +590,7 @@ impl ParamsDto {
                 pencil_reference,
                 fill_openings,
                 gap_link,
+                waterlines,
                 pass_start,
             } => ParamsDto::Finish3D {
                 pattern: (*pattern).into(),
@@ -611,6 +612,7 @@ impl ParamsDto {
                 pencil_reference: *pencil_reference,
                 fill_openings: *fill_openings,
                 gap_link: (*gap_link).into(),
+                waterlines: *waterlines,
                 pass_start: (*pass_start).into(),
             },
             // The deburr ride (M2.5 E B): the six keys are the kind's
@@ -1282,7 +1284,7 @@ impl ParamsDto {
                 plunge_feed,
                 climb,
                 entry,
-                helix_radius,
+                helix_radius, blend_turns, blend_radius,
                 tilt,
                 extend_start,
                 extend_end,
@@ -1307,7 +1309,7 @@ impl ParamsDto {
                     Entry3D::Helix => EntryDto::Helix,
                     Entry3D::Arc => EntryDto::Arc,
                 },
-                helix_radius: *helix_radius,
+                helix_radius: *helix_radius, blend_turns: *blend_turns, blend_radius: *blend_radius,
                 tilt: (*tilt).map(Into::into),
                 extend_start: *extend_start,
                 extend_end: *extend_end,
@@ -1470,7 +1472,7 @@ impl ParamsDto {
                 feed,
                 plunge_feed,
                 climb,
-                blend_turns,
+                blend_turns, blend_radius,
                 holes,
                 tilt,
             } => OpParams::Face {
@@ -1482,7 +1484,7 @@ impl ParamsDto {
                 feed: *feed,
                 plunge_feed: *plunge_feed,
                 climb: *climb,
-                blend_turns: *blend_turns,
+                blend_turns: *blend_turns, blend_radius: *blend_radius,
                 holes: (*holes).into(),
                 tilt: (*tilt).map(Into::into),
             },
@@ -1504,7 +1506,7 @@ impl ParamsDto {
                 side,
                 entry,
                 helix_radius,
-                blend_turns,
+                blend_turns, blend_radius,
                 level_link,
                 ramp_angle,
                 links,
@@ -1545,7 +1547,7 @@ impl ParamsDto {
                     EntryDto::Arc => Entry3D::Arc,
                 },
                 helix_radius: *helix_radius,
-                blend_turns: *blend_turns,
+                blend_turns: *blend_turns, blend_radius: *blend_radius,
                 // The pre-M11.2 keys migrate in memory (a stay-down ramp
                 // is level Keep down + a Ramp transition); `links` lays
                 // over them.
@@ -1935,6 +1937,7 @@ impl ParamsDto {
                 pencil_reference,
                 fill_openings,
                 gap_link,
+                waterlines,
                 pass_start,
             } => OpParams::Finish3D {
                 pattern: (*pattern).into(),
@@ -1956,6 +1959,7 @@ impl ParamsDto {
                 pencil_reference: *pencil_reference,
                 fill_openings: *fill_openings,
                 gap_link: (*gap_link).into(),
+                waterlines: *waterlines,
                 pass_start: (*pass_start).into(),
             },
             // Read back whole, the blade kinds' way - sane or
@@ -2602,7 +2606,7 @@ impl ParamsDto {
                 plunge_feed,
                 climb,
                 entry,
-                helix_radius,
+                helix_radius, blend_turns, blend_radius,
                 tilt,
                 extend_start,
                 extend_end,
@@ -2627,7 +2631,7 @@ impl ParamsDto {
                     EntryDto::Helix => Entry3D::Helix,
                     EntryDto::Arc => Entry3D::Arc,
                 },
-                helix_radius: *helix_radius,
+                helix_radius: *helix_radius, blend_turns: *blend_turns, blend_radius: *blend_radius,
                 tilt: (*tilt).map(Into::into),
                 extend_start: *extend_start,
                 extend_end: *extend_end,
@@ -2797,7 +2801,7 @@ mod face_holes_law {
     fn face(holes: FaceHoles) -> OpParams {
         OpParams::Face {
             holes,
-            blend_turns: false,
+            blend_turns: false, blend_radius: None,
             tilt: None,
             stepover: 3.0,
             clearance_z: Height::fixed(25.0),

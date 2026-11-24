@@ -194,15 +194,96 @@ fn band_material(world: &World, name: &str, (lo, hi): (Point3, Point3)) -> camcr
 /// #3316 second read: along each WHOLE level (not only its ends), no
 /// Outside cut has uncut stock on both flanks - no cut takes the full
 /// tool width, where the band at the lobe tips splits the ring.
+/// #3744: Outside walks the one ring set (offsets of the part). At the
+/// waist the rings of the two lobes merge, and a ring corner there moves
+/// by more than one stepover: 495 full-width points before #3788. The
+/// fill rings of #3788 (a) clear the stock between two rings there: 21
+/// points stay, single samples at 7 ring corners (3 levels), and the
+/// narrow note names them (#3788 (c)). #3788 keeps the corners open; the
+/// pin goes back to 0 points and no note with them.
 #[test]
 #[ignore = "heavy lane (#3316 fig8 Outside): one generation and its verify run past the 60 s debug budget (about 170 s) - run with --release -- --ignored"]
 fn fig8_outside_offset_cuts_no_move_at_full_width() {
     let (world, mut h, name, stock) = fig8_world();
     let (path, _) = offset_op(&world, &mut h, &name, stock.0.z, PassStart::Outside);
     let full = flanks::full_width_points(&path, &band_material(&world, &name, stock), R8);
-    assert!(full.is_empty(), "{} full-width cut point(s), the first at {:?}", full.len(), full.first());
+    assert_names_each_full_width_cut(&world, &name, &path, &full, false);
+    assert!(full.len() <= 21, "{} full-width cut point(s) (#3788: 21 at 7 ring corners), the first at {:?}", full.len(), full.first());
     let named: Vec<&String> = path.notes.iter().filter(|n| n.starts_with(PASS_START_NOTE)).collect();
-    assert!(named.is_empty(), "the band starts in air, so no pass start warning: {named:?}");
+    assert!(!named.iter().any(|n| n.contains("is a wall in the stock")), "the band starts in air: {named:?}");
+}
+
+/// #3788 (c): no full-width cut is silent. When the meter finds a cut of
+/// the full tool width off the part wall, the path names it with the
+/// narrow note; without `wall`, the note's first place is the meter's
+/// first place. With `wall`, the cuts along the part wall are named by
+/// the wall note.
+fn assert_names_each_full_width_cut(world: &World, name: &str, path: &Toolpath, full: &[camcraft_app::geo2d::Point2], wall: bool) {
+    let notes: Vec<&String> = path.notes.iter().filter(|n| n.starts_with(PASS_START_NOTE)).collect();
+    let e = model::find_by_name(world, name).expect("part");
+    let part = camcraft_app::geometry::slice::project(&model::world_facets(world, &e).expect("facets"), 64).expect("part outline");
+    let to_wall = |q: &camcraft_app::geo2d::Point2| {
+        let mut best = f64::INFINITY;
+        for l in part.loops() {
+            let pts = l.points();
+            for i in 0..pts.len() {
+                let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+                let (dx, dy) = (b.x - a.x, b.y - a.y);
+                let dd = dx * dx + dy * dy;
+                let t = if dd > 0.0 { (((q.x - a.x) * dx + (q.y - a.y) * dy) / dd).clamp(0.0, 1.0) } else { 0.0 };
+                best = best.min((q.x - a.x - dx * t).hypot(q.y - a.y - dy * t));
+            }
+        }
+        best
+    };
+    let on_wall = |q: &camcraft_app::geo2d::Point2| (to_wall(q) - R8).abs() < 0.5;
+    let (walled, open): (Vec<&camcraft_app::geo2d::Point2>, Vec<&camcraft_app::geo2d::Point2>) = full.iter().partition(|q| wall && on_wall(q));
+    if !walled.is_empty() {
+        assert!(notes.iter().any(|n| n.contains("the part wall")), "{} cut(s) along the part wall are not named: {notes:?}", walled.len());
+    }
+    let Some(first) = open.first() else { return };
+    let narrow = notes.iter().find(|n| n.contains("take the full tool width"));
+    let Some(narrow) = narrow else { panic!("{} full-width cut(s) are not named, the first at {first:?}: {notes:?}", open.len()) };
+    let at = format!("X {:.3}, Y {:.3}", first.x, first.y);
+    let near = |n: &str| {
+        let tail = n.rsplit("the first is at X ").next().unwrap_or_default();
+        let mut it = tail.split(", Y ");
+        let x: f64 = it.next().and_then(|v| v.trim().parse().ok()).unwrap_or(f64::NAN);
+        let y: f64 = it.next().and_then(|v| v.trim().parse().ok()).unwrap_or(f64::NAN);
+        (x - first.x).hypot(y - first.y) < 1.0
+    };
+    // Inside walks the wall first, and the meter reads the posted walk
+    // (arcs, links) in another order there: the note is required, its
+    // first place only where no wall cut comes first.
+    assert!(wall || near(narrow), "the note names another place than the meter's first ({at}): {narrow}");
+}
+
+/// #3788 (c) pin: Inside on fig8 cuts its first ring along the part wall at
+/// the full tool width (named by the wall note) and more cuts at the
+/// waist; each one is named.
+#[test]
+#[ignore = "heavy lane (#3788 fig8 Inside): one generation and the meter run past the 60 s debug budget - run with --release -- --ignored"]
+fn fig8_inside_offset_names_each_full_width_cut() {
+    let (world, mut h, name, stock) = fig8_world();
+    let (path, _) = offset_op(&world, &mut h, &name, stock.0.z, PassStart::Inside);
+    let full = flanks::full_width_points(&path, &band_material(&world, &name, stock), R8);
+    eprintln!("fig8 Inside: {} full-width point(s)", full.len());
+    assert!(!full.is_empty(), "Inside starts on the part wall, so the meter reads full-width cuts");
+    assert_names_each_full_width_cut(&world, &name, &path, &full, true);
+}
+
+/// #3744 pin: the one ring set gives no crossing feeds on fig8, from
+/// either side. The maintainer's Inside run on a private model gave 414
+/// `Warning::Crossing` (#3741); a crossing blocks the post.
+#[test]
+#[ignore = "heavy lane (#3744 fig8 Inside and Outside): two generations and their verify run past the 60 s debug budget - run with --release -- --ignored"]
+fn fig8_start_sides_have_no_crossing() {
+    for start in [PassStart::Inside, PassStart::Outside] {
+        let (world, mut h, name, stock) = fig8_world();
+        let (_, warnings) = offset_op(&world, &mut h, &name, stock.0.z, start);
+        let crossed: Vec<&String> = warnings.iter().filter(|w| w.starts_with("Crossing")).collect();
+        assert!(crossed.is_empty(), "{start:?}: {} crossing(s), the first {:?}", crossed.len(), crossed.first());
+    }
 }
 
 /// #3316: Inside on the Outside band starts each level on the part wall,
@@ -274,9 +355,10 @@ fn a_strategy_fallback_saved_without_a_cause_reads_as_adaptive() {
     assert_eq!(back, new);
 }
 
-/// #3319 guard on Auto, the maintainer's own setting: the order is the
-/// one every earlier file cut, and no lateral rapid runs below the
-/// clearance plane with "Hop below clearance" off.
+/// #3319 guard on Auto, the maintainer's own setting: no lateral rapid
+/// runs below the clearance plane with "Hop below clearance" off.
+/// #3744: Auto round a part cuts the one ring set from one side; the
+/// stock box leaves the band's outer edge in air, so Auto is Outside.
 #[test]
 fn fig8_auto_offset_keeps_every_lateral_rapid_at_the_clearance_plane() {
     let (world, mut h, name, stock) = fig8_world();
@@ -284,9 +366,12 @@ fn fig8_auto_offset_keeps_every_lateral_rapid_at_the_clearance_plane() {
     let clear_z = stock.1.z + CLEARANCE;
     assert_eq!(lateral_rapids_below(&path, clear_z), vec![], "#3319: a lateral rapid below Z {clear_z}");
     assert!(!warnings.iter().any(|w| w.starts_with("RapidInStock")), "#3319: a rapid through stock: {warnings:?}");
-    // Auto is the core-first order: the first ring is not at the stock edge.
+    // #3744: Auto picks the Outside start of the one ring set: each level
+    // starts outside the stock box (was: the core-first order of
+    // `waterline_passes`, a first ring inside the box).
     let levels = level_ends(&path);
-    assert!(levels.iter().all(|(_, first, _)| outside_box(*first, stock) < R8 - 0.05), "Auto moved: {levels:?}");
+    assert!(!levels.is_empty(), "the levels: {levels:?}");
+    assert!(levels.iter().all(|(_, first, _)| outside_box(*first, stock) >= R8 - 0.05), "Auto is not the Outside start: {levels:?}");
 }
 
 fn call(s: &mut Server, id: i64, name: &str, args: Value) -> Value {

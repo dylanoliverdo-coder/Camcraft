@@ -777,3 +777,56 @@ fn gap_link_rides_the_params_door_and_undoes() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn waterlines_rides_list_add_edit_generate_and_undo() {
+    let dir = tmp_dir("waterlines_mcp");
+    let stl = dir.join("block.stl");
+    write_box_stl(&stl);
+    let mut c = Client::new();
+    c.request("initialize", json!({ "protocolVersion": "2025-06-18" }));
+    let kinds = c.ok("list_operation_types", json!({ "kind": "3D Finish" }));
+    let fields = kinds["kinds"][0]["fields"].as_array().expect("fields array");
+    let wf = fields.iter().find(|f| f["name"] == "waterlines").expect("waterlines listed");
+    assert_eq!(wf["type"], json!("boolean"));
+    assert_eq!(wf["default"], json!(true));
+
+    c.ok("import_model", json!({ "path": stl.display().to_string() }));
+    c.ok("set_stock", json!({ "box": { "dx": 60.0, "dy": 60.0, "dz": 20.0 } }));
+    c.ok("add_tool", json!({ "catalog": "BN-0600" }));
+    let add = c.ok("add_operation", json!({ "kind": "3D Finish", "tool": "BN-0600" }));
+    let op = add["operation"].as_str().expect("op name").to_string();
+    let job = c.ok("get_job", json!({}));
+    assert_eq!(job["operations"][0]["params"]["finish3d"]["waterlines"], json!(true));
+
+    let edit = c.ok("edit_operation", json!({ "name": op, "params": { "waterlines": false } }));
+    assert_eq!(edit["params"]["finish3d"]["waterlines"], json!(false));
+    let bad = c.refused("edit_operation", json!({ "name": op, "params": { "waterlines": "off" } }));
+    assert!(!bad.is_empty());
+
+    let generated = c.ok("generate", json!({}));
+    assert_eq!(generated["generated"][0]["status"], json!("ok"), "{generated}");
+    let notes = generated["generated"][0]["notes"]
+        .as_array()
+        .expect("notes exposed in generate output");
+    assert!(
+        notes.iter().any(|n| n.as_str().is_some_and(|s| s.starts_with(camcraft_app::finishing3d::WATERLINES_OFF_NOTE))),
+        "uncut steep flanks note must surface in generate output: {notes:?}"
+    );
+
+    c.ok("undo", json!({}));
+    c.ok("undo", json!({}));
+    let job = c.ok("get_job", json!({}));
+    assert_eq!(job["operations"][0]["params"]["finish3d"]["waterlines"], json!(true));
+
+    let add_off = c.ok("add_operation", json!({
+        "kind": "3D Finish",
+        "name": "FinishOff",
+        "tool": "BN-0600",
+        "params": { "waterlines": false }
+    }));
+    assert_eq!(add_off["operation"], json!("FinishOff"));
+    let job = c.ok("get_job", json!({}));
+    assert_eq!(job["operations"][1]["params"]["finish3d"]["waterlines"], json!(false));
+    let _ = std::fs::remove_dir_all(&dir);
+}

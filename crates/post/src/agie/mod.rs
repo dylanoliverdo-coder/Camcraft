@@ -17,7 +17,7 @@ pub struct AgieJob {
 #[derive(Debug)]
 pub struct ExportedJob {
     pub files: Vec<PathBuf>,
-    pub controller_review: &'static str,
+    pub controller_review: String,
 }
 
 /// Write a complete controller job to a new directory.

@@ -32,6 +32,7 @@ fn p(blend: bool, staged: bool) -> FaceParams {
         plunge_feed: 100.0,
         climb: true,
         blend_turns: blend,
+        blend_radius: None,
         holes: FaceHoles::default(),
         stock_top: None,
     }

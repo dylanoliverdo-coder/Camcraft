@@ -26,6 +26,8 @@ use super::pass_start::{PassStart, StartSide};
 use super::pocket::PocketParams;
 use super::pocket_plan::plan_passes;
 use super::pocket_strategy::PocketStrategy;
+use super::ring_fill::{Band, RING, closed_walk, fills};
+use super::ring_side::{mirror, share_ends};
 use super::ring::dist;
 
 /// How far (mm) the area's own boundary may stand from the start side
@@ -101,7 +103,7 @@ fn side_plan(
     let rings = matches!(strategy, PocketStrategy::Waterline | PocketStrategy::OffsetRings | PocketStrategy::Adaptive);
     if side.start != PassStart::Auto
         && rings
-        && let Some(pieces) = level_pieces(region, center, off, step, climb, side.start)?
+        && let Some(pieces) = level_pieces(region, center, off, step, climb, side, tool_r)?
     {
         let plan = order(pieces, center, tool_r, side)?;
         let left = unswept(center, &plan.passes, tool_r)?;
@@ -139,14 +141,22 @@ pub(super) fn unswept(center: &Region, passes: &[Vec<Point2>], r: f64) -> Result
 /// the material (an outer loop with its own holes; material inside a
 /// hole is a part of its own) starts from its own edges. `None` when no
 /// part has the start side (Inside on an area with no hole).
+///
+/// `around` (#3744): the area surrounds the part, so every start side
+/// cuts ONE ring set, the distance from the part (its holes): Outside
+/// walks the Inside pieces mirrored (`ring_side::mirror`). A part with
+/// no hole keeps its own rings (core first for Inside, from its edge for
+/// Outside: offsets of the same edge).
 pub(super) fn level_pieces(
     region: &Region,
     center: &Region,
     off: f64,
     step: f64,
     climb: bool,
-    start: PassStart,
+    side: &StartSide,
+    tool_r: f64,
 ) -> Result<Option<Vec<Piece>>, GenError> {
+    let (start, around) = (side.start, side.around_part);
     let Some((lo, hi)) = center.bounds() else {
         return Err(GenError::Empty("empty pocket region".into()));
     };
@@ -166,23 +176,36 @@ pub(super) fn level_pieces(
         }
         let filled = Region::new(part.loops().iter().filter(|l| l.is_ccw()).cloned().collect())?;
         let holes = filled.difference(&part)?;
-        let ok = if start == PassStart::Inside && holes.area().abs() <= 1e-9 {
+        let has_holes = holes.area().abs() > 1e-9;
+        let from_holes = start == PassStart::Inside || (around && has_holes);
+        let first = out.len();
+        let ok = if from_holes && !has_holes {
             core_first(&c, step, climb, cap, &mut out)?
-        } else if start == PassStart::Inside {
+        } else if from_holes {
             started = true;
             // The distance from the holes: the holes' centre keep-out grown.
             // `off` 0: the area is its own outline (the 3-D level).
             let hc = if off == 0.0 { holes } else { holes.offset(off)? };
             sides(&c, &hc.offset(SIDE_EPS)?, true, climb, &mut out)?;
             let mut done = false;
+            let mut last = 0;
             for j in 1..=cap {
                 let g = hc.offset(f64::from(j) * step)?;
                 // `g` lies on the left of its loops and is the cut side.
-                curves(&c, &g, j, !climb, &mut out)?;
+                // Ring `j` is level `RING * j`: its fills (#3788) lie between.
+                curves(&c, &g, RING.saturating_mul(j), !climb, &mut out)?;
+                last = j;
                 if c.difference(&g)?.is_empty() {
                     done = true;
                     break;
                 }
+            }
+            if side.around_part {
+                let fill = Band { c: &c, hc: &hc, j: 0, step, tool_r, climb };
+                add_fills(&mut out, first, &fill, last)?;
+            }
+            if start == PassStart::Outside {
+                mirror(out.get_mut(first..).unwrap_or_default());
             }
             done
         } else {
@@ -211,6 +234,20 @@ pub(super) fn level_pieces(
     }
     share_ends(&mut out);
     Ok(Some(out))
+}
+
+/// The fills (#3788) of each band of one part's rings, `out[first..]`.
+fn add_fills(out: &mut Vec<Piece>, first: usize, band: &Band<'_>, last: u32) -> Result<(), GenError> {
+    let walks = |out: &[Piece], lev: u32| -> Vec<Vec<Point2>> {
+        out.iter().skip(first).filter(|p| !p.core && p.level == lev).map(closed_walk).collect()
+    };
+    let mut add = Vec::new();
+    for j in 1..=last {
+        let (inner, outer) = (walks(out, RING.saturating_mul(j - 1)), walks(out, RING.saturating_mul(j)));
+        add.extend(fills(&Band { j, ..*band }, &inner, &outer)?);
+    }
+    out.extend(add);
+    Ok(())
 }
 
 /// The parts of the material: each outer (counter-clockwise) loop with
@@ -284,38 +321,6 @@ fn sides(center: &Region, start_side: &Region, start_inside: bool, climb: bool, 
         push(out, WALL, &back, wall);
     }
     Ok(())
-}
-
-/// Each end of a ring piece that stands on the area's boundary becomes
-/// a vertex of the boundary walk it stands on (ring 0 or a wall): the
-/// two then share the point exactly, so the verifier's crossing law
-/// reads a touch there, never a crossing.
-fn share_ends(out: &mut [Piece]) {
-    let ends: Vec<Point2> = out
-        .iter()
-        .filter(|p| !p.closed && p.level != 0 && p.level != WALL)
-        .flat_map(|p| p.pts.first().into_iter().chain(p.pts.last()).copied().collect::<Vec<_>>())
-        .collect();
-    for p in out.iter_mut().filter(|p| p.level == 0 || p.level == WALL) {
-        for &e in &ends {
-            let at = p.pts.windows(2).position(|w| w[0] != e && w[1] != e && on_segment(e, w[0], w[1]));
-            if let Some(i) = at {
-                p.pts.insert(i + 1, e);
-            }
-        }
-    }
-}
-
-/// Is `e` on the segment `a -> b`, strictly between its ends, within a
-/// nanometre?
-fn on_segment(e: Point2, a: Point2, b: Point2) -> bool {
-    let (dx, dy) = (b.x - a.x, b.y - a.y);
-    let dd = dx * dx + dy * dy;
-    if !(dd > 0.0 && dd.is_finite()) {
-        return false;
-    }
-    let t = ((e.x - a.x) * dx + (e.y - a.y) * dy) / dd;
-    t > 0.0 && t < 1.0 && dist(e, Point2::new(a.x + t * dx, a.y + t * dy)) <= 1e-6
 }
 
 /// Ring `level`: the loops of `g` clipped to `center`, reversed when
