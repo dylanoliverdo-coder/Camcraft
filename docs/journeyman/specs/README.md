@@ -34,7 +34,7 @@ Each module that a spec changes or adds carries one provenance line, for example
 | Spec | Operation | Status |
 |---|---|---|
 | S1 | Contour: several wall passes per level | built (008af6cfd), checked on a lab part |
-| S2 | Pocket, Contour, Face: floor allowance | written |
+| S2 | Pocket, Contour, Face: floor allowance | built (e91a07bf5), checked on a lab part |
 | S3 | 2D operations: fed retract | written |
 | S4 | Pocket: wall finishing passes with their own direction | written |
 | S5 | 2D Adaptive: wall finishing passes after clearing | written |
