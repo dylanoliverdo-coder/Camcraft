@@ -48,6 +48,7 @@ fn bore(entry: Entry3D, stepdown: f64, links: Links) -> ContourParams {
         helix_radius: 1.5,
         blend_turns: false,
         links,
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     }
 }
 

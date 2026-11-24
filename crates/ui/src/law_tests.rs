@@ -700,6 +700,7 @@ mod path_tests {
                     blend_turns: false,
                     links: camcraft_app::links::Links::PLANAR,
                     chain_overrides: Vec::new(),
+                    passes: camcraft_app::machining2d::WallPasses::default(),
                 },
             )
             .expect("operation"),
@@ -1447,6 +1448,7 @@ mod height_plane_tests {
             blend_turns: false,
             links: camcraft_app::links::Links::PLANAR,
             chain_overrides: Vec::new(),
+            passes: camcraft_app::machining2d::WallPasses::default(),
         }
     }
 
@@ -1798,6 +1800,7 @@ mod height_plane_tests {
             blend_turns: false,
             links: camcraft_app::links::Links::PLANAR,
             chain_overrides: Vec::new(),
+            passes: camcraft_app::machining2d::WallPasses::default(),
         };
         let mut state = state_with("C1", params);
         // G54 at z 3.0: stock top (20) + 5 = 25, G54 - 1 = 2.
@@ -1864,6 +1867,7 @@ mod height_plane_tests {
             blend_turns: false,
             links: camcraft_app::links::Links::PLANAR,
             chain_overrides: Vec::new(),
+            passes: camcraft_app::machining2d::WallPasses::default(),
         };
         let state = state_with("C1", params);
         assert!(

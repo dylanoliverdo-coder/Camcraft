@@ -77,6 +77,7 @@ fn build_air_cut_world(spindle_rpm: f64) -> World {
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     h.execute(&world, CreateOperation::new(&world, "Perimeter Skim", "6MM EM", SrcRef::Stock, contour).expect("contour"));
     h.execute(&world, GenerateOperation::new(&world, "Perimeter Skim").expect("gen contour"));

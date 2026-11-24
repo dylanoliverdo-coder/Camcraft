@@ -168,6 +168,7 @@ impl ParamsDto {
                 links,
                 tilt,
                 chain_overrides,
+                passes,
             } => ParamsDto::Contour {
                 stock_to_leave: *stock_to_leave,
                 clearance_z: (*clearance_z).into(),
@@ -216,6 +217,7 @@ impl ParamsDto {
                         reverse: o.reverse,
                     })
                     .collect(),
+                passes: (*passes).into(),
             },
             OpParams::Pocket {
                 links,
@@ -1510,6 +1512,7 @@ impl ParamsDto {
                 links,
                 tilt,
                 chain_overrides,
+                passes,
             } => OpParams::Contour {
                 stock_to_leave: *stock_to_leave,
                 clearance_z: (*clearance_z).into(),
@@ -1560,6 +1563,7 @@ impl ParamsDto {
                         reverse: o.reverse,
                     })
                     .collect(),
+                passes: (*passes).into(),
             },
             ParamsDto::Pocket {
                 links,

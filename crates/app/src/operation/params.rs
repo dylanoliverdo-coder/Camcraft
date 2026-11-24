@@ -4,7 +4,7 @@
 //! Provenance: our own digest law over this repo's operation registry.
 
 use super::*;
-use digest::{w, write_corner_relief, write_rest, wt};
+use digest::{w, write_corner_relief, write_rest, write_wall_passes, wt};
 
 impl OpParams {
     /// The digest-relevant scalars, written to a hasher in a fixed
@@ -102,6 +102,7 @@ impl OpParams {
                 links: _,
                 tilt,
                 chain_overrides,
+                passes,
             } => {
                 w(h, *stock_to_leave);
                 wh(h, *clearance_z);
@@ -178,6 +179,11 @@ impl OpParams {
                         h.write_u8(u8::from(o.reverse));
                     }
                 }
+                // Journeyman spec S1: the wall-pass counts and spacings
+                // change the moves only away from the single pass, and are
+                // written only then - every legacy contour keeps its cached
+                // digest.
+                write_wall_passes(passes, h);
                 // The level links ride the shared tail below (M11.2).
             }
             OpParams::Pocket {

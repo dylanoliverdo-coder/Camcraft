@@ -194,6 +194,7 @@ pub(super) fn build_workholding_world() -> World {
         lead: Lead::Arc { radius: 4.0 }, tolerance: 0.01, tab_count: 0, tab_width: 8.0,
         tab_height: 3.0, entry: Entry3D::Plunge, helix_radius: 1.0, blend_turns: false,
         links: Links::PLANAR, tilt: None, chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     });
     world
 }

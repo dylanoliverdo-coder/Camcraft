@@ -765,6 +765,9 @@ fn seed_contour(c: &Carried) -> OpParams {
         links: crate::links::Links::PLANAR,
         tilt: c.tilt,
         chain_overrides: Vec::new(),
+        // Journeyman spec S1: the single wall pass every file before the
+        // option held.
+        passes: crate::machining2d::WallPasses::default(),
     }
 }
 

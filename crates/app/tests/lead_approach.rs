@@ -51,6 +51,7 @@ fn contour_op(lead: Lead, links: Links) -> OpParams {
         tilt: None,
         links,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

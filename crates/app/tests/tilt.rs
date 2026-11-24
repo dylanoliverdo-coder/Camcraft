@@ -393,6 +393,7 @@ fn tilt_on_a_picked_selection_refuses_by_name() {
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     // The prismatic control: the same pick on the same part is legal.
     history.execute(

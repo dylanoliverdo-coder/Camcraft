@@ -79,6 +79,27 @@ impl OpParams {
             return Some(why.into());
         }
         match self {
+            OpParams::Contour {
+                passes,
+                tab_count,
+                ..
+            } => {
+                if let Some(why) = passes.refusal() {
+                    return Some(why);
+                }
+                // Journeyman spec S1 (review round 3): tabs and wall
+                // passes are not specified together yet - refuse by name.
+                if *tab_count > 0
+                    && (passes.rough_passes > 1
+                        || passes.finish_passes > 0
+                        || passes.spring_passes > 0)
+                {
+                    return Some(
+                        "tabs and wall passes are not specified together yet - clear the tabs or set the wall passes to the single pass".into(),
+                    );
+                }
+                None
+            }
             OpParams::Finish3D { direction_angle, .. } => {
                 crate::finishing3d::parallel_angle_refusal(*direction_angle).map(str::to_owned)
             }
@@ -213,6 +234,7 @@ impl OpParams {
                 tab_height,
                 helix_radius,
                 chain_overrides,
+                passes,
                 ..
             } => {
                 // Structural only, the pocket doors' word (M8.2 A): a
@@ -240,6 +262,9 @@ impl OpParams {
                     && nneg(*tab_height)
                     && pos(*helix_radius)
                     && lead_sane(lead)
+                    // Journeyman spec S1: the wall-pass door (the
+                    // generator's own `WallPasses::refusal`).
+                    && passes.refusal().is_none()
             }
             OpParams::Pocket {
                 stepover,

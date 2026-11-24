@@ -309,6 +309,7 @@ fn a_contour_ring_under_an_overhanging_slab_is_a_gouge() {
         helix_radius: 1.0,
         blend_turns: false,
         links: camcraft_motion::links::Links::PLANAR,
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     };
     let t = contour(&region, &p).expect("contour");
     let got = old_silent_new_exact(&t, &b, &f, &region, Mode::Boundary, 20.0);
@@ -367,6 +368,7 @@ fn a_cavity_ring_under_an_undercut_lip_is_a_gouge() {
         helix_radius: 1.0,
         blend_turns: false,
         links: camcraft_motion::links::Links::PLANAR,
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     };
     let t = contour(&region, &p).expect("contour");
     let levels: Vec<f64> = t.moves.iter().filter(|m| m.kind == MoveKind::Feed && m.from.z == m.to.z).map(|m| m.to.z).collect();

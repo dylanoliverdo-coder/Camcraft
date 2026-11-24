@@ -172,6 +172,10 @@ pub enum OpParams {
         /// sketch contours; empty by default so legacy operations stamp
         /// identically.
         chain_overrides: Vec<super::sel::ChainOverride>,
+        /// Wall passes per level (Journeyman spec S1): the roughing,
+        /// finishing and spring passes. The default is today's single
+        /// pass, byte for byte.
+        passes: crate::machining2d::WallPasses,
     },
     Pocket {
         stepover: f64,

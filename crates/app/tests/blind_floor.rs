@@ -97,6 +97,7 @@ fn contour_op(stepdown: f64, leave: f64) -> OpParams {
         tilt: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 
@@ -186,6 +187,7 @@ fn direct_params(stepdown: f64, leave: f64) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

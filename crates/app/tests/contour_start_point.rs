@@ -51,6 +51,7 @@ fn contour_op(pick: Option<Point2>) -> OpParams {
         tilt: None,
         links: Links { approach: Approach { start_point: pick, ..Approach::DEFAULT }, ..Links::PLANAR },
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

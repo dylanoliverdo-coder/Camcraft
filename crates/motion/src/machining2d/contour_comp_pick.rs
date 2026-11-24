@@ -128,6 +128,7 @@ mod tests {
                 approach: Approach { compensation: Compensation::Control, ..Approach::DEFAULT },
                 ..Links::PLANAR
             },
+            passes: crate::machining2d::WallPasses::default(),
         }
     }
 

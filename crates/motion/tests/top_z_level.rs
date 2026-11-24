@@ -148,6 +148,7 @@ fn a_contour_whose_stepdown_spans_the_depth_cuts_one_level() {
         helix_radius: 1.0,
         blend_turns: false,
         links: Links::PLANAR,
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     };
     one_level("2D contour", &contour(&square(0.0, 0.0, 30.0), &p).expect("contour"));
 }

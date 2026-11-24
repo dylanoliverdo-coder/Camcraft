@@ -92,6 +92,7 @@ fn cp(blend: bool) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: blend,
         links: camcraft_app::links::Links::PLANAR,
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 
@@ -190,6 +191,7 @@ fn contour_op(blend: bool) -> OpParams {
         tilt: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

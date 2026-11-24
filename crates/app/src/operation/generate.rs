@@ -520,6 +520,7 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             entry,
             helix_radius,
             blend_turns,
+            passes,
             ..
         } => {
             // Backstop for a committed file that carries Inside on a
@@ -572,8 +573,23 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
                 entry: *entry,
                 helix_radius: *helix_radius,
                 blend_turns: *blend_turns,
-            links: lk,
+                links: lk,
+                passes: *passes,
             };
+            // Journeyman spec S1: a finishing pass at the last level cuts
+            // the whole wall height with the side of the tool, so the
+            // flute must cover it - refused by name, never approximated.
+            if passes.finish_passes > 0 {
+                let finishing_here = match passes.finish_level {
+                    crate::machining2d::FinishLevel::Every => true,
+                    crate::machining2d::FinishLevel::Last => {
+                        crate::machining2d::contour_last_level(&cp).is_ok()
+                    }
+                };
+                if finishing_here {
+                    crate::machining2d::contour_flute_covers_wall(&cp, tool.flute_len)?;
+                }
+            }
             let (region, path) = if let Some(plan_res) = sketch_contour.take() {
                 let mut carry = |reach: &Region, candidate: &Toolpath| -> Option<f64> {
                     carry_need!(reach, candidate)

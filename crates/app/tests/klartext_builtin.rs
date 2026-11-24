@@ -70,6 +70,7 @@ fn generated_contour_and_face() -> flecs_ecs::prelude::World {
     history.execute(&world, ImportModel::from_mesh("Block", part));
     let contour = OpParams::Contour {
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(25.0),

@@ -250,6 +250,7 @@ fn a_contour_cuts_the_levels_of_its_mode() {
             helix_radius: 1.0,
             blend_turns: false,
             links: links(Links::PLANAR, equal),
+            passes: camcraft_motion::machining2d::WallPasses::default(),
         };
         contour(&square(0.0, 0.0, 30.0), &p).expect("contour")
     });

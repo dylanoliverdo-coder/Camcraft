@@ -86,13 +86,23 @@ pub fn contour_open_run_sided(
         Ok(Some(l)) => l,
         _ => !tool_left,
     };
-    let mut ride = offset_run(&run, d, tool_left)?;
-    // `offset_run` comes back with the run on its left.
-    if tool_left != material_left {
-        ride.reverse();
-    }
-    clear_of_part(&ride, p.tool_diameter * 0.5, &part_levels)?;
-    let mut path = contour_along_chain(&ride, p)?;
+    // `offset_run_side` comes back with the run on its left.
+    let reverse = tool_left != material_left;
+    let ride = |d: f64| -> Result<Vec<Point2>, GenError> {
+        let mut r = offset_run(&run, d, tool_left)?;
+        if reverse {
+            r.reverse();
+        }
+        clear_of_part(&r, p.tool_diameter * 0.5, &part_levels)?;
+        Ok(r)
+    };
+    let mut path = if p.passes.is_default() {
+        // The default: today's single pass over all levels, exactly the
+        // pre-S1 code (spec S1, review round 4).
+        contour_along_chain(&ride(d)?, p)?
+    } else {
+        super::contour_passes::open_pass_runs(p, |d| ride(d).map(Some))?
+    };
     path.notes.push(format!(
         "contour: the open run on the stock is cut to its {said} side - the tool centre {d:.3} mm off it (tool radius plus stock to leave)"
     ));

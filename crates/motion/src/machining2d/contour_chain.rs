@@ -37,6 +37,18 @@ pub fn contour_along_chain(
     pts: &[Point2],
     p: &ContourParams,
 ) -> Result<Toolpath, GenError> {
+    let zs = p.levels()?;
+    contour_along_chain_zs(pts, p, &zs)
+}
+
+/// [`contour_along_chain`] over the cut levels `zs` (Journeyman spec S1,
+/// review round 3): the open-run passes run level by level, so a caller
+/// that cuts one level at a time passes one level here.
+pub(crate) fn contour_along_chain_zs(
+    pts: &[Point2],
+    p: &ContourParams,
+    zs: &[f64],
+) -> Result<Toolpath, GenError> {
     p.validate()?;
     if pts.len() < 2 {
         return Err(GenError::Empty(
@@ -67,7 +79,6 @@ pub fn contour_along_chain(
         v.reverse();
         v
     };
-    let zs = p.levels()?;
     let walk = fit_arcs_sided(&poly, p.tolerance, Some(p.climb));
     let t0 = walk_tangent(&walk, &poly, true);
     let (entry, lead) = lead_in(poly[0], t0, air_side(t0, p.climb), p.lead);

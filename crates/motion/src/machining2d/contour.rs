@@ -30,6 +30,12 @@ pub use super::contour_region::{contour, contour_on_bodies, contour_on_part, con
 /// Offset loops, programmed region and walking polylines prepared for one
 /// contour band; shared with `contour_whole`.
 pub(super) struct PreparedBand {
+    /// The material cross-section this band was cut from (Journeyman
+    /// spec S1): the base every pass's own offset is taken from.
+    pub base: Region,
+    /// The tool-centre distance from the wall this band's loops ride
+    /// (spec S1): the final offset `w`, or one pass's own offset.
+    pub offset: f64,
     pub center: Region,
     pub prog: Option<Region>,
     pub loops: Vec<Loop>,
@@ -77,7 +83,7 @@ pub(super) fn prepare_band(region: &Region, p: &ContourParams) -> Result<Prepare
             v
         })
         .collect();
-    Ok(PreparedBand { center, prog, loops, plan, room: None })
+    Ok(PreparedBand { base: region.clone(), offset: d, center, prog, loops, plan, room: None })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -126,8 +132,63 @@ pub(super) fn emit_band(
     let mut fits = super::tab_clear::fit_loops(&band.loops, &tab_levels, pick, p, &legal);
     // The cut order, and where the stay-down link joins it (contour_link).
     let (sched, stay) = plan_links(p, lad, &band.plan, lead_notes);
+    // Journeyman spec S1: each schedule item runs once per wall pass
+    // of its level, in cut order, on a band re-offset to that pass. The
+    // default (one roughing pass at the final offset) is exactly one
+    // run per item, byte for byte.
+    let levels = lad.zs.clone();
+    // The pass loops each base loop maps to, and which pass loops are
+    // already cut (a merged pass loop is cut once, at the first base
+    // loop that maps to it - spec S1, review round 3).
+    let mut cut_pass_loops: std::collections::HashSet<(u64, usize, usize)> = std::collections::HashSet::new();
+    // With the default passes (one roughing pass, no finishing, no
+    // spring) the body runs exactly as it did before S1: no pass band
+    // is built and no loop is mapped (spec S1, review round 4).
+    let single = p.passes.is_default();
     for (si, &(z, li)) in sched.iter().enumerate() {
-        let l = &band.loops[li];
+      let passes = if single {
+            vec![super::contour_passes::WallPass { offset: band.offset, finishing: false }]
+        } else {
+            super::contour_passes::passes_at_level(p, &levels, z)
+        };
+      for (pi, pass) in passes.into_iter().enumerate() {
+        let pass_band = super::contour_passes::prepare_pass(band, p, pass, lead_notes)?;
+        if pass_band.loops.is_empty() {
+            continue;
+        }
+        // Map this base loop to its pass loop; never index one band's
+        // loops with another band's index. The default's pass band IS
+        // the base band, so the map is the identity.
+        let pli = if single { li } else {
+            let Some(pli) = super::contour_passes::map_loops(&band.loops, &pass_band.loops, inside).get(li).copied().flatten() else {
+                let at = band.loops.get(li).and_then(|l| l.points().first().copied());
+                let note = format!(
+                    "contour: a wall pass at {:.3} mm from the wall has no loop for the ring at ({:.3}, {:.3}) - the pass is dropped there",
+                    pass.offset,
+                    at.map(|q| q.x).unwrap_or(0.0),
+                    at.map(|q| q.y).unwrap_or(0.0)
+                );
+                if !lead_notes.contains(&note) {
+                    lead_notes.push(note);
+                }
+                continue;
+            };
+            pli
+        };
+        let key = (z.to_bits(), pi, pli);
+        if !cut_pass_loops.insert(key) {
+            // A pass loop that carries several base loops is cut once;
+            // name the merge (spec S1, review round 3).
+            let map = super::contour_passes::map_loops(&band.loops, &pass_band.loops, inside);
+            if let Some(note) = super::contour_passes::merged_note(&map, pli, pass.offset)
+                && !lead_notes.contains(&note)
+            {
+                lead_notes.push(note);
+            }
+            continue;
+        }
+        let band = &pass_band;
+        let l = &band.loops[pli];
         let tabbed = is_tabbed(z);
         // A tab-hop template traverses at `hop` between windows, and a
         // standing tab is material AT the window down to the level -
@@ -348,6 +409,7 @@ pub(super) fn emit_band(
                     .map_err(|e| e.with_ghost_moves(b.moves()))?;
             }
         }
+    }
     }
     lifted.say(b, "ring-to-ring");
     let cur = b.at();

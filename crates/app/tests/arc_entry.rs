@@ -51,6 +51,7 @@ fn bore_params(entry: Entry3D) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

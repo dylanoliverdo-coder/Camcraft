@@ -55,6 +55,7 @@ mod contour_depth;
 mod contour_entry;
 mod contour_link;
 mod contour_params;
+mod contour_passes;
 mod contour_run_side;
 mod contour_run_stock;
 mod contour_start;
@@ -153,9 +154,13 @@ pub use chamfer::{chamfer, ChamferParams};
 pub use chamfer_ride::{ride_loops as chamfer_ride_loops, wall_lean as chamfer_wall_lean};
 pub use circular::{circular, CircularParams};
 pub use contour::{contour, contour_on_bodies, contour_on_part, contour_on_picked, ContourParams, Lead, Side};
+pub use contour_passes::{
+    contour_flute_covers_wall, contour_last_level, FinishLevel, WallPasses, MAX_WALL_PASSES,
+};
 pub use contour_whole::{contour_whole_bodies, contour_whole_bodies_with};
 pub use contour_auto::{auto_side, AutoSide, AUTO_BAND, AUTO_PROBE_DZ};
 pub use contour_chain::contour_along_chain;
+pub(crate) use contour_chain::contour_along_chain_zs;
 pub use contour_run_side::{contour_open_run, offset_run_side, SectionAt};
 pub use contour_run_stock::contour_open_run_sided;
 pub use contour_link::DEFAULT_LEVEL_RAMP_ANGLE;

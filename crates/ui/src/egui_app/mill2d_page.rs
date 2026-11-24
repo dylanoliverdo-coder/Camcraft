@@ -122,6 +122,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             links,
             tilt,
             chain_overrides,
+            passes,
         } => {
             if tab == SEC_GEO {
                 let mut s_idx = match side {
@@ -177,6 +178,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
                 // is legal; the status line names every corner left
                 // sharp and the corner rest the rounding leaves.
                 check_row(ui, "Arc turns at corners", blend_turns);
+                super::contour_pass_rows::wall_pass_rows(ui, u, passes);
             }
             if tab == SEC_LEADS {
                 let mut l_idx = match lead {
