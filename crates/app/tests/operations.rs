@@ -3838,6 +3838,7 @@ fn drilled_block() -> camcraft_app::geometry::Mesh {
 
 fn drill_params(holes: Vec<Hole>, top_z: f64, clearance_z: f64) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(clearance_z),
@@ -6756,6 +6757,7 @@ fn stub_tool() -> Tool {
         kind: camcraft_app::tools::ToolKind::BallNose,
         diameter: 8.0,
         corner_r: 4.0,
+        tip_diameter: 0.0,
         tip_angle: 0.0,
         pitch: 0.0,
         nose_radius: 0.0,

@@ -138,7 +138,7 @@ pub fn band_growth(tol: f64, excess: f64) -> f64 {
 
 /// Whether every vertex of `l` (eight at least, as every rim has) stands
 /// on the circle of centre `c` and radius `r`: the loop is that rim.
-fn traces(l: &Loop, c: Point2, r: f64) -> bool {
+pub(super) fn traces(l: &Loop, c: Point2, r: f64) -> bool {
     let pts = l.points();
     r.is_finite()
         && r > 0.0

@@ -180,6 +180,7 @@ mod first_traverse_posed;
 mod flute_reach;
 mod hidden;
 mod hidden_span;
+mod hole_chamfer;
 mod hole_wall;
 mod laws;
 mod live_traverse;
@@ -245,7 +246,8 @@ pub use types::{FallbackCause, FixturePart, Mode, VerifyContext, Warning};
 #[doc(hidden)]
 pub use crossing::{crossed_pairs, crossed_pairs_all};
 pub use laws::CROSSING_TOUCH;
-pub use engine::{verify, verify_bodies};
+pub use engine::{verify, verify_bodies, verify_drill_bodies};
+pub use hole_chamfer::HoleChamfer;
 pub use flute_reach::{flute_note, flute_reach};
 pub use thread_bore::{CHORD_CREDIT, ThreadBore};
 pub use air::cuts_no_material;
@@ -267,7 +269,7 @@ pub use probe::Cutter;
 pub use rotary::{rotary_hits, RotaryAxis, RotaryLaw};
 pub use hole_wall::{HoleAxis, WALL_SAG, hole_is_round};
 pub use seat::{seat_skin, undersides, MARK_FLOOR};
-pub use solid::{SolidLaw, solid_hits, solid_hits_relieved, solid_hits_threaded, solid_hits_walled, stack_hits};
+pub use solid::{SolidLaw, solid_hits, solid_hits_drilled, solid_hits_relieved, solid_hits_threaded, solid_hits_walled, stack_hits};
 pub use mesh_steel::{mesh_refined, steel_stack, MeshSteel, SteelBand};
 #[doc(hidden)]
 pub use contact::posed_contact;

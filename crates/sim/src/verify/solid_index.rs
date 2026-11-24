@@ -7,6 +7,7 @@
 
 use super::probe::{Atom, Frame};
 use super::corner_relief::{CornerReliefZone, mid_in_zone, tri_in_zone};
+use super::hole_chamfer::HoleChamfer;
 use super::hole_wall::wall_excuse;
 use super::swept::{Body, pen};
 use super::thread_bore::{excused, ThreadBore};
@@ -148,6 +149,22 @@ impl<'a> SolidIndex<'a> {
         bores: &[ThreadBore],
         reliefs: &[CornerReliefZone],
     ) -> bool {
+        self.hits_with_chamfer(fr, d, atoms, allow, grow, walls, bores, reliefs, None)
+    }
+
+    #[allow(clippy::too_many_arguments)] // the sweep, its atoms and the grants
+    pub(super) fn hits_with_chamfer(
+        &mut self,
+        fr: &Frame,
+        d: [f64; 3],
+        atoms: &[Atom],
+        allow: f64,
+        grow: f64,
+        walls: &[[f64; 2]],
+        bores: &[ThreadBore],
+        reliefs: &[CornerReliefZone],
+        chamfer: Option<&HoleChamfer>,
+    ) -> bool {
         let len = atoms.iter().map(|a| a.z1).fold(0.0, f64::max);
         let (p0, p1) = (fr.up(0.0), fr.up(len));
         let e = fr.end(d);
@@ -184,7 +201,10 @@ impl<'a> SolidIndex<'a> {
                         let threaded = upright && excused(bores, &self.facets[f as usize], p0, q0, a.rho_max() + grow, allow);
                         let relieved = upright && tri_in_zone(&self.facets[f as usize], p0, q0, a.rho_max() + grow,
                             [p0.z.min(q0.z) + a.z0, p0.z.max(q0.z) + a.z1], allow, reliefs);
-                        if pen > ex + allow && !threaded && !relieved {
+                        let chamfered = upright && grow == 0.0 && chamfer.is_some_and(|h| {
+                            h.excuses(&self.facets[f as usize], a, p0, q0)
+                        });
+                        if pen > ex + allow && !threaded && !relieved && !chamfered {
                             return true;
                         }
                     }

@@ -277,7 +277,7 @@ impl ChangeTool {
         // The tool law (M10.1 B): a retype that would leave an operation
         // holding a tool its family cannot cut with is refused by name.
         if let Some(msg) =
-            crate::operation::tool_gate::retype_refusal(world, name, prev.kind, next.kind)
+            crate::operation::tool_gate::replacement_refusal(world, name, &prev, &next)
         {
             return Err(CommandError::Invalid(msg));
         }

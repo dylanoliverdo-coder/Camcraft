@@ -1342,6 +1342,7 @@ impl ParamsDto {
                 tilt: (*tilt).map(Into::into),
             },
             OpParams::Drill {
+                chamfer_width,
                 clearance_z,
                 retract_z,
                 top_z,
@@ -1356,6 +1357,7 @@ impl ParamsDto {
                 break_through,
                 break_through_from,
             } => ParamsDto::Drill {
+                chamfer_width: *chamfer_width,
                 break_through: *break_through,
                 break_through_from: Some(match break_through_from {
                     crate::drilling::BreakThroughFrom::FullDiameter => BreakThroughFromDto::FullDiameter,
@@ -2670,6 +2672,7 @@ impl ParamsDto {
                 tilt: (*tilt).map(Into::into),
             },
             ParamsDto::Drill {
+                chamfer_width,
                 clearance_z,
                 retract_z,
                 top_z,
@@ -2684,6 +2687,7 @@ impl ParamsDto {
                 break_through,
                 break_through_from,
             } => OpParams::Drill {
+                chamfer_width: *chamfer_width,
                 break_through: *break_through,
                 break_through_from: match break_through_from.unwrap_or_default() {
                     BreakThroughFromDto::FullDiameter => crate::drilling::BreakThroughFrom::FullDiameter,

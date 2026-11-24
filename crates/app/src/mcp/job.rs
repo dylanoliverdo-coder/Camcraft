@@ -235,6 +235,9 @@ pub(super) fn list_operation_types(_env: &mut Env, a: &Map<String, Value>) -> Re
             if matches!(key.as_str(), "drill" | "bore" | "thread") {
                 push_missing_fields(&mut fields, &[("break_through", "number", Value::Null)]);
             }
+            if key == "drill" {
+                push_missing_fields(&mut fields, &[("chamfer_width", "number", json!(0.0))]);
+            }
             // `WireContourDto` skips empty/default optional fields in project
             // serialization, so inject them into `list_operation_types` (#3217).
             if key == "wire_contour" {

@@ -172,6 +172,7 @@ pub fn fixture(name: &str) -> (World, PostOptions) {
             let (w, mut hi) = world(StockShape::Box { dx: 24.0, dy: 24.0, dz: 40.0 }, -20.0, bar, &["DR-0400"]);
             let hole = Hole { xy: Point2::new(0.0, 0.0), radius: 2.05, entry_z: 20.0, floor_z: 10.0, through: false, stepped: false };
             let p = OpParams::Drill {
+                chamfer_width: 0.0,
                 break_through: None,
                 break_through_from: Default::default(),
                 clearance_z: h(30.0), retract_z: None, top_z: h(20.0), bottom_z: None, cycle: CycleChoice::Auto,

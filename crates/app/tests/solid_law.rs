@@ -167,6 +167,7 @@ fn assert_blocked(world: &World, tag: &str) {
 
 fn drill_op(at: Point2, floor: f64, bottom: Option<f64>) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(30.0),

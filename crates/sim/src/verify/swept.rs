@@ -151,10 +151,10 @@ pub(super) fn rho_expanded(atom: &super::probe::Atom, w: f64, m: f64) -> f64 {
                 flat + cr + (m * m - (w - atom.z1).powi(2)).max(0.0).sqrt()
             }
         }
-        Prof::Cone { k, r } => {
-            let top = (atom.z0 + r / k).min(atom.z1);
+        Prof::Cone { k, r, tip } => {
+            let top = (atom.z0 + (r - tip) / k).min(atom.z1);
             let z_star = (w + m * k / (1.0 + k * k).sqrt()).clamp(atom.z0, top);
-            let cone = (k * (z_star - atom.z0)).min(r) + (m * m - (w - z_star).powi(2)).max(0.0).sqrt();
+            let cone = (tip + k * (z_star - atom.z0)).min(r) + (m * m - (w - z_star).powi(2)).max(0.0).sqrt();
             if w >= top && w <= atom.z1 {
                 cone.max(r + m)
             } else if w > atom.z1 {

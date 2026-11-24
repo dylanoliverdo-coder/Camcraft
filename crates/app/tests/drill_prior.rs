@@ -121,6 +121,7 @@ fn mill_world(pocket: Option<f64>, stock_top: f64) -> (World, History) {
 fn drill(entry: f64, floor: f64, r: f64) -> OpParams {
     let hole = Hole { xy: Point2::new(0.0, 0.0), radius: 2.0, entry_z: entry, floor_z: floor, through: false, stepped: false };
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(TOP + 15.0),

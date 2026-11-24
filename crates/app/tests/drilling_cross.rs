@@ -219,6 +219,7 @@ fn a_z_only_drill_file_never_writes_the_cross_key() {
     // R at the raw box's top, Z 44 (issue #91: an R plane under the
     // stock top is a rapid through it, refused at generation).
     let p = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(50.0),

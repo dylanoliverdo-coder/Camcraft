@@ -2628,6 +2628,7 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             (region, path)
         }
         OpParams::Drill {
+            chamfer_width,
             cycle,
             peck,
             dwell,
@@ -2639,6 +2640,12 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             break_through_from,
             ..
         } => {
+            let chamfering = *chamfer_width > 0.0;
+            if (chamfering || tool.tip_diameter > 0.0)
+                && (!cross.is_empty() || lathe_axial || frame.is_some())
+            {
+                return Err(GenError::Invalid("Chamfer width and tip diameter require upright mill Z holes".into()));
+            }
             // #1557: the stated break-through drives the mill's Z holes;
             // the turret's axial and radial holes keep their own exit.
             if break_through.is_some() && (!cross.is_empty() || lathe_axial) {
@@ -2758,19 +2765,20 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
                     drilling::axial_doors(&material.facets, holes, d, hl.bottom, drilling::THROUGH_CLEAR)?;
                 }
                 let run = break_through.unwrap_or(drilling::THROUGH_CLEAR);
-                let tip_run = if hl.bottom.is_none() && holes.iter().any(|h| h.through) {
+                let tip_run = if !chamfering && hl.bottom.is_none() && holes.iter().any(|h| h.through) {
                     drilling::through_tip_run(&tool, *cycle, run, tip_from)?
                 } else {
                     0.0
                 };
                 // Spot stops at the entry dimple, regardless of a through floor.
-                if hl.bottom.is_none() && !lathe_axial && *cycle != drilling::CycleChoice::Spot {
+                if !chamfering && hl.bottom.is_none() && !lathe_axial && *cycle != drilling::CycleChoice::Spot {
                     broke = super::break_through::deepest(
                         holes.iter().filter(|h| h.through).map(|h| (h.xy, h.floor_z - tip_run)),
                         tip_run,
                     );
                 }
                 drilling::drill(&drilling::CycleParams {
+                    chamfer_width: *chamfer_width,
                     through_clear: run,
                     break_through_from: tip_from,
                     clearance_z: hl.clearance,
@@ -3616,7 +3624,12 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
         super::mark_law::budget(t, b, super::mark_law::cutter_depth_limit(&params, &tool))
     });
     // #1057: the containment kinds' declared rims, read untightened.
-    let rims = if depth_law == DepthLaw::Contain { super::material_source::rims_of(&params) } else { Vec::new() };
+    let drill_probe = super::drill_chamfer::DrillProbe::of(&params, &tool);
+    let rims = if depth_law == DepthLaw::Contain || drill_probe.is_some() {
+        super::material_source::rims_of(&params)
+    } else {
+        Vec::new()
+    };
     match &frame {
         None => {
             let ctx = VerifyContext {
@@ -3721,7 +3734,11 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             };
             // The picks' touching bodies, read as their union
             // (M13.11); empty for one body.
-            let mut warns = verify::verify_bodies(&path, &ctx, &material.bodies);
+            let mut warns = if let Some(probe) = &drill_probe {
+                verify::verify_drill_bodies(&path, &ctx, &material.bodies, probe.tip_radius, &probe.chamfers)
+            } else {
+                verify::verify_bodies(&path, &ctx, &material.bodies)
+            };
             // #1091: a dive convicted against the stock's highest point is re-read under the tool.
             super::stock_top_law::acquit(&path, mode, judged_stock.filter(|_| stock_fidelity_known), &material.facets, &geom, material.excess, &mut warns);
             // The program ahead cut too (#96 review): a dive the column
@@ -3926,7 +3943,8 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             // along every move against the part solid. The Section kinds
             // answer the same law inside `verify` (b2), real tip (M13.7).
             if depth_law == DepthLaw::Contain {
-                contain_into(&mut warns, &path, &material.facets, &cutter, depth_law, stl, material.excess, material.file_tolerance, &params, &thread_bores);
+                contain_with_drill(&mut warns, &path, &material.facets, &cutter, depth_law, stl, material.excess, material.file_tolerance, &params, &thread_bores,
+                    drill_probe.as_ref().map(super::drill_chamfer::DrillProbe::verdict));
             }
             // #1603: the pocket family keeps the part - its own mesh
             // for a whole-model source, the setup's parts for a stock one
@@ -3939,7 +3957,8 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             // #1631: a hole kind off the stock - the setup's parts by the
             // containment law, its declared holes' modelled walls excused.
             if parts_holed {
-                contain_into(&mut warns, &path, &keep_parts, &cutter, DepthLaw::Contain, stl, material.excess, material.file_tolerance, &params, &thread_bores);
+                contain_with_drill(&mut warns, &path, &keep_parts, &cutter, DepthLaw::Contain, stl, material.excess, material.file_tolerance, &params, &thread_bores,
+                    drill_probe.as_ref().map(|probe| (probe.tip_radius, &[][..])));
             }
             // #1595: an Engrave or Trace on the part may lower its
             // surface by the mark budget and no more (`mark_law`);
@@ -3951,7 +3970,8 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             // #1621: the setup's other parts, beside a part source - the
             // plain solid law, no budget (a mark is on its own part).
             if !neighbour_parts.is_empty() {
-                contain_into(&mut warns, &path, &neighbour_parts, &cutter, DepthLaw::Keep, stl, material.excess, material.file_tolerance, &params, &[]);
+                contain_with_drill(&mut warns, &path, &neighbour_parts, &cutter, DepthLaw::Keep, stl, material.excess, material.file_tolerance, &params, &[],
+                    drill_probe.as_ref().map(|probe| (probe.tip_radius, &[][..])));
             }
             // #985: an external thread's crest ring against every wall
             // that is not the boss it threads, with no thread allowance.
@@ -4376,6 +4396,23 @@ pub(super) fn contain_into(
     params: &OpParams,
     bores: &[verify::ThreadBore],
 ) {
+    contain_with_drill(warns, path, facets, cutter, law, stl, excess, file_tolerance, params, bores, None);
+}
+
+#[allow(clippy::too_many_arguments)] // also carries the upright-drill probe
+pub(super) fn contain_with_drill(
+    warns: &mut Vec<Warning>,
+    path: &crate::cl::Toolpath,
+    facets: &[Triangle],
+    cutter: &verify::Cutter,
+    law: DepthLaw,
+    stl: f64,
+    excess: f64,
+    file_tolerance: bool,
+    params: &OpParams,
+    bores: &[verify::ThreadBore],
+    drill: Option<(f64, &[verify::HoleChamfer])>,
+) {
     let law = verify::SolidLaw {
         step: CONTAIN_STEP,
         // #864: less a coarse model's excess, while that is honest.
@@ -4387,7 +4424,11 @@ pub(super) fn contain_into(
         _ => &[],
     };
     let walls: Vec<verify::HoleAxis> = holes.iter().map(|h| verify::HoleAxis::vertical(h.xy.x, h.xy.y)).collect();
-    for w in verify::solid_hits_threaded(path, facets, cutter, &law, &walls, bores) {
+    let found = match drill {
+        Some((tip, chamfers)) => verify::solid_hits_drilled(path, facets, cutter, &law, &walls, tip, chamfers),
+        None => verify::solid_hits_threaded(path, facets, cutter, &law, &walls, bores),
+    };
+    for w in found {
         if !warns.contains(&w) {
             warns.push(w);
         }

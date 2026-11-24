@@ -16,6 +16,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
     let (side_note, auto_note, cycle_note, engrave) = (cx.side_note, cx.auto_note, cx.cycle_note, cx.engrave);
     match params {
         OpParams::Drill {
+            chamfer_width,
             clearance_z,
             retract_z,
             top_z,
@@ -83,6 +84,10 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
                     break_through_row(ui, u, break_through, &drill_default(u));
                     break_through_from_row(ui, break_through_from);
                 });
+                prop_row(ui, "Chamfer width", |ui| num(ui, u, chamfer_width));
+                if *chamfer_width > 0.0 {
+                    hint(ui, "The width sets each hole's depth. Set 0 to use the usual depth and break-through.");
+                }
             }
             if tab == SEC_PASSES {
                 let mut c_idx = cycle_index(cycle);

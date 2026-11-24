@@ -15,7 +15,7 @@ pub(super) struct Radius {
 }
 
 impl Radius {
-    pub(super) fn new(path: &Toolpath, cx: &VerifyContext) -> Self {
+    pub(super) fn new(path: &Toolpath, cx: &VerifyContext, tip: f64) -> Self {
         let cone = if cx.model.is_none()
             && cx.mode == Mode::Boundary
             && !cx.rims.is_empty()
@@ -24,7 +24,7 @@ impl Radius {
             && path.moves.iter().all(|m| m.axis.is_none())
         {
             Cutter::judged(cx.tool, cx.cutter)
-                .atoms()
+                .atoms_with_flat(tip)
                 .into_iter()
                 .next()
                 .filter(|atom| matches!(atom.prof, Prof::Cone { .. }))
@@ -82,7 +82,7 @@ mod tests {
             rims: &rims,
             ..Default::default()
         };
-        Radius::new(&path, &context).at(&path.moves[0])
+        Radius::new(&path, &context, 0.0).at(&path.moves[0])
     }
 
     #[test]

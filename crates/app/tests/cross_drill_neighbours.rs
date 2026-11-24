@@ -114,6 +114,7 @@ fn stocks() -> [(&'static str, StockShape); 2] {
 
 fn drill_of(h: CrossHole) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(25.0),

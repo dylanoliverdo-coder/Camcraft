@@ -254,6 +254,7 @@ fn drill_state(cells: &[Cell]) -> State {
     let tool = catalog().into_iter().find(|(n, _)| *n == "DR-0600").map(|(_, t)| t).expect("catalog DR-0600");
     state.history.execute(&state.world, AddTool::new(&state.world, "DR-0600", tool).expect("tool"));
     let params = OpParams::Drill {
+        chamfer_width: 0.0,
         clearance_z: Height::fixed(25.0),
         retract_z: None,
         top_z: Height::fixed(10.0),

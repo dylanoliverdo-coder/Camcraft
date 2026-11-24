@@ -24,7 +24,7 @@ use crate::model;
 use crate::schema::Operation;
 use crate::tools::{Tool, ToolKind};
 
-use super::KindInfo;
+use super::{KindInfo, OpParams};
 
 /// The kinds as one phrase: "drill", "flat end mill or bull-nose",
 /// "drill, tap or boring bar".
@@ -152,6 +152,59 @@ pub fn tool_refusal(world: &World, info: &KindInfo, tool: &str) -> Option<String
     ))
 }
 
+fn accepts_for_params(params: &OpParams, kind: ToolKind) -> bool {
+    params.kind().info().accepts(kind)
+        || (kind == ToolKind::Taper && matches!(
+            params, OpParams::Drill { chamfer_width, cross, .. } if *chamfer_width > 0.0 && cross.is_empty()
+        ))
+}
+
+fn flat_tip_refusal(params: &OpParams, tool: &Tool) -> Option<String> {
+    (tool.tip_diameter > 0.0
+        && !matches!(params, OpParams::Drill { cross, .. } if cross.is_empty()))
+        .then(|| "a tool with a positive tip diameter requires an axial mill Drill operation".into())
+}
+
+pub(crate) fn operation_tool_refusal(world: &World, params: &OpParams, tool: &str) -> Option<String> {
+    let def = model::find_by_name(world, tool).and_then(|e| model::tool_of(world, &e))?;
+    if let Some(why) = flat_tip_refusal(params, &def) {
+        return Some(why);
+    }
+    if accepts_for_params(params, def.kind) {
+        return None;
+    }
+    tool_refusal(world, params.kind().info(), tool)
+}
+
+/// An edit of a Drill using S6 tool geometry must keep it supported.
+pub(crate) fn edited_drill_tool_refusal(world: &World, params: &OpParams, name: &str) -> Option<String> {
+    if !matches!(params, OpParams::Drill { .. }) {
+        return None;
+    }
+    let tool = model::find_by_name(world, name).and_then(|e| model::tool_of(world, &e))?;
+    if tool.kind == ToolKind::Taper && !accepts_for_params(params, tool.kind) {
+        return Some(format!("'{name}' requires a positive Chamfer width and mill Z holes"));
+    }
+    flat_tip_refusal(params, &tool)
+}
+
+/// Preflight a replacement definition against every operation that uses it.
+pub(crate) fn replacement_refusal(world: &World, name: &str, prev: &Tool, next: &Tool) -> Option<String> {
+    if let Some(why) = retype_refusal(world, name, prev.kind, next.kind) {
+        return Some(why);
+    }
+    if prev.tip_diameter == next.tip_diameter || next.tip_diameter == 0.0 {
+        return None;
+    }
+    model::named_entities(world).into_iter().find_map(|(label, entity)| {
+        let op = model::operation_of(world, &entity)?;
+        if op.tool != name {
+            return None;
+        }
+        flat_tip_refusal(&op.params, next).map(|why| format!("'{name}' is mounted on {label}: {why}"))
+    })
+}
+
 /// Why a tool's definition cannot change kind from `prev` to `next`:
 /// an operation that names it would be left holding a tool its family
 /// cannot cut with. A kind-keeping edit (diameter, lengths) is never
@@ -166,8 +219,8 @@ pub fn retype_refusal(world: &World, tool: &str, prev: ToolKind, next: ToolKind)
         .into_iter()
         .filter_map(|(name, e)| model::operation_of(world, &e).map(|op| (name, op)))
         .filter(|(_, op)| op.tool == tool)
+        .filter(|(_, op)| !accepts_for_params(&op.params, next))
         .map(|(name, op)| (name, op.params.kind().info()))
-        .filter(|(_, info)| !info.accepts(next))
         .collect();
     let (first, info) = stranded.first()?;
     let more = match stranded.len().saturating_sub(1) {
@@ -252,7 +305,10 @@ pub fn tool_problem(world: &World, op_name: &str, op: &Operation) -> Option<Stri
     let Some(def) = model::tool_of(world, &entity) else {
         return Some(format!("{op_name}'s tool '{tool}' is no longer a tool; {wants}"));
     };
-    if info.accepts(def.kind) {
+    if let Some(why) = flat_tip_refusal(&op.params, &def) {
+        return Some(format!("{op_name}: {why}"));
+    }
+    if accepts_for_params(&op.params, def.kind) {
         return None;
     }
     Some(format!("{op_name}'s tool '{tool}' is a {}; {wants}", def.kind))

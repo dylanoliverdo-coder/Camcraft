@@ -82,6 +82,7 @@ fn job_on_machine(hand: Option<&str>, cycle: CycleChoice, lathe: bool) -> (World
     h.execute(&world, ImportModel::from_mesh("puck", puck()));
     h.execute(&world, AddTool::new(&world, "Tap", tap(hand)).expect("add tap"));
     let params = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(25.0), retract_z: None, top_z: Height::fixed(12.0),

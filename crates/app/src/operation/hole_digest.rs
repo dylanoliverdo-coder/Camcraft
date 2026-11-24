@@ -87,6 +87,7 @@ mod tests {
 
     fn drill_stamp(world: &flecs_ecs::prelude::World, c: &CrossHole) -> u64 {
         let params = OpParams::Drill {
+            chamfer_width: 0.0,
             break_through: None,
             break_through_from: Default::default(),
             clearance_z: Height::fixed(10.0),

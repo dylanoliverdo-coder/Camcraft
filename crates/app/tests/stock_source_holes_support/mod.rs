@@ -151,6 +151,7 @@ pub fn tap_through_a_lid(rotated: bool) -> Vec<Warning> {
     h.execute(&world, SetStock::new(&world, StockShape::Box { dx: 2.0 * HALF, dy: 2.0 * HALF, dz: TOP + 4.0 }, at).expect("stock"));
     let hole = Hole { xy: Point2::new(0.0, 0.0), radius: 2.5, entry_z: TOP + 4.0, floor_z: 10.0, through: false, stepped: false };
     let params = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(TOP + 14.0),
@@ -182,6 +183,7 @@ pub fn job_without_part(half: f64) -> (World, History) {
 
 fn drill(cut: Cut, cycle: CycleChoice) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(30.0),

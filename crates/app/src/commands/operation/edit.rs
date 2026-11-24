@@ -127,6 +127,9 @@ impl EditOperationParams {
             )));
         }
         heights_gate(world, prev.setup.as_deref(), &prev.src, &params)?;
+        if let Some(why) = operation::tool_gate::edited_drill_tool_refusal(world, &params, &prev.tool) {
+            return Err(CommandError::Invalid(why));
+        }
         // #894: a thread's pitch, infeed and holes against the mounted thread mill.
         super::gates::thread_gate(world, &params, &prev.tool)?;
         // #1489: the rest group's previous tool against the mounted one.

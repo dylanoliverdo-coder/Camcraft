@@ -220,6 +220,7 @@ fn tool(kind: ToolKind, center_cutting: bool) -> Tool {
         kind,
         diameter: 6.0,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: 118.0,
         pitch: 1.0,
         nose_radius: 0.0,
@@ -252,6 +253,7 @@ fn holes() -> Vec<Hole> {
 fn cycle(t: &Tool, cycle: CycleChoice) -> Result<Toolpath, GenError> {
     let hs = holes();
     drill(&CycleParams {
+        chamfer_width: 0.0,
         through_clear: camcraft_motion::drilling::THROUGH_CLEAR,
         break_through_from: Default::default(),
         clearance_z: 25.0,

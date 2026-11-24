@@ -18,7 +18,7 @@ use crate::tools::Tool;
 /// `Tool::profile` draws the cutter, neck and shank from)?
 #[must_use]
 pub fn same_shape(a: &Tool, b: &Tool) -> bool {
-    let n = |t: &Tool| [t.diameter, t.corner_r, t.tip_angle, t.flute_len, t.shank_d, t.shank_len];
+    let n = |t: &Tool| [t.diameter, t.corner_r, t.tip_angle, t.tip_diameter, t.flute_len, t.shank_d, t.shank_len];
     a.kind == b.kind && n(a) == n(b)
 }
 

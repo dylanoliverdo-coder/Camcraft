@@ -33,6 +33,7 @@ fn electrode() -> Tool {
         kind: ToolKind::Electrode,
         diameter: 10.0,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: 0.0,
         pitch: 0.0,
         nose_radius: 0.0,

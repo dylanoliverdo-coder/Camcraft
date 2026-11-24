@@ -32,7 +32,13 @@ pub(super) fn program_marks<'a>(
         .filter_map(|p| {
             let mark = p.mark.as_ref()?;
             Some(Mark {
-                op: SimOp { moves: &p.moves, radius: p.radius, ball: p.ball, cone: p.cone, corner: p.corner },
+                op: SimOp {
+                    moves: mark.nominal_moves.as_deref().unwrap_or(&p.moves),
+                    radius: p.radius,
+                    ball: p.ball,
+                    cone: p.cone,
+                    corner: p.corner,
+                },
                 budget: mark.budget,
                 target: mark.target.as_deref(),
             })

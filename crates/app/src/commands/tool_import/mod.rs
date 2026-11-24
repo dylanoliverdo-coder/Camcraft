@@ -56,7 +56,7 @@ fn change_refusal(
     if let Some(why) = next.torch_refusal() {
         return Some(format!("tool '{name}': {why}"));
     }
-    if let Some(msg) = crate::operation::tool_gate::retype_refusal(world, name, prev.kind, next.kind) {
+    if let Some(msg) = crate::operation::tool_gate::replacement_refusal(world, name, prev, next) {
         return Some(msg);
     }
     let entity = model::find_by_name(world, name)?;

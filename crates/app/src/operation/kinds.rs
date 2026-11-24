@@ -988,6 +988,7 @@ fn seed_trace(c: &Carried) -> OpParams {
 
 fn seed_drill(c: &Carried) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         clearance_z: c.clearance,
         retract_z: None,
         top_z: c.top,

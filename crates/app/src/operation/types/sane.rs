@@ -82,6 +82,9 @@ impl OpParams {
             return Some(why.into());
         }
         match self {
+            OpParams::Drill { chamfer_width, .. } => {
+                crate::drilling::chamfer_width_refusal(*chamfer_width).map(str::to_owned)
+            }
             OpParams::Contour {
                 passes,
                 tab_count,
@@ -1010,6 +1013,7 @@ impl OpParams {
                     && pos(*plunge_feed)
             }
             OpParams::Drill {
+                chamfer_width,
                 clearance_z,
                 retract_z,
                 top_z,
@@ -1037,7 +1041,10 @@ impl OpParams {
                     && *peck >= 0.0
                     && dwell.is_finite()
                     && *dwell >= 0.0
-                    && holes.iter().all(|h| h.is_usable())
+                    && crate::drilling::chamfer_width_refusal(*chamfer_width).is_none()
+                    && holes.iter().all(|h| {
+                        if *chamfer_width > 0.0 { h.is_usable_for_chamfer() } else { h.is_usable() }
+                    })
                     && cross.iter().all(|h| h.is_usable())
                     // #1557: a stated break-through is a length.
                     && break_through.is_none_or(nneg)

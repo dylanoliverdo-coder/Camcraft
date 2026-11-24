@@ -113,6 +113,11 @@ pub(super) fn write(world: &World, tool_name: &str, params: &OpParams, h: &mut s
         }
         _ => {}
     }
+    if matches!(tool.kind, crate::tools::ToolKind::Drill | crate::tools::ToolKind::Taper)
+        && tool.tip_diameter != 0.0
+    {
+        w(h, tool.tip_diameter);
+    }
     // A Thread OP times its helix against the TOOL's pitch (M2.4 C, the
     // tap cycle's reading), whatever kind carries it - so the clause
     // belongs to the operation, not the tool kind: the turning thread
