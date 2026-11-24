@@ -19,6 +19,8 @@
 //!   --ref-stl <stock.stl>       another engine's stock: per-column top
 //!                               heights compared with ours
 //!   --part-stl <part.stl>       the part: `Stock::deviate` against it
+//!   --parts <spec.json>         several parts against the one cut: {"parts": [{"key", "stl"}]};
+//!                               each part's deviate under vs_parts[key]
 //!   --tol <mm>                  deviate tolerance (default 0.0254)
 //!   --out-stl <file>            field arm only: write the stock surface
 //!   --shank <mm>                field arm only: cut with this tool length above the tip
@@ -1148,19 +1150,37 @@ fn main() {
             "seconds": t3.elapsed().as_secs_f64(),
         });
     }
-    if let Some(p) = get("part-stl") {
+    let tol = get("tol").map(|s| num(&s)).unwrap_or(0.0254);
+    let deviate_one = |path: &str| -> serde_json::Value {
         let t4 = Instant::now();
-        let tol = get("tol").map(|s| num(&s)).unwrap_or(0.0254);
-        let part = read_stl(&p, stl_k);
+        let part = read_stl(path, stl_k);
         let dvs: Result<Vec<_>, _> = stocks.iter().map(|st| st.deviate(&part, tol)).collect();
         match dvs.map(|v| v.into_iter().reduce(|mut a, b| { a.rest_cells += b.rest_cells; a.gouge_cells += b.gouge_cells; a.rest_volume += b.rest_volume; a.gouge_volume += b.gouge_volume; a.max_rest = a.max_rest.max(b.max_rest); a.max_gouge = a.max_gouge.max(b.max_gouge); a }).unwrap()) {
-            Ok(dv) => out["vs_part"] = json!({
+            Ok(dv) => json!({
                 "tol_mm": tol, "part_facets": part.len(), "rest_cells": dv.rest_cells, "gouge_cells": dv.gouge_cells,
                 "rest_mm3": dv.rest_volume, "gouge_mm3": dv.gouge_volume, "max_rest_mm": dv.max_rest,
                 "max_gouge_mm": dv.max_gouge, "clean": dv.is_clean(), "seconds": t4.elapsed().as_secs_f64(),
             }),
-            Err(e) => out["vs_part"] = json!({"error": e.to_string()}),
+            Err(e) => json!({"error": e.to_string()}),
         }
+    };
+    if let Some(p) = get("part-stl") {
+        out["vs_part"] = deviate_one(&p);
+    }
+    // Several parts against the one cut stock: {"parts": [{"key": k, "stl": path}, ...]} -> vs_parts {k: ...}.
+    if let Some(p) = get("parts") {
+        let spec: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&p).unwrap_or_else(|e| die(format!("cannot read {p}: {e}"))),
+        )
+        .unwrap_or_else(|e| die(format!("{p}: {e}")));
+        let mut by_key = serde_json::Map::new();
+        for part in spec["parts"].as_array().unwrap_or_else(|| die(format!("{p}: no parts list"))) {
+            let (Some(k), Some(s)) = (part["key"].as_str(), part["stl"].as_str()) else {
+                die(format!("{p}: each part needs key and stl"))
+            };
+            by_key.insert(k.to_string(), deviate_one(s));
+        }
+        out["vs_parts"] = serde_json::Value::Object(by_key);
     }
     if let Some(p) = get("out-stl") {
         let t5 = Instant::now();
