@@ -521,6 +521,7 @@ fn drill_plate_matches_golden() {
         },
     ];
     let p = CycleParams {
+        chamfer_width: 0.0,
         through_clear: camcraft_app::drilling::THROUGH_CLEAR,
         break_through_from: BreakThroughFrom::Tip,
         clearance_z: 5.0,
@@ -559,6 +560,7 @@ fn drill_peck_matches_golden() {
         stepped: false,
     }];
     let p = CycleParams {
+        chamfer_width: 0.0,
         through_clear: camcraft_app::drilling::THROUGH_CLEAR,
         break_through_from: BreakThroughFrom::Tip,
         clearance_z: 6.0,
@@ -595,6 +597,7 @@ fn tap_plate_matches_golden() {
         stepped: false,
     }];
     let p = CycleParams {
+        chamfer_width: 0.0,
         through_clear: camcraft_app::drilling::THROUGH_CLEAR,
         break_through_from: BreakThroughFrom::Tip,
         clearance_z: 5.0,

@@ -144,6 +144,8 @@ pub struct CycleParams<'a> {
     /// Depth override for every hole; `None` uses each hole's floor
     /// (plus exit allowance past a through hole's far wall).
     pub bottom_z: Option<f64>,
+    /// S6: radial chamfer width in mm; zero keeps the original depth law.
+    pub chamfer_width: f64,
     pub cycle: CycleChoice,
     /// Depth per peck; `<= 0` lets the Auto law pick (see [`drill`]).
     pub peck: f64,

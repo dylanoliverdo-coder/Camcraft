@@ -92,6 +92,7 @@ fn hole(xy: (f64, f64), r: f64, entry: f64, floor: f64, through: bool) -> Hole {
 
 fn params<'a>(tool: &'a Tool, holes: &'a [Hole]) -> CycleParams<'a> {
     CycleParams {
+        chamfer_width: 0.0,
         through_clear: crate::drilling::THROUGH_CLEAR,
         break_through_from: BreakThroughFrom::FullDiameter,
         clearance_z: 15.0,

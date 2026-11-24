@@ -252,6 +252,7 @@ fn holes() -> Vec<Hole> {
 fn cycle(t: &Tool, cycle: CycleChoice) -> Result<Toolpath, GenError> {
     let hs = holes();
     drill(&CycleParams {
+        chamfer_width: 0.0,
         through_clear: camcraft_motion::drilling::THROUGH_CLEAR,
         break_through_from: Default::default(),
         clearance_z: 25.0,

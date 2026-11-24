@@ -32,6 +32,7 @@
 mod axial;
 // #985: the bosses an external thread is milled on.
 mod boss;
+mod chamfer_width;
 mod cylinder;
 mod cross;
 mod cycle;
@@ -57,6 +58,7 @@ mod tests_ream;
 
 pub use axial::{axial_doors, axial_warnings, AXIAL_TOL};
 pub use boss::recognize_bosses;
+pub use chamfer_width::{chamfer_tip_z, chamfer_width_refusal};
 pub use cross::{cross_drill, CrossParams};
 pub use cycle::drill;
 pub use fine_bore::FINE_BORE_MAX_SHIFT_UM;

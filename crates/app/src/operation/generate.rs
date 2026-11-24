@@ -2771,6 +2771,7 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
                     );
                 }
                 drilling::drill(&drilling::CycleParams {
+                    chamfer_width: 0.0,
                     through_clear: run,
                     break_through_from: tip_from,
                     clearance_z: hl.clearance,

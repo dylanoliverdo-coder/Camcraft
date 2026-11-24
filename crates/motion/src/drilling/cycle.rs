@@ -1,5 +1,6 @@
 //! Split from `drilling.rs` by M5.0.1; structure only.
 
+use super::chamfer_width::{chamfer_width_refusal, plan_hole};
 use super::hole::{
     auto_kind, through_tip_run, CHIP_BREAK, CycleChoice, CycleParams, FIT_TOL, Hole, SPOT_DEPTH,
 };
@@ -18,7 +19,11 @@ pub fn drill(p: &CycleParams) -> Result<Toolpath, GenError> {
     if !(d.is_finite() && d > 0.0) || !p.r_z.is_finite() || !p.clearance_z.is_finite() {
         return Err(GenError::Invalid("drill tool or heights not usable".into()));
     }
-    if !p.holes.iter().all(|h| h.all_finite() && h.radius > 0.0 && h.floor_z < h.entry_z) {
+    if let Some(why) = chamfer_width_refusal(p.chamfer_width) {
+        return Err(GenError::Invalid(why.into()));
+    }
+    let chamfering = p.chamfer_width > 0.0;
+    if !p.holes.iter().all(|h| if chamfering { h.is_usable_for_chamfer() } else { h.is_usable() }) {
         return Err(GenError::Invalid("malformed hole list".into()));
     }
     if !(p.feed.is_finite() && p.plunge_feed.is_finite() && p.dwell.is_finite() && p.dwell >= 0.0) {
@@ -32,14 +37,15 @@ pub fn drill(p: &CycleParams) -> Result<Toolpath, GenError> {
     }
     let tap_feed = p.tool.rpm * p.tool.pitch;
     let taps = matches!(p.cycle, CycleChoice::Tap | CycleChoice::FloatingTap)
-        || (matches!(p.cycle, CycleChoice::Auto) && p.tool.kind == ToolKind::Tap);
+        || (!chamfering && matches!(p.cycle, CycleChoice::Auto) && p.tool.kind == ToolKind::Tap);
     if taps && !(tap_feed.is_finite() && tap_feed > 0.0) {
         return Err(GenError::Invalid("a tap cycle needs a positive pitch x rpm feed".into()));
     }
 
     // Snap once; every move and every cycle reads these, so the two
     // truths agree bit for bit, not by luck.
-    let hs: Vec<Hole> = p
+    let mut refused = Vec::new();
+    let hs: Vec<(Hole, Option<f64>)> = p
         .holes
         .iter()
         .map(|h| Hole {
@@ -50,9 +56,13 @@ pub fn drill(p: &CycleParams) -> Result<Toolpath, GenError> {
             through: h.through,
             stepped: h.stepped,
         })
+        .filter_map(|h| plan_hole(h, p, &mut refused))
         .collect();
+    let Some((first, _)) = hs.first() else {
+        return Err(GenError::Invalid(refused.join("; ")));
+    };
 
-    let tip_run = if p.bottom_z.is_none() && hs.iter().any(|h| h.through) {
+    let tip_run = if !chamfering && p.bottom_z.is_none() && hs.iter().any(|(h, _)| h.through) {
         through_tip_run(p.tool, p.cycle, p.through_clear, p.break_through_from)?
     } else {
         0.0
@@ -60,8 +70,11 @@ pub fn drill(p: &CycleParams) -> Result<Toolpath, GenError> {
 
     let start_z = p.clearance_z.max(p.r_z);
     let hop = p.hop_z.unwrap_or(p.clearance_z).max(p.r_z);
-    let mut b = PathBuilder::new(Point3::new(hs[0].xy.x, hs[0].xy.y, start_z));
-    for (i, h) in hs.iter().enumerate() {
+    let mut b = PathBuilder::new(Point3::new(first.xy.x, first.xy.y, start_z));
+    for note in refused {
+        b.note(note);
+    }
+    for (i, (h, chamfer_bottom)) in hs.iter().enumerate() {
         if i > 0 {
             // The previous hole's exit left the tool at (prev_xy, hop):
             // move over, then down onto this hole's R plane.
@@ -69,7 +82,7 @@ pub fn drill(p: &CycleParams) -> Result<Toolpath, GenError> {
         }
         b.push(MoveKind::Rapid, Point3::new(h.xy.x, h.xy.y, p.r_z), None);
         let floor_bottom = h.floor_z - if h.through { tip_run } else { 0.0 };
-        let bottom = match p.bottom_z {
+        let bottom = match chamfer_bottom.or(p.bottom_z) {
             Some(z) => z,
             // SPOT_DEPTH's own words: the dimple hangs off the ENTRY
             // plane - the hole's mouth - not the R plane, so a hole on
@@ -87,6 +100,7 @@ pub fn drill(p: &CycleParams) -> Result<Toolpath, GenError> {
             ));
         }
         let kind = match p.cycle {
+            CycleChoice::Auto if chamfering => CycleKind::Spot,
             CycleChoice::Auto => auto_kind(p.tool.kind, p.r_z - bottom, d),
             _ => resolve_choice(p),
         };
@@ -222,8 +236,8 @@ pub fn drill(p: &CycleParams) -> Result<Toolpath, GenError> {
         // Lift to the hop plane for the traverse to the next hole.
         b.push(MoveKind::Rapid, Point3::new(h.xy.x, h.xy.y, hop), None);
     }
-    let last = hs[hs.len() - 1];
-    b.push(MoveKind::Rapid, Point3::new(last.xy.x, last.xy.y, start_z), None);
+    let at = b.at();
+    b.push(MoveKind::Rapid, Point3::new(at.x, at.y, start_z), None);
     let t = b.finish();
     if !t.is_chained() || !t.all_finite() {
         // The builder cannot produce this; if it ever did, the path is
