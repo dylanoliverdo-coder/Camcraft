@@ -1406,8 +1406,8 @@ pub(crate) fn height_planes(state: &State) -> Vec<HeightPlane> {
         // Bottom the last step down. Face skims one plane unless it
         // stages: then its Top is the first level, drawn like the depth
         // kinds' Top, with the finished Cut below it.
-        operation::OpParams::Face { top_z, cut_z, .. } => {
-            let cut = resolve(*cut_z);
+        operation::OpParams::Face { top_z, cut_z, floor_stock, .. } => {
+            let cut = resolve(*cut_z).map(|z| z + *floor_stock).filter(|z| z.is_finite());
             if let (Some(t), Some(c)) = ((*top_z).to_owned(), cut)
                 && let Some(tz) = resolve(t)
                 && tz != c
@@ -1542,7 +1542,8 @@ pub(crate) fn height_planes(state: &State) -> Vec<HeightPlane> {
                     skip_rect: stands(z),
                 });
             }
-            if let Some(z) = resolve(*bottom_z) {
+            let floor_off = draft.floor_stock().unwrap_or(0.0);
+            if let Some(z) = resolve(*bottom_z).map(|z| z + floor_off).filter(|z| z.is_finite()) {
                 out.push(HeightPlane {
                     z,
                     src: *bottom_z,

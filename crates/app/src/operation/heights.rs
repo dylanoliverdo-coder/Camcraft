@@ -128,7 +128,7 @@ pub fn region_z(
     match params {
         OpParams::Face { top_z, cut_z, .. } => top_z
             .map(resolve)
-            .unwrap_or_else(|| resolve(*cut_z)),
+            .unwrap_or_else(|| resolve(*cut_z).and_then(|z| super::floor_stock::shift_bottom(params, z))),
         OpParams::Contour { top_z, .. }
         | OpParams::Pocket { top_z, .. }
         // The roughing twins name the pocket's high station (M2.4 A),

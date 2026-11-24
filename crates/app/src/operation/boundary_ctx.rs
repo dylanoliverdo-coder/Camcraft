@@ -134,7 +134,10 @@ fn build(world: &World, op: &Operation, tool_r: f64, material: &Material, part_s
         | OpParams::Offset2D { top_z, bottom_z, stepdown, .. } => {
             let planes_for = |parts: &[Triangle], init_top: f64| -> Option<Vec<f64>> {
                 let t = fold_height(world, setup, Some(&op.src), frame.as_ref(), *top_z)?;
-                let b = fold_height(world, setup, Some(&op.src), frame.as_ref(), *bottom_z)?;
+                let b = super::floor_stock::shift_bottom(
+                    &op.params,
+                    fold_height(world, setup, Some(&op.src), frame.as_ref(), *bottom_z)?,
+                )?;
                 let mt = super::area::stock_top(world, setup, parts, init_top, frame.as_ref());
                 Some(super::area::ladder_planes(t - oz, mt, b - oz, op.params.ladder_stepdown(t, b, *stepdown)))
             };

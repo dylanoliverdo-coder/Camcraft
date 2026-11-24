@@ -172,6 +172,9 @@ pub fn depth_sane(
     src: Option<&SrcRef>,
     params: &OpParams,
 ) -> bool {
+    if super::floor_stock_depth_refusal(world, setup, src, params).is_some() {
+        return false;
+    }
     let Ok(frame) = OpFrame::new(setup.map(str::to_owned), params.tilt()).checked_frame() else {
         return true; // an invalid tilt is refused by its own command door
     };

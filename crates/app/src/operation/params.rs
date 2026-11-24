@@ -33,11 +33,7 @@ impl OpParams {
         // literal at the head of each arm is now the registry row's
         // data - the bytes written are unchanged.
         h.write_u8(self.kind().info().tag);
-        // Journeyman S2: any signed allowance changes the last cut. Zero keeps legacy stamps.
-        if let Some(stock) = self.floor_stock().filter(|stock| *stock != 0.0) {
-            h.write(b"floor_stock");
-            w(h, stock);
-        }
+        super::floor_stock::write_stamp(self, h);
         match self {
             OpParams::Face {
                 stepover,
@@ -50,8 +46,7 @@ impl OpParams {
                 climb,
                 blend_turns,
                 holes,
-                tilt,
-                ..
+                tilt, ..
             } => {
                 w(h, *stepover);
                 wh(h, *clearance_z);

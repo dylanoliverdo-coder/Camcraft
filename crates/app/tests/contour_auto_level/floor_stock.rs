@@ -178,11 +178,36 @@ fn pocket_floor_stock_refusals_name_the_field_at_creation_and_edit() {
 
 #[test]
 fn a_negative_pocket_floor_stock_still_checks_the_blind_floor() {
+    // Picked blind pocket: pocket_ladder now includes floor_stock (-0.2 -> -10.200), so
+    // pocket_region_on_part refuses the blind-floor intrusion before generating any toolpath.
     let (world, mut history, src) = pocket_job(-12.0);
-    let (_, warnings) = run(&world, &mut history, src, pocket_params(-0.2, false));
-    assert!(gouges(&warnings) > 0, "{warnings:?}");
+    history.execute(&world, CreateOperation::new(&world, "test cut", TOOL, src, pocket_params(-0.2, false)).expect("create"));
+    let gen_err = GenerateOperation::new(&world, "test cut").err().expect("blind floor refused at generate").to_string();
+    assert!(gen_err.contains("-10.200") && gen_err.contains("floor"), "{gen_err}");
     let nc = std::env::temp_dir().join(format!("camcraft-s2-blind-{}.nc", std::process::id()));
-    let refusal = posting::post_setup(&world, &nc).expect_err("the gouge blocks posting");
+    let _ = std::fs::remove_file(&nc);
+    assert!(posting::post_setup(&world, &nc).is_err(), "un-generated op must not post");
+    assert!(!nc.exists(), "the refused post writes no NC");
+
+    // Face with negative floor_stock into a solid part's top (part top at Z=0, cut_z=0, floor_stock=-0.2):
+    // verifier flags a blocking gouge and post_setup refuses writing NC.
+    let outer = rect(-30.0, -20.0, 30.0, 20.0);
+    let mut facets = Vec::new();
+    plate(&outer, None, -10.0, 0.0, &mut facets);
+    let (w2, mut h2) = world_with(facets);
+    add_stock(&w2, &mut h2, 80.0, 60.0);
+    let mut fp = retype_params(&auto(), OpType::Face as usize);
+    if let OpParams::Face { cut_z, clearance_z, top_z, stepdown, stepover, floor_stock, .. } = &mut fp {
+        *cut_z = Height::fixed(0.0);
+        *clearance_z = Height::fixed(5.0);
+        *top_z = None;
+        *stepdown = None;
+        *stepover = 3.0;
+        *floor_stock = -0.2;
+    }
+    let (_, warnings) = run(&w2, &mut h2, SrcRef::Stock, fp);
+    assert!(gouges(&warnings) > 0, "{warnings:?}");
+    let refusal = posting::post_setup(&w2, &nc).err().expect("the gouge blocks posting");
     assert!(refusal.to_string().to_lowercase().contains("gouge"), "{refusal}");
     assert!(!nc.exists(), "the refused post writes no NC");
 }
@@ -226,4 +251,161 @@ fn legacy_and_explicit_zero_floor_stock_keep_the_contour() {
     assert_eq!(path, control);
     assert_eq!(legacy, zero);
     assert!(params_to_json(&legacy)["contour"].get("floor_stock").is_none());
+}
+
+#[test]
+fn positive_floor_stock_clears_a_blind_pocket_floor_and_steps_above_a_submerged_island() {
+    // Blind pocket floor at -10.0 (part extends down to -12.0). Raw bottom_z = -10.2 sits below
+    // the blind floor, but +0.5 floor stock raises the last cut to -9.7 (safely above -10.0).
+    let (world, mut history, src) = pocket_job(-12.0);
+    let mut params = pocket_params(0.5, false);
+    if let OpParams::Pocket { bottom_z, .. } = &mut params {
+        *bottom_z = Height::fixed(-10.2);
+    }
+    let (path, warnings) = run(&world, &mut history, src, params);
+    assert!((floor(&path) - -9.7).abs() < 1e-8, "got floor {}", floor(&path));
+    assert_eq!(gouges(&warnings), 0, "{warnings:?}");
+
+    // Whole-model pocket around a 20x20 boss on a 60x50 stock, raw bottom -10.0, floor_stock +2.5 -> -7.5.
+    let boss = rect(-10.0, -10.0, 10.0, 10.0);
+    let mut boss_facets = Vec::new();
+    plate(&boss, None, -10.0, 0.0, &mut boss_facets);
+    let (w2, mut h2) = world_with(boss_facets);
+    add_stock(&w2, &mut h2, 60.0, 50.0);
+    let (path_whole, w_whole) = run(&w2, &mut h2, SrcRef::Entity("part".into()), pocket_params(2.5, false));
+    assert!((floor(&path_whole) - -7.5).abs() < 1e-8, "whole-model floor {}", floor(&path_whole));
+    assert_eq!(gouges(&w_whole), 0, "{w_whole:?}");
+
+    // Stock-source pocket around the same part with floor_stock +2.5 -> -7.5.
+    let mut boss_facets2 = Vec::new();
+    plate(&boss, None, -10.0, 0.0, &mut boss_facets2);
+    let (w3, mut h3) = world_with(boss_facets2);
+    add_stock(&w3, &mut h3, 60.0, 50.0);
+    let (path_stock, w_stock) = run(&w3, &mut h3, SrcRef::Stock, pocket_params(2.5, false));
+    assert!((floor(&path_stock) - -7.5).abs() < 1e-8, "stock-source floor {}", floor(&path_stock));
+    assert_eq!(gouges(&w_stock), 0, "{w_stock:?}");
+}
+
+#[test]
+fn contour_face_sanity_refusals_and_unresolved_ref_symmetry() {
+    // Contour & staged Face refusals at creation and edit, plus is_sane / named_refusal on non-finite.
+    let outline = rect(-30.0, -20.0, 30.0, 20.0);
+    let mut facets = Vec::new();
+    plate(&outline, None, -10.0, 0.0, &mut facets);
+    let (world, mut history) = world_with(facets);
+    let src = SrcRef::Selection(top_face(&world, 0.0));
+    add_stock(&world, &mut history, 100.0, 80.0);
+
+    let mut c_ok = auto();
+    if let OpParams::Contour { top_z, bottom_z, .. } = &mut c_ok {
+        *top_z = Height::fixed(0.0);
+        *bottom_z = Height::fixed(-10.0);
+    }
+    history.execute(&world, CreateOperation::new(&world, "c_ok", TOOL, src.clone(), c_ok.clone()).expect("create contour"));
+    for bad in [10.0, 11.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let mut p = c_ok.clone();
+        if let OpParams::Contour { floor_stock, .. } = &mut p {
+            *floor_stock = bad;
+        }
+        if !bad.is_finite() {
+            assert!(!p.is_sane(), "non-finite contour floor_stock must fail is_sane");
+            assert!(p.named_refusal().is_some_and(|w| w.contains("Floor stock")));
+        } else {
+            assert!(!camcraft_app::operation::depth_sane(&world, None, Some(&src), &p));
+        }
+        let c_err = CreateOperation::new(&world, "c_bad", TOOL, src.clone(), p.clone()).err().expect("contour refused").to_string();
+        let e_err = camcraft_app::commands::EditOperationParams::new(&world, "c_ok", p).err().expect("contour edit refused").to_string();
+        assert!(c_err.contains("Floor stock") && e_err.contains("Floor stock"), "{c_err} | {e_err}");
+    }
+
+    // Staged Face refusal when cut_z + floor_stock >= top_z or non-finite.
+    let mut f_ok = retype_params(&auto(), OpType::Face as usize);
+    if let OpParams::Face { top_z, cut_z, stepdown, .. } = &mut f_ok {
+        *top_z = Some(Height::fixed(0.0));
+        *cut_z = Height::fixed(-5.0);
+        *stepdown = Some(2.5);
+    }
+    history.execute(&world, CreateOperation::new(&world, "f_ok", TOOL, SrcRef::Stock, f_ok.clone()).expect("create face"));
+    for bad in [5.0, 6.0, f64::NAN, f64::INFINITY] {
+        let mut p = f_ok.clone();
+        if let OpParams::Face { floor_stock, .. } = &mut p {
+            *floor_stock = bad;
+        }
+        if !bad.is_finite() {
+            assert!(!p.is_sane());
+            assert!(p.named_refusal().is_some_and(|w| w.contains("Floor stock")));
+        } else {
+            assert!(!camcraft_app::operation::depth_sane(&world, None, Some(&SrcRef::Stock), &p));
+        }
+        let c_err = CreateOperation::new(&world, "f_bad", TOOL, SrcRef::Stock, p.clone()).err().expect("face refused").to_string();
+        let e_err = camcraft_app::commands::EditOperationParams::new(&world, "f_ok", p).err().expect("face edit refused").to_string();
+        assert!(c_err.contains("Floor stock") && e_err.contains("Floor stock"), "{c_err} | {e_err}");
+    }
+
+    // Negative radial stock_to_leave stays refused even when floor_stock is negative.
+    let mut neg_rad = pocket_params(-0.2, false);
+    if let OpParams::Pocket { stock_to_leave, .. } = &mut neg_rad {
+        *stock_to_leave = -0.1;
+    }
+    assert!(!neg_rad.is_sane());
+
+    // Unresolved non-selection height reference (TopOfStock with a part but no stock in world)
+    // stays allowed at creation time symmetrically with floor_stock == 0.0.
+    let mut bare_facets = Vec::new();
+    plate(&outline, None, -10.0, 0.0, &mut bare_facets);
+    let (bare, _) = world_with(bare_facets);
+    let bare_src = SrcRef::Entity("part".into());
+    let mut unres = retype_params(&auto(), OpType::Face as usize);
+    if let OpParams::Face { top_z, cut_z, stepdown, floor_stock, .. } = &mut unres {
+        *top_z = Some(Height::of(HeightReference::TopOfStock, 0.0));
+        *cut_z = Height::of(HeightReference::TopOfStock, -2.0);
+        *stepdown = Some(1.0);
+        *floor_stock = 0.5;
+    }
+    assert!(camcraft_app::operation::depth_sane(&bare, None, Some(&bare_src), &unres));
+    assert!(CreateOperation::new(&bare, "pending_stock", TOOL, bare_src, unres).is_ok());
+}
+
+#[test]
+fn region_z_setup_sheet_digest_and_undo_follow_floor_stock() {
+    let world = new_world();
+    let mut history = History::default();
+    history.execute(&world, AddTool::new(&world, TOOL, facer()).expect("tool"));
+    add_stock(&world, &mut history, 100.0, 80.0);
+
+    let mut f0 = retype_params(&auto(), OpType::Face as usize);
+    if let OpParams::Face { top_z, cut_z, stepdown, floor_stock, .. } = &mut f0 {
+        *top_z = None;
+        *cut_z = Height::fixed(-5.0);
+        *stepdown = None;
+        *floor_stock = 0.0;
+    }
+    let mut f_pos = f0.clone();
+    if let OpParams::Face { floor_stock, .. } = &mut f_pos {
+        *floor_stock = 0.5;
+    }
+    // Unstaged Face region_z shifts by floor_stock.
+    assert_eq!(camcraft_app::operation::region_z(&world, None, Some(&SrcRef::Stock), &f0), Some(-5.0));
+    assert_eq!(camcraft_app::operation::region_z(&world, None, Some(&SrcRef::Stock), &f_pos), Some(-4.5));
+
+    // Parameter stamp changes when floor_stock != 0.0 and stays identical for 0.0 vs -0.0.
+    history.execute(&world, CreateOperation::new(&world, "F", TOOL, SrcRef::Stock, f0.clone()).expect("create"));
+    let s0 = camcraft_app::operation::current_stamp(&world, TOOL, &SrcRef::Stock, &f0, "F", None);
+    let mut f_neg0 = f0.clone();
+    if let OpParams::Face { floor_stock, .. } = &mut f_neg0 {
+        *floor_stock = -0.0;
+    }
+    assert_eq!(s0, camcraft_app::operation::current_stamp(&world, TOOL, &SrcRef::Stock, &f_neg0, "F", None));
+
+    // Undo / redo through EditOperationParams and setup-sheet BOT column reflects -4.500.
+    history.execute(&world, camcraft_app::commands::EditOperationParams::new(&world, "F", f_pos.clone()).expect("edit +0.5"));
+    assert_ne!(s0, camcraft_app::operation::current_stamp(&world, TOOL, &SrcRef::Stock, &f_pos, "F", None));
+    let sheet = camcraft_app::setup_sheet::render(&world, None).expect("setup sheet");
+    assert!(sheet.contains("-4.500"), "setup sheet should show shifted cut Z -4.500:\n{sheet}");
+    assert!(history.undo(&world));
+    let sheet_undone = camcraft_app::setup_sheet::render(&world, None).expect("setup sheet undone");
+    assert!(sheet_undone.contains("-5.000"), "undo restores -5.000:\n{sheet_undone}");
+    assert!(history.redo(&world));
+    let sheet_redone = camcraft_app::setup_sheet::render(&world, None).expect("setup sheet redone");
+    assert!(sheet_redone.contains("-4.500"), "redo restores -4.500:\n{sheet_redone}");
 }

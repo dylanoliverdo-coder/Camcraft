@@ -58,6 +58,9 @@ impl OpParams {
         if let Some(why) = self.tilt().and_then(|t| t.refusal()) {
             return Some(why);
         }
+        if let Some(why) = self.floor_stock_refusal() {
+            return Some(why);
+        }
         if self.predrilled_elsewhere() {
             return Some(PREDRILLED_POCKET_ONLY.into());
         }
@@ -152,8 +155,10 @@ impl OpParams {
         let links_ok = links_ok && self.arc_turn_refusal().is_none();
         // #1489: a rest group the generator would refuse.
         let links_ok = links_ok && crate::operation::rest_op::rest_refusal(self).is_none();
+        let floor_ok = self.floor_stock_refusal().is_none();
         tilt_ok
             && links_ok
+            && floor_ok
             && match self {
             // The plasma door (#670): the parameter set's own sanity.
             OpParams::PlasmaProfile(p) => p.is_sane(),
