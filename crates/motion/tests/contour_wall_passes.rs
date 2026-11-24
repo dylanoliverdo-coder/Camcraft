@@ -1,5 +1,5 @@
 //! Journeyman spec S1: a 2D Contour with several wall passes per level
-//! - the roughing, finishing and spring passes, their offsets, their
+//! The roughing, finishing and spring passes, their offsets, their
 //! order, the open-chain end normals, the inside-chain passes that do
 //! not fit, the flute law and the project-file round trip. Every check
 //! of the spec's "Checks" section is one test here, on synthetic
@@ -212,26 +212,26 @@ fn boss_three_passes_at_the_offsets_of_the_spec() {
 }
 
 #[test]
-#[ignore = "app-side: the open-chain per-pass offset runs through the app's open pass (contour_open_run_sided), which S1b leaves to the app commit"]
 fn open_chain_passes_start_and_end_on_the_end_normals() {
-    // A 30 mm radius quarter arc, then a 20 mm straight leg.
-    let mut chain: Vec<Point2> = (0..=48)
-        .map(|k| {
-            let a = (k as f64 / 48.0) * std::f64::consts::FRAC_PI_2;
-            Point2::new(30.0 * a.cos(), 30.0 * a.sin())
-        })
-        .collect();
-    for k in 1..=8 {
-        chain.push(Point2::new(30.0, -(k as f64) * 2.5));
-    }
+    // An L-shaped open chain: a 20 mm leg up from (0, 0) to (0, 20),
+    // then a 20 mm leg right to (20, 20). The material is the square
+    // [0, 20]^2 inside the L; the tool rides its air side (outside the
+    // square), on the offset of each pass.
+    let chain = vec![
+        Point2::new(0.0, 0.0),
+        Point2::new(0.0, 10.0),
+        Point2::new(0.0, 20.0),
+        Point2::new(10.0, 20.0),
+        Point2::new(20.0, 20.0),
+    ];
     let p = boss_params();
-    // The app's open contour: the chain offset to one side by each
-    // pass's own offset, ridden in the climb order. The section is air
-    // everywhere (the chain is a free edge), so Side::Outside holds.
-    let air = |_z: f64| -> Result<Option<Region>, camcraft_motion::machining2d::GenError> { Ok(None) };
-    let t = contour_open_run(&chain, &p, &air).expect("open passes");
-    // The chain's first end is (30, 0) with the tangent +Y; its outward
-    // end normal is +X, so each pass starts at (30 + w, 0).
+    // The open contour: the chain offset to its air side by each pass's
+    // own offset, ridden in the climb order.
+    let mat = rect(0.0, 0.0, 20.0, 20.0);
+    let section = move |_z: f64| -> Result<Option<Region>, camcraft_motion::machining2d::GenError> { Ok(Some(mat.clone())) };
+    let t = contour_open_run(&chain, &p, &section).expect("open passes");
+    // Each pass starts on the chain's first end normal (the leg up runs
+    // +Y, its outward normal is -X) at (0 - w, 0).
     let starts: Vec<(f64, f64)> = t
         .moves
         .iter()
@@ -241,12 +241,11 @@ fn open_chain_passes_start_and_end_on_the_end_normals() {
     let want = [7.59, 5.05, 5.00];
     assert_eq!(starts.len(), want.len(), "one plunge per pass: {starts:?}");
     for (s, w) in starts.iter().zip(want) {
-        assert!((s.0 - (30.0 + w)).abs() <= TOL, "start x {} want {}", s.0, 30.0 + w);
+        assert!((s.0 + w).abs() <= TOL, "start x {} want {}", s.0, -w);
         assert!(s.1.abs() <= TOL, "start y {} want 0", s.1);
     }
-    // No move at a pass end is square to the chain: every cut move of a
-    // pass is along the offset (its x runs with the chain, its y only
-    // on the corner arcs). The leg's end stands on the offset.
+    // No move at a pass end is square to the chain: every cut move runs
+    // along the offset, and the last end stands on the leg's normal.
     let cuts: Vec<&Move> = t
         .moves
         .iter()
@@ -254,10 +253,21 @@ fn open_chain_passes_start_and_end_on_the_end_normals() {
         .collect();
     let last = cuts.last().expect("a cut");
     assert!(
-        (last.to.x - 35.0).abs() <= TOL && (last.to.y + 20.0).abs() <= TOL,
-        "the last end stands on the leg's offset: {:?}",
+        (last.to.y - (20.0 + 5.00)).abs() <= TOL,
+        "the last end stands on the top leg's offset: {:?}",
         last.to
     );
+    // The three passes are three distinct offsets, in cut order.
+    let offsets: Vec<f64> = t
+        .moves
+        .iter()
+        .filter(|m| m.kind == MoveKind::Plunge)
+        .map(|m| -m.to.x)
+        .collect();
+    assert_eq!(offsets.len(), 3, "three passes: {offsets:?}");
+    for (got, want) in offsets.iter().zip(want) {
+        assert!((got - want).abs() <= 1e-2, "pass at {got} mm, want {want}");
+    }
 }
 
 #[test]

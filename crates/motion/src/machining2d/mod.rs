@@ -56,7 +56,6 @@ mod contour_entry;
 mod contour_link;
 mod contour_params;
 mod contour_passes;
-mod contour_emit;
 mod contour_run_side;
 mod contour_run_stock;
 mod contour_start;

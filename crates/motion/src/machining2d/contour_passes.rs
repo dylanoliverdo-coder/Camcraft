@@ -8,7 +8,11 @@
 //! properties of plane offset curves", CAGD 7 (1990) 83-99; no vendor
 //! parameters, text or code.
 
-use super::contour_params::ContourParams;
+use crate::geo2d::{Loop, Point2, Region};
+
+use super::contour::PreparedBand;
+use super::contour_params::{ContourParams, Side};
+use super::face::GenError;
 
 /// The wall-pass controls of one 2D Contour: the roughing, finishing and
 /// spring passes and the levels they run on (spec S1). The default is
@@ -54,13 +58,13 @@ impl WallPasses {
         if !(self.rough_spacing.is_finite() && self.finish_spacing.is_finite()) {
             return Some("parameters must be finite".into());
         }
-        if self.rough_passes > 1 && !(self.rough_spacing > 0.0) {
+        if self.rough_passes > 1 && self.rough_spacing <= 0.0 {
             return Some(format!(
                 "roughing passes: {} passes need a positive spacing (set to {:.3} mm)",
                 self.rough_passes, self.rough_spacing
             ));
         }
-        if self.finish_passes > 0 && !(self.finish_spacing > 0.0) {
+        if self.finish_passes > 0 && self.finish_spacing <= 0.0 {
             return Some(format!(
                 "finishing passes: {} passes need a positive spacing (set to {:.3} mm)",
                 self.finish_passes, self.finish_spacing
@@ -175,6 +179,70 @@ pub(crate) fn level_runs_finishing(p: &ContourParams, levels: &[f64], z: f64) ->
         FinishLevel::Every => true,
         FinishLevel::Last => levels.last().is_some_and(|&last| z.to_bits() == last.to_bits()),
     }
+}
+
+/// The band one pass rides (Journeyman spec S1): `band` itself for
+/// the final offset, the base region re-offset for any other pass. A
+/// pass whose offset collapses the region names itself in `notes` and
+/// yields an empty band - except the final offset, which keeps the
+/// existing empty-contour refusal.
+pub(crate) fn prepare_pass(
+    band: &PreparedBand,
+    p: &ContourParams,
+    pass: WallPass,
+    notes: &mut Vec<String>,
+) -> Result<PreparedBand, GenError> {
+    if (pass.offset - band.offset).abs() <= 1e-12 {
+        return Ok(PreparedBand {
+            base: band.base.clone(),
+            offset: band.offset,
+            center: band.center.clone(),
+            prog: band.prog.clone(),
+            loops: band.loops.clone(),
+            plan: band.plan.clone(),
+            room: band.room.clone(),
+        });
+    }
+    let inside = p.side == Side::Inside;
+    let d = pass.offset;
+    let center = band.base.offset(if inside { -d } else { d })?;
+    if center.is_empty() {
+        if (d - final_offset(p)).abs() <= 1e-12 {
+            return Err(GenError::Empty("offset boundary collapsed".into()));
+        }
+        notes.push(format!(
+            "contour: a wall pass at {:.3} mm from the wall does not fit this chain - the material there is narrower than the pass; the pass is dropped",
+            d
+        ));
+        return Ok(PreparedBand {
+            base: band.base.clone(),
+            offset: d,
+            center: Region::empty(),
+            prog: None,
+            loops: Vec::new(),
+            plan: Vec::new(),
+            room: None,
+        });
+    }
+    let loops: Vec<Loop> = {
+        let mut v: Vec<Loop> = center.loops().to_vec();
+        v.sort_by(|a, b| b.area().abs().total_cmp(&a.area().abs()));
+        v
+    };
+    let plan = loops
+        .iter()
+        .map(|l| {
+            let mut v: Vec<Point2> = super::ring::walked(l.points(), p.climb == inside, inside);
+            if v.len() > 1 {
+                let (first, last) = (v[0], v[v.len() - 1]);
+                if first.x != last.x || first.y != last.y {
+                    v.push(first);
+                }
+            }
+            v
+        })
+        .collect();
+    Ok(PreparedBand { base: band.base.clone(), offset: d, center, prog: None, loops, plan, room: None })
 }
 
 /// The passes of level `z` of `levels`, after the level filter.
