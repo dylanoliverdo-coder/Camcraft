@@ -23,6 +23,9 @@
 //!                               each part's deviate under vs_parts[key]
 //!   --tol <mm>                  deviate tolerance (default 0.0254)
 //!   --out-stl <file>            field arm only: write the stock surface
+//!   --out-box x0,y0,z0,x1,y1,z1 with --out-stl: write only the stock inside this box (mm, marching
+//!                               tetrahedra streamed by layer at the field cell), closed by
+//!                               the box faces (a large stock whose whole grid is past the sample budget)
 //!   --shank <mm>                field arm only: cut with this tool length above the tip
 //!   --cutting-length project|T=mm,..|<mm>   column arm: check each cutting move for material
 //!                               above the flutes (the project's tool length, per-tool lengths,
@@ -44,7 +47,7 @@
 //! G-code reading is the RS-274 subset our post writes.
 
 use camcraft_sim::cl::{Move, MoveKind};
-use camcraft_sim::geometry::{Point3, Triangle};
+use camcraft_sim::geometry::{Aabb, Point3, Triangle};
 use camcraft_sim::geo2d::Point2;
 use camcraft_sim::stock_sim::{iso, part_surface, Backend, SdfTool, SimOp, Stock, FIELD_BAND};
 use serde_json::{json, Value};
@@ -1236,7 +1239,18 @@ fn main() {
     if let Some(p) = get("out-stl") {
         let t5 = Instant::now();
         match stocks[0].field().filter(|_| stocks.len() == 1) {
-            Some(f) => match iso::extract(f) {
+            Some(f) => match match get("out-box") {
+                Some(s) => {
+                    let v: Vec<f64> = s.split(',').map(num).collect();
+                    if v.len() != 6 {
+                        die(format!("--out-box wants 6 numbers xmin,ymin,zmin,xmax,ymax,zmax, not {s}"));
+                    }
+                    let clip = Aabb { min: Point3::new(v[0], v[1], v[2]), max: Point3::new(v[3], v[4], v[5]) };
+                    out["mesh_box_mm"] = json!(v);
+                    iso::extract_clipped_streamed(f, f.cell(), clip)
+                }
+                None => iso::extract(f),
+            } {
                 Ok(tris) => {
                     write_stl(&p, &tris);
                     out["mesh"] = json!({"facets": tris.len(), "open_edges": iso::open_edges(&tris), "seconds": t5.elapsed().as_secs_f64()});
