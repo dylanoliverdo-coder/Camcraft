@@ -676,6 +676,7 @@ struct PartCopy {
     past: Vec<u32>,            // first evaluation index past the line (u32::MAX: never)
     on: Vec<u32>,              // first evaluation index on the cut
     unmeasured: Vec<bool>,     // the inside or outside point is in another X tile or off the stock's columns
+    seen: Vec<bool>,           // the sample lies in some X tile (one outside the stock's X range is never read)
 }
 
 struct Progressive {
@@ -683,6 +684,7 @@ struct Progressive {
     z0: f64,
     copies: Vec<PartCopy>,
     order: Vec<i64>,           // operation ids, program order
+    bounds: [f64; 4],          // the whole stock's x0 x1 y0 y1: beyond them there is no material
 }
 
 const BEFORE: u32 = u32::MAX - 1;
@@ -705,30 +707,34 @@ impl Progressive {
             }).collect();
             let n = s.len();
             copies.push(PartCopy { key: c["key"].as_str().unwrap_or("?").to_string(), s, past: vec![NEVER; n], on: vec![NEVER; n],
-                               unmeasured: vec![false; n] });
+                               unmeasured: vec![false; n], seen: vec![false; n] });
         }
         let mut order = Vec::new();
         for id in op_ids.iter().flatten() { if !order.contains(id) { order.push(*id); } }
-        Progressive { line, z0, copies, order }
+        Progressive { line, z0, copies, order, bounds: [f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY] }
     }
 
     /// Read every sample whose point lies in this X tile against the tile's stock; `at` is the evaluation index.
     fn eval(&mut self, stock: &Stock, tx0: f64, tx1: f64, last_tile: bool, at: u32) {
-        let (line, z0) = (self.line, self.z0);
+        let (line, z0, [bx0, bx1, by0, by1]) = (self.line, self.z0, self.bounds);
         let in_tile = |x: f64| x >= tx0 && (x < tx1 || (last_tile && x <= tx1));
+        let beyond = |r: [f64; 3]| r[0] < bx0 || r[0] > bx1 || r[1] < by0 || r[1] > by1;
         for c in &mut self.copies {
             for k in 0..c.s.len() {
                 let s = c.s[k];
-                if !in_tile(s[0] as f64) || c.unmeasured[k] { continue; }
+                if !in_tile(s[0] as f64) { continue; }
+                c.seen[k] = true;
+                if c.unmeasured[k] { continue; }
                 let p = [s[0] as f64, s[1] as f64, s[2] as f64];
                 let nrm = [s[3] as f64, s[4] as f64, s[5] as f64];
                 let q = |sgn: f64| [p[0] + sgn * line * nrm[0], p[1] + sgn * line * nrm[1], p[2] + sgn * line * nrm[2]];
                 let (qi, qo) = (q(-1.0), q(1.0));
-                if !in_tile(qi[0]) || !in_tile(qo[0]) { c.unmeasured[k] = true; continue; }
-                // Gone: below the stock's bottom, or above the column's top (a column with no top is off the grid).
+                // a point in another X tile of the stock is not read here; one beyond the stock has no material
+                if (!in_tile(qi[0]) && !beyond(qi)) || (!in_tile(qo[0]) && !beyond(qo)) { c.unmeasured[k] = true; continue; }
+                // Gone: beyond the stock, below its bottom, or above the column's top (no top: off the grid, unmeasured).
                 let mut off = false;
                 let mut gone = |r: [f64; 3]| -> bool {
-                    if r[2] < z0 { return true; }
+                    if r[2] < z0 || beyond(r) { return true; }
                     let t = stock.top(r[0], r[1]);
                     if t.is_nan() { off = true; return true; }
                     !(r[2] < t)
@@ -755,7 +761,7 @@ impl Progressive {
             for k in 0..c.s.len() {
                 let a = c.s[k][6] as f64;
                 area += a;
-                if c.unmeasured[k] { unmeasured_a += a; continue; }
+                if c.unmeasured[k] || !c.seen[k] { unmeasured_a += a; continue; }
                 let e = faces.entry(face(k)).or_insert((NEVER, NEVER));
                 // A face any of whose surface was past the line before the first toolpath stays BEFORE.
                 match c.past[k] {
@@ -944,7 +950,7 @@ fn main() {
     }
     // tool number -> (cutting length, strike moves, worst excess mm, first (op, move), the moves seen across X tiles)
     let mut strikes: BTreeMap<i64, (f64, usize, f64, (usize, usize), std::collections::BTreeSet<(usize, usize)>)> = BTreeMap::new();
-    let mut prog = get("progressive").map(|p| Progressive::load(&p, z0, &op_ids));
+    let mut prog = get("progressive").map(|p| Progressive { bounds: [x0, x1, y0, y1], ..Progressive::load(&p, z0, &op_ids) });
     for tx in 0..ntx {
         let (i0, i1) = (tx * per, ((tx + 1) * per).min(nx));
         let (tx0, tx1) = (x0 + i0 as f64 * cell, x0 + i1 as f64 * cell);
@@ -1190,8 +1196,9 @@ mod progressive_tests {
         for x in [6.0, 7.0, 8.0, 12.0, 13.0, 14.0] { for y in 6..15 { s.push([x as f32, y as f32, 5.0, 0.0, 0.0, 1.0, 1.0, f32::from_bits(1)]); } }
         for z in [2.5f32, 3.5, 4.5] { for y in 6..15 { s.push([15.0, y as f32, z, 1.0, 0.0, 0.0, 1.0, f32::from_bits(2)]); } }
         let n = s.len();
-        let mut p = Progressive { line: 0.3, z0: 0.0, order: vec![10, 20, 30],
-            copies: vec![PartCopy { key: "a".into(), s, past: vec![NEVER; n], on: vec![NEVER; n], unmeasured: vec![false; n] }] };
+        let mut p = Progressive { line: 0.3, z0: 0.0, order: vec![10, 20, 30], bounds: [0.0, 20.0, 0.0, 20.0],
+            copies: vec![PartCopy { key: "a".into(), s, past: vec![NEVER; n], on: vec![NEVER; n], unmeasured: vec![false; n],
+                                    seen: vec![false; n] }] };
         let mut stock = Stock::block(Backend::Column, 0.0, 0.0, 20.0, 20.0, 10.0, 0.1).unwrap();
         p.eval(&stock, 0.0, 20.0, true, BEFORE);
         pass(&mut stock, &[-1.0, 1.0, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0, 17.0, 19.0, 21.0], 5.0);
@@ -1209,5 +1216,32 @@ mod progressive_tests {
         assert_eq!((f(0, "faces_newly_entered"), f(2, "faces_newly_entered")), (0.0, 1.0));
         assert_eq!(r["copies"]["a"]["unmeasured_mm2"].as_f64(), Some(0.0));
         assert_eq!(r["copies"]["a"]["before_first_toolpath_on_cut_mm2"].as_f64(), Some(0.0));
+    }
+
+    /// A sample beyond the stock in X lies in no tile: it is unmeasured, never read as untouched.
+    #[test]
+    fn a_sample_off_the_stock_is_unmeasured() {
+        let s = vec![[30.0f32, 5.0, 5.0, 0.0, 0.0, 1.0, 2.0, f32::from_bits(1)], [5.0, 5.0, 5.0, 0.0, 0.0, 1.0, 1.0, f32::from_bits(1)]];
+        let mut p = Progressive { line: 0.3, z0: 0.0, order: vec![10], bounds: [0.0, 20.0, 0.0, 20.0],
+            copies: vec![PartCopy { key: "a".into(), s, past: vec![NEVER; 2], on: vec![NEVER; 2], unmeasured: vec![false; 2],
+                                    seen: vec![false; 2] }] };
+        let stock = Stock::block(Backend::Column, 0.0, 0.0, 20.0, 20.0, 10.0, 0.1).unwrap();
+        p.eval(&stock, 0.0, 20.0, true, BEFORE);
+        p.eval(&stock, 0.0, 20.0, true, 0);
+        assert_eq!(p.report()["copies"]["a"]["unmeasured_mm2"].as_f64(), Some(2.0));
+    }
+
+    /// A part face lying on the stock's side: the point outside it is beyond the stock (no material), so the face is
+    /// on the cut before the first toolpath, not unmeasured.
+    #[test]
+    fn a_face_on_the_stock_side_is_on_the_cut_before_any_toolpath() {
+        let s = vec![[20.0f32, 5.0, 5.0, 1.0, 0.0, 0.0, 1.0, f32::from_bits(1)], [0.0, 5.0, 5.0, -1.0, 0.0, 0.0, 1.0, f32::from_bits(2)]];
+        let mut p = Progressive { line: 0.3, z0: 0.0, order: vec![10], bounds: [0.0, 20.0, 0.0, 20.0],
+            copies: vec![PartCopy { key: "a".into(), s, past: vec![NEVER; 2], on: vec![NEVER; 2], unmeasured: vec![false; 2],
+                                    seen: vec![false; 2] }] };
+        let stock = Stock::block(Backend::Column, 0.0, 0.0, 20.0, 20.0, 10.0, 0.1).unwrap();
+        p.eval(&stock, 0.0, 20.0, true, BEFORE);
+        let r = &p.report()["copies"]["a"];
+        assert_eq!((r["unmeasured_mm2"].as_f64(), r["before_first_toolpath_on_cut_mm2"].as_f64()), (Some(0.0), Some(2.0)));
     }
 }
