@@ -207,7 +207,7 @@ fn a_negative_pocket_floor_stock_still_checks_the_blind_floor() {
     }
     let (_, warnings) = run(&w2, &mut h2, SrcRef::Stock, fp);
     assert!(gouges(&warnings) > 0, "{warnings:?}");
-    let refusal = posting::post_setup(&w2, &nc).err().expect("the gouge blocks posting");
+    let refusal = posting::post_setup(&w2, &nc).expect_err("the gouge blocks posting");
     assert!(refusal.to_string().to_lowercase().contains("gouge"), "{refusal}");
     assert!(!nc.exists(), "the refused post writes no NC");
 }
