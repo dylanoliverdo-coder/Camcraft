@@ -530,6 +530,7 @@ mod height_row_tests {
             blend_turns: false,
             links: camcraft_app::links::Links::PLANAR,
             chain_overrides: Vec::new(),
+            passes: camcraft_app::machining2d::WallPasses::default(),
         }
     }
 

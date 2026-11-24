@@ -77,6 +77,7 @@ fn clearance_stock_contour() -> State {
         helix_radius: 1.0, blend_turns: false,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     });
     state.pending.push_back(CommandKind::SetStock {
         shape: StockShape::Box { dx: 40.0, dy: 40.0, dz: 10.0 },
