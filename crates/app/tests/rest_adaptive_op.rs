@@ -126,6 +126,7 @@ fn adaptive_with(
         troch: AdaptiveTrochParams::default(),
         corner_relief,
         pass_start: Default::default(),
+        finish: Default::default(),
         tilt,
     }
 }

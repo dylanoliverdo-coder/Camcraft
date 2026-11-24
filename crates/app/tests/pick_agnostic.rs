@@ -81,6 +81,7 @@ fn adaptive2d(top: f64, bottom: f64) -> OpParams {
         tilt: None,
         corner_relief: Default::default(),
         pass_start: Default::default(),
+        finish: Default::default(),
     }
 }
 

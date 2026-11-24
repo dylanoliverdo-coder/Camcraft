@@ -243,6 +243,70 @@ impl WallPassesDto {
     }
 }
 
+/// File mirror of `machining2d::AdaptiveFinish` (Journeyman spec S5; Held
+/// 1991, Stori & Wright 2000; no vendor parameters, text or code). Omitted
+/// from JSON when at defaults so older files load and save unchanged.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct AdaptiveFinishDto {
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub finish_passes: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub finish_spacing: f64,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub spring_passes: u32,
+    #[serde(default, skip_serializing_if = "FinishLevelDto::is_every")]
+    pub finish_level: FinishLevelDto,
+}
+
+impl Default for AdaptiveFinishDto {
+    fn default() -> Self {
+        Self {
+            finish_passes: 0,
+            finish_spacing: 0.0,
+            spring_passes: 0,
+            finish_level: FinishLevelDto::Every,
+        }
+    }
+}
+
+impl AdaptiveFinishDto {
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    fn is_default(&self) -> bool {
+        self.finish_passes == 0
+            && self.finish_spacing == 0.0
+            && self.spring_passes == 0
+            && self.finish_level == FinishLevelDto::Every
+    }
+}
+
+impl From<crate::machining2d::AdaptiveFinish> for AdaptiveFinishDto {
+    fn from(p: crate::machining2d::AdaptiveFinish) -> Self {
+        Self {
+            finish_passes: p.finish_passes,
+            finish_spacing: p.finish_spacing,
+            spring_passes: p.spring_passes,
+            finish_level: match p.finish_level {
+                crate::machining2d::FinishLevel::Every => FinishLevelDto::Every,
+                crate::machining2d::FinishLevel::Last => FinishLevelDto::Last,
+            },
+        }
+    }
+}
+
+impl From<AdaptiveFinishDto> for crate::machining2d::AdaptiveFinish {
+    fn from(d: AdaptiveFinishDto) -> Self {
+        Self {
+            finish_passes: d.finish_passes,
+            finish_spacing: d.finish_spacing,
+            spring_passes: d.spring_passes,
+            finish_level: match d.finish_level {
+                FinishLevelDto::Every => crate::machining2d::FinishLevel::Every,
+                FinishLevelDto::Last => crate::machining2d::FinishLevel::Last,
+            },
+        }
+    }
+}
+
 /// The file mirror of `operation::OpParams`, tool-free by the same rule as
 /// the domain type: the diameter lives in the tool, never a parameter.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -472,6 +536,10 @@ pub enum ParamsDto {
         /// order every earlier file cut - no version step.
         #[serde(default, skip_serializing_if = "PassStartDto::is_auto")]
         pass_start: PassStartDto,
+        /// Journeyman spec S5: wall finishing passes after clearing; absent is
+        /// clearing alone (every earlier file loads and saves unchanged).
+        #[serde(default, skip_serializing_if = "AdaptiveFinishDto::is_default")]
+        finish: AdaptiveFinishDto,
     },
     /// 2D Offset (M2.4 A): the same arm minus the engagement door -
     /// style-A rings are spaced by the stepover alone.

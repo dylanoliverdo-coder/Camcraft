@@ -90,6 +90,7 @@ fn adaptive(rest: Option<RestParams>) -> OpParams {
         troch: crate::machining2d::AdaptiveTrochParams::default(),
         corner_relief: Default::default(),
         pass_start: Default::default(),
+        finish: Default::default(),
     }
 }
 

@@ -188,6 +188,7 @@ fn adaptive_params(top: Height, bottom: Height, stepdown: f64) -> OpParams {
         troch: Default::default(),
         corner_relief: Default::default(),
         pass_start: Default::default(),
+        finish: Default::default(),
     }
 }
 

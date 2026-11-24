@@ -155,6 +155,7 @@ fn adaptive(eng: f64) -> OpParams {
         tilt: None,
         corner_relief: Default::default(),
         pass_start: Default::default(),
+        finish: Default::default(),
     }
 }
 

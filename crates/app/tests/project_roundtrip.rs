@@ -5709,3 +5709,102 @@ fn contour_wall_passes_round_trip_and_default_when_absent() {
         "an absent key is the default"
     );
 }
+
+/// Journeyman spec S5, check 5: 2D Adaptive finishing fields round-trip through
+/// the project file (and full save/load), defaults stay off the wire so older
+/// files load unchanged, invalid values refuse at command creation/edit, and
+/// `finish_level = last` refuses by name when flute length < wall height.
+#[test]
+fn adaptive_finish_passes_round_trip_refusals_and_undo() {
+    use camcraft_app::machining2d::{AdaptiveFinish, AdaptiveMethod, AdaptiveTrochParams, FinishLevel};
+
+    let make = |finish: AdaptiveFinish| OpParams::Adaptive2D {
+        stepover: 2.5,
+        stock_to_leave: 0.0,
+        clearance_z: Height::fixed(15.0),
+        retract_z: Some(Height::fixed(12.0)),
+        top_z: Height::fixed(10.0),
+        bottom_z: Height::fixed(0.0),
+        stepdown: 2.5,
+        feed: 800.0,
+        plunge_feed: 200.0,
+        climb: true,
+        entry: camcraft_app::machining3d::Entry3D::Helix,
+        helix_radius: 2.0,
+        links: camcraft_app::links::Links::PLANAR,
+        optimal_load: camcraft_app::load::DEFAULT_OPTIMAL_LOAD,
+        method: AdaptiveMethod::Spiral,
+        troch: AdaptiveTrochParams::default(),
+        blend_turns: false,
+        blend_radius: None,
+        rest: None,
+        corner_relief: Default::default(),
+        tilt: None,
+        pass_start: Default::default(),
+        finish,
+    };
+
+    // Non-default fields round-trip identically.
+    let set = make(AdaptiveFinish {
+        finish_passes: 2,
+        finish_spacing: 0.25,
+        spring_passes: 1,
+        finish_level: FinishLevel::Last,
+    });
+    let wire = project::params_to_json(&set);
+    assert_eq!(project::params_from_json(&wire).expect("reads back"), set, "S5 fields round-trip");
+
+    // Defaults stay off the wire, so pre-S5 files load with defaults and save unchanged.
+    let plain = make(AdaptiveFinish::default());
+    let plain_wire = project::params_to_json(&plain);
+    assert!(!plain_wire.to_string().contains("\"finish\""), "default stays off the wire: {plain_wire}");
+    assert_eq!(project::params_from_json(&plain_wire).expect("reads back"), plain, "absent key loads defaults");
+
+    // Refusals at command creation & edit, plus undo/redo and flute-length law at generate.
+    let world = new_world();
+    let mut history = History::default();
+    let dir = std::env::temp_dir().join(format!("cc_s5_rt_{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = history.execute(&world, SetStock::new(&world, StockShape::Box { dx: 60.0, dy: 40.0, dz: 10.0 }, Default::default()).expect("stock"));
+    let mut short_tool = catalog_tool("EM-0600-4FL");
+    short_tool.diameter = 10.0;
+    short_tool.flute_len = 5.0;
+    history.execute(&world, AddTool::new(&world, "T_SHORT", short_tool).expect("add tool"));
+
+    let bad = make(AdaptiveFinish { finish_passes: 2, finish_spacing: 0.0, ..Default::default() });
+    assert!(
+        CreateOperation::new(&world, "A_BAD", "T_SHORT", SrcRef::Stock, bad).is_err(),
+        "finish_passes > 0 with finish_spacing == 0 must refuse at CreateOperation"
+    );
+
+    history.execute(&world, CreateOperation::new(&world, "A1", "T_SHORT", SrcRef::Stock, plain.clone()).expect("create"));
+    let bad_edit = make(AdaptiveFinish { finish_passes: 1, finish_spacing: f64::NAN, ..Default::default() });
+    assert!(
+        camcraft_app::commands::EditOperationParams::new(&world, "A1", bad_edit).is_err(),
+        "non-finite finish_spacing must refuse at EditOperationParams"
+    );
+
+    // Edit to `finish_level = Last` (10 mm wall vs 5 mm flute), test undo/redo, then verify flute refusal at generate.
+    history.execute(&world, camcraft_app::commands::EditOperationParams::new(&world, "A1", set.clone()).expect("edit"));
+    assert_eq!(model::operation_of(&world, &model::find_by_name(&world, "A1").expect("A1")).expect("op").params, set);
+    assert!(history.undo(&world));
+    assert_eq!(model::operation_of(&world, &model::find_by_name(&world, "A1").expect("A1")).expect("op").params, plain);
+    assert!(history.redo(&world));
+    assert_eq!(model::operation_of(&world, &model::find_by_name(&world, "A1").expect("A1")).expect("op").params, set);
+
+    // Full project file save/load round-trip preserves S5 fields.
+    let proj = dir.join("s5.camcraft.json");
+    project::save(&world, &proj).expect("save project");
+    let loaded = new_world();
+    project::load(&loaded, &proj).expect("load project");
+    assert_eq!(
+        model::operation_of(&loaded, &model::find_by_name(&loaded, "A1").expect("A1")).expect("op").params,
+        set,
+        "full project save/load preserves S5 fields"
+    );
+
+    // `finish_level = Last` with 5 mm flute on 10 mm wall must refuse by name at GenerateOperation.
+    let err = GenerateOperation::new(&world, "A1").err().expect("short flute must refuse at generate");
+    assert!(err.to_string().contains("flute"), "refusal must name flute: {err}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

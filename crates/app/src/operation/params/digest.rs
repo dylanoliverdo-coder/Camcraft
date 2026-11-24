@@ -100,6 +100,23 @@ pub(super) fn write_wall_passes(p: &crate::machining2d::WallPasses, h: &mut std:
     });
 }
 
+/// Wall finishing passes of a 2D Adaptive operation (Journeyman spec S5;
+/// Held 1991, Stori & Wright 2000; no vendor parameters, text or code):
+/// written only off default so every earlier op keeps its cached digest.
+pub(super) fn write_adaptive_finish(p: &crate::machining2d::AdaptiveFinish, h: &mut std::hash::DefaultHasher) {
+    if p.is_default() {
+        return;
+    }
+    h.write(b"adaptive-finish");
+    h.write_u32(p.finish_passes);
+    w(h, p.finish_spacing);
+    h.write_u32(p.spring_passes);
+    h.write_u8(match p.finish_level {
+        crate::machining2d::FinishLevel::Every => 0,
+        crate::machining2d::FinishLevel::Last => 1,
+    });
+}
+
 /// A height: its reference (tag, plus slot for a work offset) and its
 /// offset bits; a non-Fixed reference also writes its resolved Z (or an
 /// unresolved marker) - `stamp_with` says why.

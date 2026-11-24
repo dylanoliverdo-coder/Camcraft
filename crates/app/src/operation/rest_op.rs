@@ -116,11 +116,16 @@ pub fn rest_of(p: &OpParams) -> Option<&RestParams> {
     }
 }
 
+/// Rest machining beside wall finishing passes (Journeyman spec S5; Held 1991,
+/// Stori & Wright 2000; no vendor parameters, text or code): the rest planner
+/// cuts remaining stock pockets rather than full wall rings.
+pub const REST_ADAPTIVE_FINISH: &str = "wall finishing passes are not available with rest machining on a 2D Adaptive - turn off one of the two";
+
 /// The refusal of a 2D Adaptive's rest group (#1446): the entered tool
 /// (it proves nothing), values the generator refuses, and each option
 /// the rest planner does not read - refused, never silently dropped.
 fn adaptive_rest_refusal(p: &OpParams) -> Option<String> {
-    let OpParams::Adaptive2D { rest: Some(r), method, blend_turns, corner_relief, .. } = p else {
+    let OpParams::Adaptive2D { rest: Some(r), method, blend_turns, corner_relief, finish, .. } = p else {
         return None;
     };
     if r.source != RestSource::PreviousOperations {
@@ -135,6 +140,8 @@ fn adaptive_rest_refusal(p: &OpParams) -> Option<String> {
         REST_ADAPTIVE_ARC_TURNS
     } else if !corner_relief.is_off() {
         REST_ADAPTIVE_CORNER_RELIEF
+    } else if finish.is_active() {
+        REST_ADAPTIVE_FINISH
     } else if p.tilt().is_some() {
         REST_ADAPTIVE_TILTED
     } else {

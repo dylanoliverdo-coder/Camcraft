@@ -921,8 +921,14 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             rest,
             corner_relief,
             pass_start,
+            finish,
             ..
         } => {
+            // Journeyman spec S5 (Held 1991, Stori & Wright 2000; no vendor
+            // parameters, text or code): validate finishing passes by name.
+            if let Some(why) = finish.refusal() {
+                return Err(GenError::Invalid(why));
+            }
             // #1446: the rest group's refusals stand at generation too (a
             // document written past the door): nothing is dropped, and
             // the rest pass is never planned from an entered tool.
@@ -968,6 +974,11 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
                 blend_radius: *blend_radius,
             };
             pp.validate()?;
+            // Journeyman spec S5: `finish_level = last` cuts the whole wall
+            // height with the side of the tool, so the flute must cover it.
+            if finish.is_active() && finish.finish_level == machining2d::FinishLevel::Last {
+                machining2d::adaptive_flute_covers_wall(pp.top_z, pp.bottom_z, tool.flute_len)?;
+            }
             let (relieved_region, zones) = super::corner_relief::check_op_relief(
                 &region,
                 &super::corner_relief::JobReliefCtx {
@@ -1025,21 +1036,18 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             let adaptive = |pp: &PocketParams| match (rest, method, avoid_spec.as_ref()) {
                 (Some(r), _, _) => machining2d::rest_adaptive_previous(&region, pp, r, ahead_cols.as_ref()),
                 (None, machining2d::AdaptiveMethod::Spiral, Some(spec)) => {
-                    machining2d::adaptive_spiral_avoid_on(&region, pp, spec, corner_relief, &side)
+                    machining2d::adaptive_avoid_with_finish(&region, pp, spec, corner_relief, &side, finish)
                 }
                 (None, machining2d::AdaptiveMethod::Spiral, None) => {
-                    machining2d::pocket_started_on(&region, pp, &[], corner_relief, &side)
+                    machining2d::adaptive_with_finish(&region, pp, corner_relief, &side, finish)
                 }
                 // #1733: the loops are arcs already; the option is
                 // refused by name, never ignored (`sane` says it first).
                 (None, machining2d::AdaptiveMethod::Trochoidal, _) if *blend_turns => Err(GenError::Invalid(
                     "arc turns at corners are not available with the Trochoidal method".into(),
                 )),
-                (None, machining2d::AdaptiveMethod::Trochoidal, Some(spec)) => {
-                    machining2d::adaptive_trochoidal_avoid(&region, pp, troch, spec)
-                }
-                (None, machining2d::AdaptiveMethod::Trochoidal, None) => {
-                    machining2d::adaptive_trochoidal_with(&region, pp, troch)
+                (None, machining2d::AdaptiveMethod::Trochoidal, spec) => {
+                    machining2d::adaptive_trochoidal_with_finish(&region, pp, troch, spec, finish)
                 }
             };
             let mut path = adaptive(&pp)?;

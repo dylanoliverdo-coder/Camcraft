@@ -112,6 +112,7 @@ pub(super) fn settle(entities: &mut [EntityDto], from: u32) -> Vec<String> {
             corner_relief,
             tilt,
             pass_start: PassStartDto::Auto,
+            finish: super::params::AdaptiveFinishDto::default(),
         };
         // Adaptive2D uses its own kind tag in the generation stamp digest.
         op.stamp = None;
