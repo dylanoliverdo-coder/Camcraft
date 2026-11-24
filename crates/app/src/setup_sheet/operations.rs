@@ -73,6 +73,10 @@ pub(super) fn render_operations(world: &World, target: Option<&String>, out: &mu
             cells[2],
             cells[3],
         ));
+        // Journeyman S2: present the allowance separately from the nominal BOT.
+        if let Some(stock) = op.params.floor_stock().filter(|stock| *stock != 0.0) {
+            out.push_str(&format!("      Floor stock {} mm\n", signed(stock)));
+        }
         for n in notes {
             out.push_str(&n);
             out.push('\n');

@@ -58,7 +58,7 @@ pub(super) fn height_fields(params: &OpParams) -> [(&'static str, &'static str, 
             ("CLR", "Clearance Z", Some(*clearance_z)),
             ("RET", "Retract Z", None),
             ("TOP", "Top Z", *top_z),
-            ("BOT", "Cut Z", Some(crate::operation::floor_height(params, *cut_z))),
+            ("BOT", "Cut Z", Some(*cut_z)),
         ],
         OpParams::Contour {
             clearance_z,
@@ -70,7 +70,7 @@ pub(super) fn height_fields(params: &OpParams) -> [(&'static str, &'static str, 
             ("CLR", "Clearance Z", Some(*clearance_z)),
             ("RET", "Retract Z", Some(*retract_z)),
             ("TOP", "Top of Part Z", Some(*top_z)),
-            ("BOT", "Bottom of Part Z", Some(crate::operation::floor_height(params, *bottom_z))),
+            ("BOT", "Bottom of Part Z", Some(*bottom_z)),
         ],
         OpParams::Pocket {
             clearance_z,
@@ -78,15 +78,10 @@ pub(super) fn height_fields(params: &OpParams) -> [(&'static str, &'static str, 
             top_z,
             bottom_z,
             ..
-        } => [
-            ("CLR", "Clearance Z", Some(*clearance_z)),
-            ("RET", "Retract Z", *retract_z),
-            ("TOP", "Top of Part Z", Some(*top_z)),
-            ("BOT", "Bottom of Part Z", Some(crate::operation::floor_height(params, *bottom_z))),
-        ],
+        }
         // The twins' four heights are the pocket's, column for
         // column (M2.4 A).
-        OpParams::Adaptive2D {
+        | OpParams::Adaptive2D {
             clearance_z,
             retract_z,
             top_z,

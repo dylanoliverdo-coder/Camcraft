@@ -397,15 +397,21 @@ fn region_z_setup_sheet_digest_and_undo_follow_floor_stock() {
     }
     assert_eq!(s0, camcraft_app::operation::current_stamp(&world, TOOL, &SrcRef::Stock, &f_neg0, "F", None));
 
-    // Undo / redo through EditOperationParams and setup-sheet BOT column reflects -4.500.
+    let assert_nominal_cut = |sheet: &str| {
+        let row = sheet.lines().find(|row| row.split_whitespace().nth(1) == Some("F")).expect("Face row");
+        assert_eq!(row.split_whitespace().last(), Some("-5.000"), "{row}");
+    };
+    // Undo and redo track the allowance while the setup-sheet Cut Z stays nominal.
     history.execute(&world, camcraft_app::commands::EditOperationParams::new(&world, "F", f_pos.clone()).expect("edit +0.5"));
     assert_ne!(s0, camcraft_app::operation::current_stamp(&world, TOOL, &SrcRef::Stock, &f_pos, "F", None));
     let sheet = camcraft_app::setup_sheet::render(&world, None).expect("setup sheet");
-    assert!(sheet.contains("-4.500"), "setup sheet should show shifted cut Z -4.500:\n{sheet}");
+    assert_nominal_cut(&sheet);
+    assert!(sheet.lines().any(|line| line.trim() == "Floor stock +0.500 mm"), "{sheet}");
     assert!(history.undo(&world));
     let sheet_undone = camcraft_app::setup_sheet::render(&world, None).expect("setup sheet undone");
-    assert!(sheet_undone.contains("-5.000"), "undo restores -5.000:\n{sheet_undone}");
+    assert_nominal_cut(&sheet_undone);
+    assert!(!sheet_undone.contains("Floor stock"), "{sheet_undone}");
     assert!(history.redo(&world));
     let sheet_redone = camcraft_app::setup_sheet::render(&world, None).expect("setup sheet redone");
-    assert!(sheet_redone.contains("-4.500"), "redo restores -4.500:\n{sheet_redone}");
+    assert_eq!(sheet_redone, sheet);
 }

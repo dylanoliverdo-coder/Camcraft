@@ -1,4 +1,4 @@
-//! Operation parameters. Floor allowance follows Journeyman spec S2.
+//! Split from `types.rs` by M5.0.1; structure only.
 
 use crate::drilling::{CycleChoice, Hole};
 use crate::finishing3d;

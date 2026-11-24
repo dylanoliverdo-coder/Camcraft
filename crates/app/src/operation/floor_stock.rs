@@ -6,7 +6,7 @@ use std::hash::Hasher;
 
 use flecs_ecs::prelude::World;
 
-use super::{fold_height, Height, OpFrame, OpParams, SrcRef};
+use super::{fold_height, OpFrame, OpParams, SrcRef};
 
 impl OpParams {
     /// Signed axial allowance on the floor, mm (`Face`, `Contour`, `Pocket`).
@@ -24,15 +24,6 @@ impl OpParams {
         self.floor_stock()
             .filter(|stock| !stock.is_finite())
             .map(|_| "Floor stock must be finite".into())
-    }
-}
-
-/// Shift a `Height` expression by `floor_stock` when nonzero (exact identity at zero).
-#[must_use]
-pub(crate) fn floor_height(params: &OpParams, h: Height) -> Height {
-    match params.floor_stock() {
-        Some(stock) if stock != 0.0 && stock.is_finite() => Height::of(h.reference, h.offset + stock),
-        _ => h,
     }
 }
 
