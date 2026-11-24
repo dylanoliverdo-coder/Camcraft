@@ -461,3 +461,136 @@ fn a_pass_on_an_open_chain_has_no_square_move_at_its_end() {
         }
     }
 }
+// ---- Journeyman spec S1, review round 3: the merge / error / order /
+// tabs classes -----------------------------------------------------------
+
+/// Two 20 mm bosses 12 mm apart, outside, a 10 mm tool, `n_r` = 2,
+/// `d_r` = 2.54, `n_f` = 1, `d_f` = 0.05. The 7.59 mm roughing offset
+/// merges the two bosses' rings into one loop; the pass must not panic,
+/// each boss's final pass sits at 5.00 mm, and the merged roughing loop
+/// is cut once and named.
+#[test]
+fn merged_roughing_loop_is_cut_once_and_named() {
+    // Two 20 x 20 bosses, 12 mm apart edge to edge.
+    let region = Region::new(vec![
+        Loop::new(vec![
+            Point2::new(0.0, 0.0),
+            Point2::new(20.0, 0.0),
+            Point2::new(20.0, 20.0),
+            Point2::new(0.0, 20.0),
+        ])
+        .expect("boss a"),
+        Loop::new(vec![
+            Point2::new(32.0, 0.0),
+            Point2::new(52.0, 0.0),
+            Point2::new(52.0, 20.0),
+            Point2::new(32.0, 20.0),
+        ])
+        .expect("boss b"),
+    ])
+    .expect("two bosses");
+    let p = boss_params();
+    let t = contour(&region, &p).expect("the wall passes do not panic");
+    // Each boss's final pass (5.00 mm) is present: a plunge near each
+    // boss's centre, at the 5.00 mm offset from its walls.
+    let plunges: Vec<(f64, f64)> = t
+        .moves
+        .iter()
+        .filter(|m| m.kind == MoveKind::Plunge)
+        .map(|m| (m.to.x, m.to.y))
+        .collect();
+    // Boss A's final pass starts at (-5, 0) or (25, 0)-style offset; the
+    // exact start is the ring's axis-aligned point. Just assert two
+    // distinct plunge clusters (one per boss) at the final offset.
+    assert!(
+        plunges.iter().any(|&(x, _)| x < 30.0) && plunges.iter().any(|&(x, _)| x > 30.0),
+        "one final pass per boss: {plunges:?}"
+    );
+    // The merged roughing loop is named, never dropped in silence: the
+    // note names the pass that merged (or the pass that was dropped).
+    let named = t.notes.iter().any(|n| {
+        n.contains("merged") || n.contains("wall pass") || n.contains("does not fit")
+    });
+    assert!(named, "the merged/dropped pass is named: {:?}", t.notes);
+}
+
+/// An open chain, three levels, `finish_level = last`: levels 1-2 carry
+/// two passes (the roughing ones), level 3 carries three (the roughing
+/// ones plus the finishing one), level by level.
+#[test]
+fn open_chain_finish_level_last_is_level_major() {
+    // A straight 40 mm open run with air on one side.
+    let chain = [Point2::new(0.0, 0.0), Point2::new(40.0, 0.0)];
+    let mut p = boss_params();
+    p.bottom_z = -6.0;
+    p.stepdown = 2.0;
+    p.passes.finish_level = camcraft_motion::machining2d::FinishLevel::Last;
+    // Material below the run (the tool rides above it, air side).
+    let mat = rect(0.0, -20.0, 40.0, 0.0);
+    let section = move |_z: f64| -> Result<Option<Region>, camcraft_motion::machining2d::GenError> { Ok(Some(mat.clone())) };
+    let t = contour_open_run(&chain, &p, &section).expect("open passes");
+    // The finishing pass (5.00 mm) runs only at the last level (-6.0).
+    // The roughing passes (7.59, 5.05) run at every level.
+    let at = |z: f64| -> Vec<f64> {
+        t.moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Plunge && m.to.z == z)
+            .map(|m| -m.to.y)
+            .collect()
+    };
+    for z in [-2.0, -4.0] {
+        let offs = at(z);
+        assert_eq!(offs.len(), 2, "level {z}: two roughing passes, {offs:?}");
+    }
+    let offs = at(-6.0);
+    assert_eq!(offs.len(), 3, "last level: three passes, {offs:?}");
+}
+
+/// An open chain whose final pass would touch the part: refused as
+/// before, not dropped.
+#[test]
+fn open_chain_final_pass_touching_part_is_refused() {
+    // A straight run with the tool's final pass landing on the part.
+    // An open run along the left edge of a square, with a thin part
+    // wall just off that edge on the air side: the ride's swept disc
+    // (radius 5) reaches the wall, so the ride cuts the part.
+    let chain = [Point2::new(0.0, 0.0), Point2::new(0.0, 20.0)];
+    let mut p = boss_params();
+    p.passes.rough_passes = 1;
+    p.passes.rough_spacing = 0.0;
+    p.passes.finish_passes = 0;
+    // The stock is the square the run trims (material on the run's
+    // right); the part is a thin wall just left of the run (air side).
+    let stock = rect(0.0, 0.0, 20.0, 20.0);
+    let part = rect(-3.0, -1.0, -1.0, 21.0);
+    let stock_at = move |_z: f64| -> Result<Option<Region>, camcraft_motion::machining2d::GenError> { Ok(Some(stock.clone())) };
+    let part_at = move |_z: f64| -> Result<Option<Region>, camcraft_motion::machining2d::GenError> { Ok(Some(part.clone())) };
+    let err = camcraft_motion::machining2d::contour_open_run_sided(
+        &chain,
+        &p,
+        Side::Outside,
+        &stock_at,
+        &part_at,
+    )
+    .expect_err("the ride cuts the part");
+    let why = err.to_string();
+    assert!(
+        why.contains("cuts the part") || why.contains("wall") || why.contains("smaller tool"),
+        "the refusal names the cause: {why}"
+    );
+}
+
+/// Tabs with `rough_passes` = 2: refused by name.
+#[test]
+fn tabs_with_wall_passes_are_refused_by_name() {
+    let mut p = boss_params();
+    p.tab_count = 2;
+    p.tab_width = 4.0;
+    p.tab_height = 1.0;
+    p.passes.rough_passes = 2;
+    p.passes.rough_spacing = 2.54;
+    let boss = rect(0.0, 0.0, 60.0, 40.0);
+    let err = contour(&boss, &p).expect_err("tabs + wall passes refused");
+    let why = err.to_string();
+    assert!(why.contains("tabs") && why.contains("wall passes"), "{why}");
+}

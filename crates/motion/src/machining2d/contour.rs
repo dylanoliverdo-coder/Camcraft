@@ -137,14 +137,35 @@ pub(super) fn emit_band(
     // default (one roughing pass at the final offset) is exactly one
     // run per item, byte for byte.
     let levels = lad.zs.clone();
+    // The pass loops each base loop maps to, and which pass loops are
+    // already cut (a merged pass loop is cut once, at the first base
+    // loop that maps to it - spec S1, review round 3).
+    let mut cut_pass_loops: std::collections::HashSet<(u64, usize, usize)> = std::collections::HashSet::new();
     for (si, &(z, li)) in sched.iter().enumerate() {
-      for pass in super::contour_passes::passes_at_level(p, &levels, z) {
+      for (pi, pass) in super::contour_passes::passes_at_level(p, &levels, z).into_iter().enumerate() {
         let pass_band = super::contour_passes::prepare_pass(band, p, pass, lead_notes)?;
         if pass_band.loops.is_empty() {
             continue;
         }
+        // Map this base loop to its pass loop; never index one band's
+        // loops with another band's index.
+        let Some(pli) = super::contour_passes::map_loops(&band.loops, &pass_band.loops, inside).get(li).copied().flatten() else {
+            continue;
+        };
+        let key = (z.to_bits(), pi, pli);
+        if !cut_pass_loops.insert(key) {
+            // A pass loop that carries several base loops is cut once;
+            // name the merge (spec S1, review round 3).
+            let map = super::contour_passes::map_loops(&band.loops, &pass_band.loops, inside);
+            if let Some(note) = super::contour_passes::merged_note(&map, pli, pass.offset)
+                && !lead_notes.contains(&note)
+            {
+                lead_notes.push(note);
+            }
+            continue;
+        }
         let band = &pass_band;
-        let l = &band.loops[li];
+        let l = &band.loops[pli];
         let tabbed = is_tabbed(z);
         // A tab-hop template traverses at `hop` between windows, and a
         // standing tab is material AT the window down to the level -
@@ -180,7 +201,7 @@ pub(super) fn emit_band(
         let ap = &p.links.approach;
         let picked = pick.filter(|&(pi, _)| pi == li).map(|(_, q)| q);
         let seated = contour_start::seat(pts.clone(), picked, tabbed, prog.is_some(), p, &legal, lead_notes);
-        let alone = !tabbed && picked.is_none() && band.room.is_none() && !(0..band.loops.len()).any(|lj| lj != li && rz.iter().any(|&q| lad.walks(lj, q)));
+        let alone = !tabbed && picked.is_none() && band.room.is_none() && !(0..band.loops.len()).any(|lj| lj != pli && rz.iter().any(|&q| lad.walks(lj, q)));
         let seated = super::tab_clear::level_start(seated, pts, fits.get(&li).filter(|_| alone && !tab_levels[li].is_empty()));
         let ring = Ring::new(seated);
         // The overlap past the start on closed rings (M11.3 C): not on

@@ -71,55 +71,17 @@ pub fn contour_open_run(pts: &[Point2], p: &ContourParams, section: &SectionAt) 
     // The tool stands on the side without material. The offset comes back
     // with the run (the material's side) on its left; climb travels with
     // the material on its RIGHT (#1555), so it turns round.
-    let mut path = wall_pass_runs(p, |d| {
-        let mut r = offset_run(&run, d, !material_left)?;
+    let mut path = super::contour_passes::open_pass_runs(p, |d| {
+        let Some(mut r) = offset_run_side(&run, d, !material_left)? else {
+            return Ok(None);
+        };
         r.reverse();
         clear_of_part(&r, p.tool_diameter * 0.5, &levels)?;
-        Ok(r)
+        Ok(Some(r))
     })?;
     path.notes.push(format!(
         "contour: the open run is cut on its air side - the tool centre {d:.3} mm off it (tool radius plus stock to leave); Side applies to closed rings only"
     ));
-    Ok(path)
-}
-
-/// The wall passes of an open run (Journeyman spec S1): the tool centre
-/// rides each pass's own offset of the run, farthest first and the final
-/// offset last. `offset` maps a pass's tool-centre distance to its ride;
-/// a pass whose offset does not exist is named and dropped.
-fn wall_pass_runs(
-    p: &ContourParams,
-    offset: impl Fn(f64) -> Result<Vec<Point2>, GenError>,
-) -> Result<Toolpath, GenError> {
-    let zs = p.levels()?;
-    let mut path = Toolpath::default();
-    let mut first = true;
-    for pass in super::contour_passes::passes_at_level(p, &zs, zs[0]) {
-        let d = pass.offset;
-        if !(d.is_finite() && d > TOL) {
-            return Err(GenError::Invalid(format!(
-                "the open run's offset (tool radius plus stock to leave) is {d:.3} mm - it must be positive"
-            )));
-        }
-        let ride = match offset(d) {
-            Ok(r) => r,
-            Err(_) => {
-                path.notes.push(format!(
-                    "contour: a wall pass at {:.3} mm from the open run does not fit - the pass is dropped",
-                    d
-                ));
-                continue;
-            }
-        };
-        let seg = contour_along_chain(&ride, p)?;
-        if first {
-            path = seg;
-            first = false;
-        } else {
-            path.moves.extend(seg.moves);
-            path.notes.extend(seg.notes);
-        }
-    }
     Ok(path)
 }
 
@@ -390,16 +352,6 @@ pub fn offset_run_side(run: &[Point2], d: f64, left: bool) -> Result<Option<Vec<
         return Ok(None);
     }
     Ok(Some(ride))
-}
-
-/// One side of the run's offset at `d`, refusing by name when it folds.
-pub(super) fn offset_run(run: &[Point2], d: f64, left: bool) -> Result<Vec<Point2>, GenError> {
-    offset_run_side(run, d, left)?.ok_or_else(|| {
-        GenError::Invalid(format!(
-            "the open run's offset of {d:.3} mm folds onto itself (the run comes back within twice the offset of \
-             itself) - pick a gentler run or a smaller tool"
-        ))
-    })
 }
 
 #[cfg(test)]

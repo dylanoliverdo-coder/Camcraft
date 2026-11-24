@@ -245,6 +245,155 @@ pub(crate) fn prepare_pass(
     Ok(PreparedBand { base: band.base.clone(), offset: d, center, prog: None, loops, plan, room: None })
 }
 
+/// Map each base band loop to the pass band loop that carries it
+/// (Journeyman spec S1, review round 3): a pass offset can merge or
+/// split loops, so a schedule index built on the base band may not
+/// index the pass band. For an Outside contour (the region grows) the
+/// base loop sits inside the pass loop that contains it; for an Inside
+/// contour (the region erodes) the pass loop sits inside the base loop.
+/// Returns, for each base loop index, the pass loop index that carries
+/// it, or `None` when no pass loop does (the pass drops that loop).
+pub(crate) fn map_loops(base: &[Loop], pass: &[Loop], inside: bool) -> Vec<Option<usize>> {
+    let inside_loop = |outer: &Loop, q: Point2| -> bool {
+        // Ray parity to +x with the half-open edge rule (the same law
+        // `Loop::contains_xy` uses), on one loop.
+        let p = outer.points();
+        let mut hit = false;
+        let n = p.len();
+        for i in 0..n {
+            let (a, b) = (p[i], p[(i + 1) % n]);
+            let (ylo, yhi) = if a.y <= b.y { (a.y, b.y) } else { (b.y, a.y) };
+            if q.y >= ylo && q.y < yhi {
+                let x_at = a.x + (q.y - a.y) * (b.x - a.x) / (b.y - a.y);
+                if q.x < x_at {
+                    hit = !hit;
+                }
+            }
+        }
+        hit
+    };
+    // A loop's representative interior point: its centroid nudged from
+    // the first vertex toward the centroid, so it is strictly inside
+    // the loop (the centroid itself may fall in a notch).
+    let inner = |l: &Loop| -> Point2 {
+        let p = l.points();
+        let (mut cx, mut cy) = (0.0, 0.0);
+        for q in p {
+            cx += q.x;
+            cy += q.y;
+        }
+        let n = p.len().max(1) as f64;
+        let c = Point2::new(cx / n, cy / n);
+        let v = p[0];
+        Point2::new(v.x + (c.x - v.x) * 0.5, v.y + (c.y - v.y) * 0.5)
+    };
+    base.iter()
+        .map(|b| {
+            // A base outer loop (CCW) is carried by the pass loop that
+            // contains it when the region grows (Outside), or that it
+            // contains when the region erodes (Inside); a base hole loop
+            // (CW) is the other way round.
+            let b_outer = b.is_ccw();
+            let a = inner(b);
+            pass.iter()
+                .position(|p| {
+                    let grows = b_outer != inside;
+                    if grows {
+                        inside_loop(p, a)
+                    } else {
+                        inside_loop(b, inner(p))
+                    }
+                })
+        })
+        .collect()
+}
+
+/// The note naming a merged pass loop (spec S1, review round 3): the
+/// pass loop `pli` carries `carriers` base loops; `None` when it does
+/// not merge.
+pub(crate) fn merged_note(map: &[Option<usize>], pli: usize, offset: f64) -> Option<String> {
+    let carriers = map.iter().filter(|&&m| m == Some(pli)).count();
+    (carriers > 1).then(|| {
+        format!(
+            "contour: a wall pass at {:.3} mm from the wall merges {} rings into one loop - the merged loop is cut once",
+            offset, carriers
+        )
+    })
+}
+
+/// The wall passes of an open run, level by level (Journeyman spec
+/// S1, review round 3): the passes of each level in cut order, then the
+/// next level, finishing at the last level when `finish_level` is Last.
+/// `offset` maps a pass's tool-centre distance to its ride: `Ok(None)`
+/// when the offset curve does not exist (the pass is named and
+/// dropped), `Err` for every other refusal (propagated). A level whose
+/// every pass is dropped is an error, never an empty `Ok`.
+pub(crate) fn open_pass_runs(
+    p: &ContourParams,
+    mut offset: impl FnMut(f64) -> Result<Option<Vec<Point2>>, GenError>,
+) -> Result<crate::cl::Toolpath, GenError> {
+    let zs = p.levels()?;
+    let mut path = crate::cl::Toolpath::default();
+    let mut first = true;
+    let mut level_cut = false;
+    for &z in &zs {
+        let mut level_any = false;
+        for pass in passes_at_level(p, &zs, z) {
+            let d = pass.offset;
+            if !(d.is_finite() && d > 1e-3) {
+                return Err(GenError::Invalid(format!(
+                    "the open run's offset (tool radius plus stock to leave) is {d:.3} mm - it must be positive"
+                )));
+            }
+            let ride = match offset(d)? {
+                Some(r) => r,
+                None => {
+                    // The final pass (w) failing refuses the run exactly
+                    // as before; any other pass is named and dropped.
+                    if (d - final_offset(p)).abs() <= 1e-9 {
+                        return Err(GenError::Invalid(format!(
+                            "the open run's offset (tool radius plus stock to leave) is {d:.3} mm - it must be positive"
+                        )));
+                    }
+                    path.notes.push(format!(
+                        "contour: a wall pass at {:.3} mm from the open run does not fit - the pass is dropped",
+                        d
+                    ));
+                    continue;
+                }
+            };
+            let seg = super::contour_along_chain_zs(&ride, p, std::slice::from_ref(&z))?;
+            if first {
+                path = seg;
+                first = false;
+            } else {
+                // The segment opens with a rapid from the seed (0, 0,
+                // clearance); re-anchor it on the actual current
+                // position so the concatenated path stays linked.
+                let mut moves = seg.moves;
+                if let Some(first_move) = moves.first_mut() {
+                    let cur = path.moves.last().map(|m| m.to).unwrap_or(first_move.from);
+                    first_move.from = cur;
+                }
+                path.moves.extend(moves);
+                path.notes.extend(seg.notes);
+            }
+            level_any = true;
+        }
+        if !level_any {
+            // Every pass of this level was dropped: nothing is cut here.
+            return Err(GenError::Empty(format!(
+                "the open run has no wall pass that fits at Z {z:.3} - every pass was dropped"
+            )));
+        }
+        level_cut = true;
+    }
+    if !level_cut {
+        return Err(GenError::Empty("the open run has no cut level".into()));
+    }
+    Ok(path)
+}
+
 /// The passes of level `z` of `levels`, after the level filter.
 pub(crate) fn passes_at_level(p: &ContourParams, levels: &[f64], z: f64) -> Vec<WallPass> {
     if level_runs_finishing(p, levels, z) {

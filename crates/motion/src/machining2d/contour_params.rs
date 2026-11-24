@@ -202,6 +202,18 @@ impl ContourParams {
         if self.tab_count > 0 && (self.tab_width <= 0.0 || self.tab_height < 0.0) {
             return Err(GenError::Invalid("tabs need positive width".into()));
         }
+        // Journeyman spec S1 (review round 3): tabs and wall passes are
+        // not specified together yet - a standing tab is material the
+        // pass room law cannot see. Refuse by name, never drop.
+        if self.tab_count > 0
+            && (self.passes.rough_passes > 1
+                || self.passes.finish_passes > 0
+                || self.passes.spring_passes > 0)
+        {
+            return Err(GenError::Invalid(
+                "tabs and wall passes are not specified together yet - clear the tabs or set the wall passes to the single pass".into(),
+            ));
+        }
         self.links.validate().map_err(|e| GenError::Invalid(e.into()))?;
         let helix = self.entry == Entry3D::Helix || self.links.transition == Some(Entry3D::Helix);
         if helix && self.helix_radius <= 0.0 {
