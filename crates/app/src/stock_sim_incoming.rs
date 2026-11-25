@@ -14,18 +14,41 @@ pub(super) fn report(
     after: &Dexel,
     dev: &mut Deviation,
 ) -> Option<String> {
-    if dev.gouge_cells == 0 {
+    if dev.gouge_cells == 0 && !planned.is_empty() {
         return None;
     }
     // The setup and lattice the walk started from (`carry::walk`): a program
     // of touch probes only plans nothing, yet its uncut stock is judged on
     // the span-sized lattice an infinite radius gives (#592), and so here.
     let setup = planned.first().and_then(|p| p.setup.as_deref());
-    if !unplanned_ops_leave_the_judged_stock(world, setup)? {
+    let judged = crate::setup::effective(world, setup);
+    let probes = unplanned_probe_setups(world)?;
+    if planned.is_empty() {
+        // Touch probes only, so nothing is cut: every deficit of the stock
+        // they machine against is inherited. An empty plan is judged on the
+        // first setup's stock; probes of one other setup are judged here on
+        // their own setup's stock, and only that stock's acknowledgement
+        // counts. Probes across setups keep the full gate.
+        let [own] = probes.iter().collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        if *own != judged {
+            return own_setup_note(world, own.as_deref(), dev);
+        }
+        if dev.gouge_cells == 0 {
+            return None;
+        }
+    } else if probes.iter().any(|s| *s != judged) {
         return None;
     }
-    let source = crate::stock_source::incoming_stock_source(world, setup)?;
     let radius = planned.iter().map(|op| op.radius).fold(f64::INFINITY, f64::min);
+    note(world, setup, radius, after, dev)
+}
+
+/// The located note for the acknowledged deficits of `setup`'s stock that
+/// `after` leaves unchanged, taking them out of `dev`.
+fn note(world: &World, setup: Option<&str>, radius: f64, after: &Dexel, dev: &mut Deviation) -> Option<String> {
+    let source = crate::stock_source::incoming_stock_source(world, setup)?;
     let before = stock_grid(world, setup, radius).ok()?;
     let inherited = separate_unchanged(&before, after, dev)?;
     let units = crate::units::of(world);
@@ -46,26 +69,42 @@ pub(super) fn report(
     ))
 }
 
-/// Whether the program's ops the column plan left out keep the receipt
-/// true: the "unchanged" claim reads only the planned cuts. A torch or a
-/// wire removes material the column never sees (#670, #108's skip), so a
-/// program with one keeps the full gate. A touch probe removes nothing,
-/// but it must machine against the stock the verdict judged: an empty
-/// plan judges the first setup's stock, and another setup's probe (or
-/// its acknowledgement) says nothing about that stock.
-fn unplanned_ops_leave_the_judged_stock(world: &World, setup: Option<&str>) -> Option<bool> {
+/// A probe-only program in a setup the empty plan was not judged on: its
+/// own uncut stock, judged on the same span-sized lattice and against the
+/// same part as the ordinary verdict, takes the verdict's place - only when
+/// that stock is acknowledged (`note` refuses otherwise), so the ordinary
+/// verdict is untouched outside this opt-in.
+fn own_setup_note(world: &World, setup: Option<&str>, dev: &mut Deviation) -> Option<String> {
+    crate::stock_source::incoming_stock_source(world, setup)?;
+    let uncut = stock_grid(world, setup, f64::INFINITY).ok()?;
+    let facets = super::part_facets(world).ok()?;
+    let tol = crate::model_fidelity::program_tol(world).ok()?;
+    let mut own = super::deviate(&uncut, &facets, tol).ok()?;
+    let line = note(world, setup, f64::INFINITY, &uncut, &mut own)?;
+    *dev = own;
+    Some(line)
+}
+
+/// The effective setups of the program's touch probes, which the column
+/// plan leaves out (#108); `None` keeps the full gate. The receipt's
+/// "unchanged" reads only the planned cuts, and a torch or a wire removes
+/// material the column never sees (#670), so a program with one gets no
+/// note.
+fn unplanned_probe_setups(world: &World) -> Option<std::collections::BTreeSet<Option<String>>> {
     use crate::tools::ToolKind;
-    let judged = crate::setup::effective(world, setup);
+    let mut setups = std::collections::BTreeSet::new();
     for (_, e) in crate::posting::program_ops(world).ok()? {
         let op = crate::model::operation_of(world, &e)?;
         let kind = crate::model::find_by_name(world, &op.tool).and_then(|t| crate::model::tool_of(world, &t))?.kind;
         match kind {
-            ToolKind::Torch | ToolKind::Wire => return Some(false),
-            ToolKind::Probe if crate::setup::effective(world, op.setup.as_deref()) != judged => return Some(false),
+            ToolKind::Torch | ToolKind::Wire => return None,
+            ToolKind::Probe => {
+                setups.insert(crate::setup::effective(world, op.setup.as_deref()));
+            }
             _ => {}
         }
     }
-    Some(true)
+    Some(setups)
 }
 
 #[derive(Default)]

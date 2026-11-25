@@ -228,18 +228,33 @@ fn add_probe(world: &World, h: &mut History) {
 }
 
 #[test]
-fn another_setups_acknowledgement_never_relieves_a_probe_program() {
-    // The probe machines against the second setup's stock; an empty plan is
-    // judged on the first setup's. Neither acknowledgement may stand in for
-    // the other.
-    for acknowledge in [[true, false], [false, true]] {
-        let world = two_setup_probe_job(acknowledge);
-        let report = posting::verification_report(&world);
-        assert!(
-            !report.not_judged.clone().unwrap_or_default().contains("incoming stock"),
-            "{acknowledge:?}: one setup's acknowledgement relieved a probe in another: {report:?}"
-        );
-    }
+fn an_idle_setups_acknowledgement_never_relieves_a_probe_program() {
+    // The probe machines against the second setup's stock; the first
+    // setup's acknowledgement says nothing about it.
+    let world = two_setup_probe_job([true, false]);
+    let report = posting::verification_report(&world);
+    assert!(
+        !report.not_judged.clone().unwrap_or_default().contains("incoming stock"),
+        "the idle setup's acknowledgement relieved a probe in another: {report:?}"
+    );
+    assert!(report.problems.iter().any(|p| p.starts_with("gouge")), "the deficits no longer block: {report:?}");
+    post(&world, "probe-idle-ack").expect_err("a probe program posted on another setup's acknowledgement");
+}
+
+#[test]
+fn a_probe_program_uses_its_own_setups_acknowledgement() {
+    // An empty plan is judged on the first setup's stock; a probe-only
+    // program in the second is judged, under its acknowledgement, on the
+    // second setup's own uncut stock - every deficit there is inherited.
+    let world = two_setup_probe_job([false, true]);
+    let report = posting::verification_report(&world);
+    assert!(report.problems.is_empty(), "the executing setup's acknowledgement did not relieve its probe: {:?}", report.problems);
+    let note = report.not_judged.expect("the acknowledged deficits are said, never silent");
+    assert!(note.starts_with("note: incoming stock 'casting' already has "), "{note}");
+    assert!(note.contains("worst 5.00 mm at ("), "{note}");
+    let (_, y, z) = located(&note);
+    assert!((STEP_Y..=20.0).contains(&y) && (z - STEP_TOP).abs() < 1e-6, "the worst cell is not on the step: {note}");
+    post(&world, "probe-own-ack").expect("a probe program refused under its own setup's acknowledgement");
 }
 
 #[test]
