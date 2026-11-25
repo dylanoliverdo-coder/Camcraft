@@ -10,35 +10,23 @@ use crate::geometry::Point3;
 
 pub(super) fn report(
     world: &World,
+    start: Option<&str>,
     planned: &[Planned],
     after: &Dexel,
     dev: &mut Deviation,
 ) -> Option<String> {
-    if dev.gouge_cells == 0 && !planned.is_empty() {
+    if dev.gouge_cells == 0 {
         return None;
     }
-    // The setup and lattice the walk started from (`carry::walk`): a program
-    // of touch probes only plans nothing, yet its uncut stock is judged on
-    // the span-sized lattice an infinite radius gives (#592), and so here.
-    let setup = planned.first().and_then(|p| p.setup.as_deref());
+    // The setup and lattice the walk started from (`carry::walk`, which
+    // passes `start`): the first cutting op's setup or, for a program of
+    // touch probes only, which plans nothing, the setup the probes run in,
+    // its uncut stock judged on the span-sized lattice an infinite radius
+    // gives (#592). Only that stock's acknowledgement counts: a probe in
+    // any other setup keeps the full gate.
+    let setup = planned.first().map_or(start, |p| p.setup.as_deref());
     let judged = crate::setup::effective(world, setup);
-    let probes = unplanned_probe_setups(world)?;
-    if planned.is_empty() {
-        // Touch probes only, so nothing is cut: every deficit of the stock
-        // they machine against is inherited. An empty plan is judged on the
-        // first setup's stock; probes of one other setup are judged here on
-        // their own setup's stock, and only that stock's acknowledgement
-        // counts. Probes across setups keep the full gate.
-        let [own] = probes.iter().collect::<Vec<_>>()[..] else {
-            return None;
-        };
-        if *own != judged {
-            return own_setup_note(world, own.as_deref(), dev);
-        }
-        if dev.gouge_cells == 0 {
-            return None;
-        }
-    } else if probes.iter().any(|s| *s != judged) {
+    if unplanned_probe_setups(world)?.iter().any(|s| *s != judged) {
         return None;
     }
     let radius = planned.iter().map(|op| op.radius).fold(f64::INFINITY, f64::min);
@@ -67,22 +55,6 @@ fn note(world: &World, setup: Option<&str>, radius: f64, after: &Dexel, dev: &mu
         inherited.cells,
         units.suffix()
     ))
-}
-
-/// A probe-only program in a setup the empty plan was not judged on: its
-/// own uncut stock, judged on the same span-sized lattice and against the
-/// same part as the ordinary verdict, takes the verdict's place - only when
-/// that stock is acknowledged (`note` refuses otherwise), so the ordinary
-/// verdict is untouched outside this opt-in.
-fn own_setup_note(world: &World, setup: Option<&str>, dev: &mut Deviation) -> Option<String> {
-    crate::stock_source::incoming_stock_source(world, setup)?;
-    let uncut = stock_grid(world, setup, f64::INFINITY).ok()?;
-    let facets = super::part_facets(world).ok()?;
-    let tol = crate::model_fidelity::program_tol(world).ok()?;
-    let mut own = super::deviate(&uncut, &facets, tol).ok()?;
-    let line = note(world, setup, f64::INFINITY, &uncut, &mut own)?;
-    *dev = own;
-    Some(line)
 }
 
 /// The effective setups of the program's touch probes, which the column

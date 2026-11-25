@@ -243,9 +243,9 @@ fn an_idle_setups_acknowledgement_never_relieves_a_probe_program() {
 
 #[test]
 fn a_probe_program_uses_its_own_setups_acknowledgement() {
-    // An empty plan is judged on the first setup's stock; a probe-only
-    // program in the second is judged, under its acknowledgement, on the
-    // second setup's own uncut stock - every deficit there is inherited.
+    // A probe-only program is judged on the uncut stock of the setup it runs
+    // in, never on the first setup's; under that stock's acknowledgement every
+    // deficit there is inherited.
     let world = two_setup_probe_job([false, true]);
     let report = posting::verification_report(&world);
     assert!(report.problems.is_empty(), "the executing setup's acknowledgement did not relieve its probe: {:?}", report.problems);
@@ -255,6 +255,80 @@ fn a_probe_program_uses_its_own_setups_acknowledgement() {
     let (_, y, z) = located(&note);
     assert!((STEP_Y..=20.0).contains(&y) && (z - STEP_TOP).abs() < 1e-6, "the worst cell is not on the step: {note}");
     post(&world, "probe-own-ack").expect("a probe program refused under its own setup's acknowledgement");
+}
+
+/// Two setups made fresh, setup one holding `one` (`None`: no stock at all)
+/// and setup two `two`; a stock from the casting is marked raw stock only,
+/// acknowledged per `acknowledge`. The program's only op is a touch probe in
+/// setup two, so setup one is idle.
+fn probe_in_setup_two(one: Option<StockShape>, two: StockShape, acknowledge: [bool; 2]) -> World {
+    use camcraft_app::commands::{ActivateSetup, CreateSetup};
+    let world = new_world();
+    let mut h = History::default();
+    h.execute(&world, ImportModel::from_mesh("casting", stepped_casting()));
+    h.execute(&world, ImportModel::from_mesh("part", part()));
+    let tool = catalog().into_iter().find(|(n, _)| *n == "PRB-0400").map(|(_, t)| t).expect("catalog");
+    h.execute(&world, AddTool::new(&world, "PRB-0400", tool).expect("tool"));
+    for (name, stock, ack) in [("Setup1", one, acknowledge[0]), ("Setup2", Some(two), acknowledge[1])] {
+        h.execute(&world, CreateSetup::new(&world, Some(name), None).expect("setup"));
+        h.execute(&world, ActivateSetup::new(&world, Some(name)).expect("activate"));
+        let Some(shape) = stock else { continue };
+        let cast = matches!(shape, StockShape::FromModel { .. });
+        h.execute(&world, SetStock::new(&world, shape, Location::default()).expect("stock"));
+        if cast {
+            h.execute(&world, SetStockSourceOnly::with_inherited_deficits(&world, true, ack).expect("mark"));
+        }
+    }
+    add_probe(&world, &mut h);
+    world
+}
+
+fn casting() -> StockShape {
+    StockShape::FromModel { source: "casting".into() }
+}
+
+/// A box over the whole part: no deficit anywhere.
+fn clean_box() -> StockShape {
+    StockShape::Box { dx: 60.0, dy: 60.0, dz: 25.0 }
+}
+
+#[test]
+fn a_probe_program_on_clean_stock_posts_beside_an_idle_deficient_setup() {
+    // The probe runs on setup two's clean box; setup one's deficient casting
+    // is never machined, so it neither blocks nor earns a note.
+    let world = probe_in_setup_two(Some(casting()), clean_box(), [false, false]);
+    let report = posting::verification_report(&world);
+    assert!(report.problems.is_empty(), "an idle setup's stock blocked a probe on clean stock: {:?}", report.problems);
+    assert!(
+        !report.not_judged.clone().unwrap_or_default().contains("incoming stock"),
+        "a clean stock earned a deficit note: {report:?}"
+    );
+    post(&world, "probe-clean-own").expect("a probe program on clean stock was refused");
+}
+
+#[test]
+fn an_idle_setup_with_no_stock_leaves_the_probe_judged_on_its_own() {
+    // Setup one has no stock at all; the probe's setup two holds the
+    // acknowledged casting, so the post carries the located note.
+    let world = probe_in_setup_two(None, casting(), [false, true]);
+    let report = posting::verification_report(&world);
+    assert!(report.problems.is_empty(), "the acknowledged casting still blocks: {:?}", report.problems);
+    let note = report.not_judged.expect("the acknowledged deficits are said, never silent");
+    assert!(note.starts_with("note: incoming stock 'casting' already has "), "{note}");
+    assert!(note.contains("worst 5.00 mm at ("), "{note}");
+    let (_, y, z) = located(&note);
+    assert!((STEP_Y..=20.0).contains(&y) && (z - STEP_TOP).abs() < 1e-6, "the worst cell is not on the step: {note}");
+    let posted = post(&world, "probe-idle-none").expect("an acknowledged probe program was refused");
+    assert_eq!(posted.not_judged.as_deref(), Some(note.as_str()), "the post reports the same note");
+}
+
+#[test]
+fn an_idle_clean_setup_never_hides_the_probes_own_deficits() {
+    // Without the acknowledgement, setup two's deficient casting blocks as a
+    // gouge however clean the idle setup one's box is.
+    let world = probe_in_setup_two(Some(clean_box()), casting(), [false, false]);
+    let why = post(&world, "probe-idle-box").expect_err("a probe on deficient stock posted beside a clean idle setup");
+    assert!(why.contains("gouge"), "refused, but not as a gouge: {why}");
 }
 
 #[test]
