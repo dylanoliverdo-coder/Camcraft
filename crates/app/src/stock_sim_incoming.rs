@@ -17,7 +17,10 @@ pub(super) fn report(
     if dev.gouge_cells == 0 {
         return None;
     }
-    let setup = planned.first()?.setup.as_deref();
+    // The setup and lattice the walk started from (`carry::walk`): a program
+    // of touch probes only plans nothing, yet its uncut stock is judged on
+    // the span-sized lattice an infinite radius gives (#592), and so here.
+    let setup = planned.first().and_then(|p| p.setup.as_deref());
     let source = crate::stock_source::incoming_stock_source(world, setup)?;
     let radius = planned.iter().map(|op| op.radius).fold(f64::INFINITY, f64::min);
     let before = stock_grid(world, setup, radius).ok()?;

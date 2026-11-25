@@ -4,7 +4,8 @@
 //! the post reports cells the program leaves at their incoming heights as a
 //! located note instead of gouges. A program that cuts into such a cell, or
 //! below the part anywhere else, still blocks. Opening the project clears the
-//! acknowledgement.
+//! acknowledgement. A program of touch probes only, which plans nothing in the
+//! stock sim, is judged and noted the same way.
 //!
 //! Provenance: our own fixtures (`stock_source_verdict.rs`'s casting and blind
 //! hole part, with a 5 mm step lowered into the casting); no vendor material.
@@ -97,21 +98,27 @@ fn op(world: &World, h: &mut History, name: &str, params: OpParams) {
     h.execute(world, GenerateOperation::new(world, name).expect("generate op"));
 }
 
-/// The stepped casting as the stock's source, the part, and a legal bore of
-/// the blind hole: nothing in the program reaches the step. `acknowledge`
-/// marks the casting raw stock only with or without the acknowledgement;
-/// the ops are generated after the mark, as a user would.
-fn job(acknowledge: bool, extra: Option<OpParams>) -> World {
+/// The stepped casting as the stock's source and the part, with `tool` in the
+/// library. `acknowledge` marks the casting raw stock only with or without the
+/// acknowledgement; ops are generated after the mark, as a user would.
+fn setup(acknowledge: bool, tool_name: &str) -> (World, History) {
     let world = new_world();
     let mut h = History::default();
     h.execute(&world, ImportModel::from_mesh("casting", stepped_casting()));
     h.execute(&world, ImportModel::from_mesh("part", part()));
     let shape = StockShape::FromModel { source: "casting".into() };
     h.execute(&world, SetStock::new(&world, shape, Location::default()).expect("stock"));
-    let tool = catalog().into_iter().find(|(n, _)| *n == TOOL).map(|(_, t)| t).expect("catalog");
-    h.execute(&world, AddTool::new(&world, TOOL, tool).expect("tool"));
+    let tool = catalog().into_iter().find(|(n, _)| *n == tool_name).map(|(_, t)| t).expect("catalog");
+    h.execute(&world, AddTool::new(&world, tool_name, tool).expect("tool"));
     let mark = SetStockSourceOnly::with_inherited_deficits(&world, true, acknowledge).expect("mark");
     h.execute(&world, mark);
+    (world, h)
+}
+
+/// The setup and a legal bore of the blind hole: nothing in the program
+/// reaches the step.
+fn job(acknowledge: bool, extra: Option<OpParams>) -> World {
+    let (world, mut h) = setup(acknowledge, TOOL);
     op(&world, &mut h, "Op1", bore(Point2::new(0.0, 0.0), 8.0, FLOOR));
     if let Some(params) = extra {
         op(&world, &mut h, "Op2", params);
@@ -168,6 +175,57 @@ fn acknowledged_a_cut_into_the_step_still_blocks() {
     let (x, y, z) = located(&why);
     let off_centre = x.hypot(y - 16.0);
     assert!(off_centre <= 4.5 + 0.5 && (z - 12.0).abs() < 1e-6, "the gouge is not the bore's cut: {why}");
+}
+
+/// The setup and one top-face probe touch on the part away from the step and
+/// the hole: a program of touch probes only, which removes nothing.
+fn probe_job(acknowledge: bool) -> World {
+    use camcraft_app::operation::HeightReference;
+    use camcraft_app::probing::{ProbeDir, ProbeMode};
+    let (world, mut h) = setup(acknowledge, "PRB-0400");
+    let p = OpParams::Probe {
+        clearance_z: Height::of(HeightReference::TopOfModel, 25.0),
+        mode: ProbeMode::Face,
+        dir: ProbeDir::ZNeg,
+        dir_y: ProbeDir::YPos,
+        target: [0.0, -15.0, MOUTH],
+        radius: 10.0,
+        approach: 5.0,
+        overtravel: 1.0,
+        backoff: 1.0,
+        fast_feed: 300.0,
+        slow_feed: 30.0,
+        depth: 3.0,
+        inset: 5.0,
+        set_wcs: Some(0),
+        tolerance: 0.5,
+    };
+    let src = SrcRef::Entity("part".into());
+    h.execute(&world, CreateOperation::new(&world, "Probe1", "PRB-0400", src, p).expect("probe op"));
+    h.execute(&world, GenerateOperation::new(&world, "Probe1").expect("generate probe"));
+    world
+}
+
+#[test]
+fn a_probe_only_program_on_the_step_blocks_without_the_acknowledgement() {
+    let world = probe_job(false);
+    let why = post(&world, "probe-plain").expect_err("stock under the part posted without the acknowledgement");
+    assert!(why.contains("gouge"), "refused, but not as a gouge: {why}");
+}
+
+#[test]
+fn acknowledged_a_probe_only_program_posts_with_the_located_note() {
+    // A probe plans nothing in the stock sim (#108), so the program's setup
+    // and lattice come from the walk's start, not from a planned op.
+    let world = probe_job(true);
+    let report = posting::verification_report(&world);
+    assert!(report.problems.is_empty(), "the untouched step still blocks a probe-only program: {:?}", report.problems);
+    let note = report.not_judged.expect("the acknowledged deficits are said, never silent");
+    assert!(note.starts_with("note: incoming stock 'casting' already has "), "{note}");
+    assert!(note.contains("worst 5.00 mm at ("), "{note}");
+    let (_, y, z) = located(&note);
+    assert!((STEP_Y..=20.0).contains(&y) && (z - STEP_TOP).abs() < 1e-6, "the worst cell is not on the step: {note}");
+    post(&world, "probe-acknowledged").expect("an acknowledged probe-only program was refused");
 }
 
 #[test]
