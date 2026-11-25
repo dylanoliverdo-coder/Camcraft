@@ -335,6 +335,25 @@ fn step_setups(world: &flecs_ecs::prelude::World, planned: &[Planned]) -> Result
     Ok(planned.iter().map(|p| crate::setup::effective(world, p.setup.as_deref())).collect())
 }
 
+/// A program that cuts nothing (probes or torches only, no wire job) and runs
+/// in more than one setup. The walk is the only judge of the stock under
+/// such a program - its ops' generator verdicts judge their paths, not the
+/// stock - so when the walk cannot cross those setups, the post refuses
+/// instead of going ahead on a not-judged line (`posting_sim`).
+#[must_use]
+pub(crate) fn cuts_nothing_across_setups(world: &flecs_ecs::prelude::World) -> bool {
+    if !crate::stock_sim::plan_program(world).is_ok_and(|planned| planned.is_empty()) {
+        return false;
+    }
+    let Ok(ops) = crate::posting::program_ops(world) else { return false };
+    if ops.iter().any(|(_, e)| crate::model::operation_of(world, e).is_some_and(|op| super::wire::skips(&op))) {
+        return false;
+    }
+    let setups: std::collections::BTreeSet<_> =
+        ops.iter().map(|(_, e)| crate::program_entry::effective_setup(world, e)).collect();
+    setups.len() > 1
+}
+
 /// The verdict before leaving `frame`, credited only by operations already
 /// cut in that setup. A later setup's declarations cannot excuse this cut.
 fn judge(

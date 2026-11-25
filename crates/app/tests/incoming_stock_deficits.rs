@@ -203,6 +203,10 @@ fn two_setup_probe_job(acknowledge: [bool; 2]) -> World {
 
 /// One top-face probe touch, in the active setup.
 fn add_probe(world: &World, h: &mut History) {
+    add_probe_named(world, h, "Probe1");
+}
+
+fn add_probe_named(world: &World, h: &mut History, name: &str) {
     use camcraft_app::operation::HeightReference;
     use camcraft_app::probing::{ProbeDir, ProbeMode};
     let p = OpParams::Probe {
@@ -223,8 +227,8 @@ fn add_probe(world: &World, h: &mut History) {
         tolerance: 0.5,
     };
     let src = SrcRef::Entity("part".into());
-    h.execute(world, CreateOperation::new(world, "Probe1", "PRB-0400", src, p).expect("probe op"));
-    h.execute(world, GenerateOperation::new(world, "Probe1").expect("generate probe"));
+    h.execute(world, CreateOperation::new(world, name, "PRB-0400", src, p).expect("probe op"));
+    h.execute(world, GenerateOperation::new(world, name).expect("generate probe"));
 }
 
 #[test]
@@ -357,17 +361,26 @@ fn acknowledged_a_probe_only_program_posts_with_the_located_note() {
 /// torch profile of the part: the torch cuts through along a kerf the column
 /// sim has no atom for, so it plans nothing there.
 fn torch_job() -> World {
+    torch_job_in(false, true)
+}
+
+/// `torch_job`, with `two_setups` a second setup holding its own copy of the
+/// casting and a torch profile in each, and `acknowledge` the acknowledgement.
+fn torch_job_in(two_setups: bool, acknowledge: bool) -> World {
+    use camcraft_app::commands::{ActivateSetup, CreateSetup};
     use camcraft_app::operation::{PlasmaComp, PlasmaOp};
     const TORCH: &str = "PT-KERF-150";
     let world = new_world();
     let mut h = History::default();
     h.execute(&world, camcraft_app::commands::LoadMachine::builtin(&world, "Tormach 1300PL").expect("plasma table"));
+    let plasma = camcraft_app::schema::PostRef::Named("Tormach PathPilot Plasma".into());
+    h.execute(&world, camcraft_app::commands::SelectPost::new(&world, plasma).expect("plasma post"));
     h.execute(&world, ImportModel::from_mesh("casting", stepped_casting()));
     h.execute(&world, ImportModel::from_mesh("part", part()));
     let shape = StockShape::FromModel { source: "casting".into() };
     h.execute(&world, SetStock::new(&world, shape, Location::default()).expect("stock"));
     h.execute(&world, AddTool::new(&world, TORCH, camcraft_app::tools::torch_tool(1.5)).expect("torch"));
-    h.execute(&world, SetStockSourceOnly::with_inherited_deficits(&world, true, true).expect("mark"));
+    h.execute(&world, SetStockSourceOnly::with_inherited_deficits(&world, true, acknowledge).expect("mark"));
     let p = OpParams::PlasmaProfile(PlasmaOp {
         clearance_z: Height::fixed(40.0),
         top_z: Height::fixed(MOUTH),
@@ -385,9 +398,25 @@ fn torch_job() -> World {
         cut_height: None,
         pierce_delay: None,
     });
-    let src = SrcRef::Entity("part".into());
-    h.execute(&world, CreateOperation::new(&world, "Plasma1", TORCH, src, p).expect("torch op"));
-    h.execute(&world, GenerateOperation::new(&world, "Plasma1").expect("generate torch"));
+    let setups: &[&str] = if two_setups { &["Setup1", "Setup2"] } else { &[""] };
+    if two_setups {
+        h.execute(&world, CreateSetup::new(&world, Some("Setup1"), None).expect("setup 1"));
+        h.execute(&world, CreateSetup::new(&world, Some("Setup2"), Some("Setup1")).expect("setup 2"));
+        // The plasma post cannot stop for a re-clamp: run straight on.
+        let between = camcraft_app::schema::BetweenSetups::Continue;
+        let options = camcraft_app::schema::PostOptions { between_setups: between, ..posting::post_options(&world) };
+        h.execute(&world, camcraft_app::commands::SetPostOptions::new(&world, options).expect("between setups"));
+    }
+    for (k, setup) in setups.iter().enumerate() {
+        if two_setups {
+            h.execute(&world, ActivateSetup::new(&world, Some(*setup)).expect("activate"));
+            h.execute(&world, SetStockSourceOnly::with_inherited_deficits(&world, true, acknowledge).expect("mark"));
+        }
+        let name = format!("Plasma{}", k + 1);
+        let src = SrcRef::Entity("part".into());
+        h.execute(&world, CreateOperation::new(&world, &name, TORCH, src, p.clone()).expect("torch op"));
+        h.execute(&world, GenerateOperation::new(&world, &name).expect("generate torch"));
+    }
     world
 }
 
@@ -402,6 +431,41 @@ fn acknowledged_a_torch_program_keeps_the_full_gate() {
         "a torch program was told its deficits are unchanged: {report:?}"
     );
     assert!(report.problems.iter().any(|p| p.starts_with("gouge")), "the inherited deficits no longer block: {report:?}");
+}
+
+/// Post to a fresh path; the refusal, and that no NC file was written.
+fn refused_with_no_file(world: &World, tag: &str) -> String {
+    let out = std::env::temp_dir().join(format!("camcraft-incoming-{tag}-{}.nc", std::process::id()));
+    let _ = std::fs::remove_file(&out);
+    let why = posting::post_setup(world, &out).expect_err("the program posted");
+    assert!(!out.exists(), "a refused post wrote {}", out.display());
+    why
+}
+
+#[test]
+fn a_probe_program_across_setups_the_sim_cannot_cross_refuses() {
+    // Probes in both setups, each on its own unacknowledged copy of the
+    // deficient casting. The walk cannot clip to the second setup's model
+    // stock, and nothing else judges the stock under probes.
+    use camcraft_app::commands::ActivateSetup;
+    let world = two_setup_probe_job([false, false]);
+    let mut h = History::default();
+    h.execute(&world, ActivateSetup::new(&world, Some("Setup1")).expect("activate"));
+    add_probe_named(&world, &mut h, "Probe2");
+    let why = refused_with_no_file(&world, "probe-both-setups");
+    assert!(why.contains(posting::NOT_JUDGED) && why.contains("cuts nothing across setups"), "refused, but not for the stock: {why}");
+}
+
+#[test]
+fn a_torch_program_across_setups_the_sim_cannot_cross_refuses() {
+    for acknowledge in [false, true] {
+        let world = torch_job_in(true, acknowledge);
+        let why = refused_with_no_file(&world, &format!("torch-both-setups-{acknowledge}"));
+        assert!(
+            why.contains(posting::NOT_JUDGED) && why.contains("cuts nothing across setups"),
+            "refused, but not for the stock (acknowledged {acknowledge}): {why}"
+        );
+    }
 }
 
 #[test]
