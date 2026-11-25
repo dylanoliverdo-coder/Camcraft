@@ -190,6 +190,7 @@ fn opening_the_project_clears_the_acknowledgement() {
     let loaded = new_world();
     camcraft_app::project::load(&loaded, &path).expect("load");
     let _ = std::fs::remove_file(&path);
+    assert_eq!(camcraft_app::stock_source::raw_stock_only_of(&loaded, None), Some(true));
     let report = posting::verification_report(&loaded);
     assert!(
         report.problems.iter().any(|p| p.starts_with("gouge")),
