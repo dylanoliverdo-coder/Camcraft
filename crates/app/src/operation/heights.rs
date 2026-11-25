@@ -128,7 +128,7 @@ pub fn region_z(
     match params {
         OpParams::Face { top_z, cut_z, .. } => top_z
             .map(resolve)
-            .unwrap_or_else(|| resolve(*cut_z)),
+            .unwrap_or_else(|| resolve(*cut_z).and_then(|z| super::floor_stock::shift_bottom(params, z))),
         OpParams::Contour { top_z, .. }
         | OpParams::Pocket { top_z, .. }
         // The roughing twins name the pocket's high station (M2.4 A),
@@ -396,6 +396,13 @@ pub fn resolve_params_with(
         // The drill bottom is an override of the whole pattern, not a
         // requirement: each hole's own floor is the default depth, so an
         // unresolved (None) bottom is the normal shape, not a failure.
+        OpParams::Drill { clearance_z, retract_z, top_z, chamfer_width, .. } if *chamfer_width > 0.0 => (
+            req("Clearance Z", *clearance_z)?,
+            Some(req("Top of Part Z", *top_z)?),
+            None,
+            None,
+            opt("Retract Z", *retract_z)?,
+        ),
         OpParams::Drill { clearance_z, retract_z, top_z, bottom_z, .. }
         // The boring ride and the thread mill carry the drill's four
         // heights verbatim (M2.4 C) - the floors ride the holes, the
@@ -454,6 +461,7 @@ pub fn resolve_params_with(
             opt("Retract Z", p.retract_z)?,
         ),
     };
+    let bottom = super::floor_stock::offset(params, bottom, top.or(face_top))?;
     Ok(ResolvedHeights { clearance, top, bottom, face_top, retract })
 }
 

@@ -105,6 +105,7 @@ fn contour_params(d: f64, lead: Lead, side: Side) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 
@@ -209,6 +210,7 @@ fn verdicts() -> Vec<(&'static str, Vec<Warning>)> {
         kind,
         diameter: d,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: tip,
         pitch,
         nose_radius: 0.0,
@@ -234,7 +236,7 @@ fn verdicts() -> Vec<(&'static str, Vec<Warning>)> {
     };
     let hole = |x: f64, y: f64, r: f64, floor: f64, through: bool| Hole { xy: Point2::new(x, y), radius: r, entry_z: 0.0, floor_z: floor, through, stepped: false };
     let cycle = |holes: &[Hole], tool: &Tool, clear: f64| {
-        drill(&CycleParams { clearance_z: clear, r_z: 0.0, hop_z: None, bottom_z: None, cycle: CycleChoice::Auto, peck: 0.0, dwell: 0.0, feed: 200.0, plunge_feed: 60.0, tool, holes, through_clear: camcraft_app::drilling::THROUGH_CLEAR, break_through_from: camcraft_app::drilling::BreakThroughFrom::Tip })
+        drill(&CycleParams { chamfer_width: 0.0, clearance_z: clear, r_z: 0.0, hop_z: None, bottom_z: None, cycle: CycleChoice::Auto, peck: 0.0, dwell: 0.0, feed: 200.0, plunge_feed: 60.0, tool, holes, through_clear: camcraft_app::drilling::THROUGH_CLEAR, break_through_from: camcraft_app::drilling::BreakThroughFrom::Tip })
             .expect("drill")
     };
     let dr6 = tool(ToolKind::Drill, 6.0, 118.0, 0.0);

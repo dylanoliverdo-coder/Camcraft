@@ -114,6 +114,7 @@ fn face_op(world: &World, h: &mut History) {
     let tool = catalog().into_iter().find(|(n, _)| *n == "EM-0400-2FL").map(|(_, t)| t).expect("tool");
     h.execute(world, AddTool::new(world, "EM-0400-2FL", tool).expect("tool"));
     let params = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false, blend_radius: None,

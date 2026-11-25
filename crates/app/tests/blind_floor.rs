@@ -76,6 +76,7 @@ fn block_with_hole(floor: Option<f64>) -> Mesh {
 
 fn contour_op(stepdown: f64, leave: f64) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: leave,
         clearance_z: Height::fixed(30.0),
         retract_z: Height::fixed(25.0),
@@ -97,6 +98,7 @@ fn contour_op(stepdown: f64, leave: f64) -> OpParams {
         tilt: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 
@@ -186,6 +188,7 @@ fn direct_params(stepdown: f64, leave: f64) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 
@@ -331,6 +334,7 @@ fn a_blind_hole_shallower_than_one_stepdown_is_cut_at_its_floor() {
 
 fn drill_op(bottom: Option<f64>) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(30.0),
@@ -393,7 +397,7 @@ fn the_gouge_clause_speaks_the_document_s_units() {
 
 #[test]
 fn a_face_cut_into_the_part_is_a_gouge() {
-    let face = |cut: f64| OpParams::Face { holes: Default::default(),
+    let face = |cut: f64| OpParams::Face { floor_stock: 0.0, holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 4.0,

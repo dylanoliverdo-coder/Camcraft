@@ -119,6 +119,7 @@ fn top_face(world: &World, z: f64) -> Vec<GeoSel> {
 
 fn params(side: Side, top: Height, bottom: Height) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(30.0),
@@ -140,6 +141,7 @@ fn params(side: Side, top: Height, bottom: Height) -> OpParams {
         blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 
@@ -266,6 +268,7 @@ fn the_full_depth_outside_ring_is_a_gouge_to_the_verifier() {
         helix_radius: 1.0,
         blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     let t = contour(&hole, &p).expect("the flat contour builds the ring");
     let tool = mill(6.0);

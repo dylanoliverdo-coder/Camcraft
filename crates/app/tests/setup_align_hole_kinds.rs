@@ -140,6 +140,7 @@ fn document(case: Case, tool: &str) -> (World, History) {
 
 fn contour_params() -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(30.0),
         retract_z: Height::fixed(24.0),
@@ -161,6 +162,7 @@ fn contour_params() -> OpParams {
         tilt: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

@@ -167,6 +167,7 @@ fn assert_blocked(world: &World, tag: &str) {
 
 fn drill_op(at: Point2, floor: f64, bottom: Option<f64>) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(30.0),
@@ -212,7 +213,7 @@ fn a_drill_through_an_undercut_lip_is_a_gouge_and_never_posts() {
 
 #[test]
 fn facing_under_an_overhanging_slab_is_a_gouge_and_never_posts() {
-    let face = OpParams::Face { holes: Default::default(),
+    let face = OpParams::Face { floor_stock: 0.0, holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 4.0,
@@ -265,6 +266,7 @@ fn the_solid_law_on_the_users_part_is_silent_and_cheap() {
         helix_radius: 1.0,
         blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     let t = contour_on_part(&region, &m.facets, &p).expect("contour");
     let g = ToolGeom { radius: 5.0, nose_radius: 0.0, flute_len: 22.0, shank_radius: 5.0, shank_len: 40.0, holder_radius: 22.0, holder_len: 35.0 };

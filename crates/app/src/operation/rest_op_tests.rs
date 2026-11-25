@@ -15,6 +15,7 @@ use super::rest_op::REST_ADAPTIVE_CORNER_RELIEF;
 
 fn pocket(rest: Option<RestParams>) -> OpParams {
     OpParams::Pocket {
+        floor_stock: 0.0,
         rest,
         blend_radius: None,
         links: crate::links::Links::PLANAR,

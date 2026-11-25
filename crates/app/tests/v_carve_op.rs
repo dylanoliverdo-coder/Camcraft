@@ -287,3 +287,19 @@ fn over_mcp_a_letter_is_carved_verified_and_undone() {
     call(&mut s, &mut id, "undo", json!({}));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn adding_a_tip_flat_cannot_strand_a_mounted_v_carve() {
+    use camcraft_app::commands::{ChangeTool, ImportMode, ImportTools};
+    use camcraft_app::tool_library::LibraryTool;
+    let (world, mut history) = job();
+    let op = CreateOperation::new(&world, "V carve", VBIT, SrcRef::Entity("part".into()), carve(TOP, 1.0, false));
+    history.execute(&world, op.expect("sharp V bit"));
+    let entity = model::find_by_name(&world, VBIT).expect("mounted V bit");
+    let mut t = model::tool_of(&world, &entity).expect("tool definition");
+    t.tip_diameter = 0.25;
+    let edit = ChangeTool::new(&world, VBIT, t.clone()).err().expect("flat tip edit refused");
+    assert!(edit.to_string().contains("V carve") && edit.to_string().contains("tip diameter"), "{edit}");
+    let import = ImportTools::with_mode(&world, vec![LibraryTool::bare(VBIT, t)], ImportMode::Update).err().expect("flat tip import refused");
+    assert!(import.to_string().contains("V carve") && import.to_string().contains("tip diameter"), "{import}");
+}

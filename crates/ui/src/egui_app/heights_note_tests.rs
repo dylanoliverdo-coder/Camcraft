@@ -67,6 +67,7 @@ fn tilted_corner_note_uses_the_same_local_frame_as_its_top_row() {
 fn clearance_stock_contour() -> State {
     use camcraft_app::machining2d::{Lead, Side};
     let mut state = opened(OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None, stock_to_leave: 0.0,
         clearance_z: Height::fixed(8.0), retract_z: Height::fixed(8.0),
         top_z: Height::fixed(5.0), bottom_z: Height::fixed(0.0),
@@ -77,6 +78,7 @@ fn clearance_stock_contour() -> State {
         helix_radius: 1.0, blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     });
     state.pending.push_back(CommandKind::SetStock {
         shape: StockShape::Box { dx: 40.0, dy: 40.0, dz: 10.0 },
@@ -120,6 +122,7 @@ fn clearance_stock_advice_follows_draft_height_and_prior_face_before_generate() 
     let builds = crate::height_memo::advice_builds();
     let state = harness.state_mut();
     let face = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(), blend_turns: false, blend_radius: None, tilt: None,
         stepover: 4.0, clearance_z: Height::fixed(20.0), cut_z: Height::fixed(5.0),
         top_z: None, stepdown: None, feed: 1200.0, plunge_feed: 300.0, climb: true,

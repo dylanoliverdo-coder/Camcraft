@@ -91,6 +91,7 @@ pub(super) fn rapids_in_stock(
     cx: &VerifyContext,
     rest: &Rest,
     cutter: &Cutter,
+    drill_tip: Option<f64>,
     warns: &mut Vec<Warning>,
 ) {
     if cx.mode == Mode::Radial {
@@ -104,6 +105,11 @@ pub(super) fn rapids_in_stock(
             if m.kind != MoveKind::Rapid {
                 continue;
             }
+            let tip = drill_tip.unwrap_or(0.0);
+            let surface = |q| match drill_tip {
+                Some(tip) => rest.surface_before_drill(q, i, cutter, tip),
+                None => rest.surface_before(q, i),
+            };
             let (a, b) = (xy(&m.from), xy(&m.to));
             let (dx, dy) = (b.x - a.x, b.y - a.y);
             // #904: the footprint gives a coarse model's excess back.
@@ -117,7 +123,7 @@ pub(super) fn rapids_in_stock(
                 // own earlier plunge, so it is acquitted by the cuts.
                 let down = m.to.z < m.from.z - cx.z_tol;
                 let under = |(q, rho): (Point2, f64)| {
-                    rest.in_stock(q) && m.to.z + cutter.lift_at(rho) < rest.surface_before(q, i) - cx.z_tol
+                    rest.in_stock(q) && m.to.z + cutter.lift_at_with_flat(rho, tip) < surface(q) - cx.z_tol
                 };
                 if down && footprint(a, d).any(under) {
                     warns.push(Warning::RapidInStock { at: i });
@@ -145,7 +151,7 @@ pub(super) fn rapids_in_stock(
                 && stations(a, b, d).is_none_or(|mut it| {
                     it.any(|c| {
                         footprint(c, d)
-                            .any(|(q, rho)| rest.in_stock(q) && low + cutter.lift_at(rho) < rest.surface_before(q, i))
+                            .any(|(q, rho)| rest.in_stock(q) && low + cutter.lift_at_with_flat(rho, tip) < surface(q))
                     })
                 });
             let bad = marched || rest.hidden_along(a, b, low, d, i);

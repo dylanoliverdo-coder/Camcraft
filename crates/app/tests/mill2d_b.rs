@@ -295,6 +295,7 @@ fn taper(diameter: f64, tip_angle: f64, flute_len: f64) -> Tool {
         kind: ToolKind::Taper,
         diameter,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle,
         pitch: 0.0,
         nose_radius: 0.0,

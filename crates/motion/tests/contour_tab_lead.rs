@@ -54,6 +54,7 @@ fn params(tab_count: u32, climb: bool) -> ContourParams {
         blend_turns: false,
         blend_radius: None,
         links: Links::PLANAR,
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     }
 }
 

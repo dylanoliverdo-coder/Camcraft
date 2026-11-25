@@ -60,6 +60,7 @@ fn drilled(coarse_mm: Option<f64>, bottom: f64) -> Vec<Warning> {
     drill.flute_len = 30.0; // long series: the hole runs 10 mm from the Z 20 top
     h.execute(&world, AddTool::new(&world, "DR-0400", drill).expect("tool"));
     let params = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(30.0),

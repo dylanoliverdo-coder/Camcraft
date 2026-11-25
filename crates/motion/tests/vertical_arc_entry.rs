@@ -61,6 +61,7 @@ fn params(lead: Lead) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: false, blend_radius: None,
         links: camcraft_motion::links::Links::PLANAR,
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     }
 }
 

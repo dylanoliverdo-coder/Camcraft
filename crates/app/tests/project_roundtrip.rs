@@ -375,7 +375,7 @@ fn tools_and_generated_operations_round_trip() {
             "Face1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(19.5),
@@ -472,7 +472,7 @@ fn arc_move_round_trips() {
             "Skin1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Contour { tilt: None,
+            OpParams::Contour { floor_stock: 0.0, tilt: None,
                 stock_to_leave: 0.0,
                 clearance_z: Height::fixed(20.0),
                 retract_z: Height::fixed(15.0),
@@ -493,6 +493,7 @@ fn arc_move_round_trips() {
                 blend_turns: false, blend_radius: None,
                 links: camcraft_app::links::Links::PLANAR,
                 chain_overrides: Vec::new(),
+                passes: camcraft_app::machining2d::WallPasses::default(),
             },
         )
         .expect("create"),
@@ -551,7 +552,7 @@ fn a_stated_pose_round_trips_verbatim() {
             "Face1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 5.0,
                 clearance_z: Height::fixed(15.0),
                 cut_z: Height::fixed(9.0),
@@ -967,7 +968,7 @@ fn v5_roundtrips_retract_and_auto() {
             "Pocket1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Pocket { pass_start: Default::default(), rest: None, blend_radius: None, tilt: None,
+            OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None, blend_radius: None, tilt: None,
                 links: camcraft_app::links::Links::PLANAR,
                 stepover: 1.0,
                 stock_to_leave: 0.0,
@@ -1075,7 +1076,7 @@ fn patch_selection_round_trips() {
                 entity: "boss".into(),
                 feature: FeatureSel::Patch(pid),
             }]),
-            OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(4.5),
@@ -1150,7 +1151,7 @@ fn a_selection_round_trips_and_stays_ok() {
         })
         .map(|c| c.id)
         .expect("a horizontal rim edge");
-    let params = OpParams::Contour { tilt: None,
+    let params = OpParams::Contour { floor_stock: 0.0, tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),
         retract_z: Height::fixed(8.0),
@@ -1171,6 +1172,7 @@ fn a_selection_round_trips_and_stays_ok() {
         blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     history.execute(
         &world,
@@ -2663,6 +2665,7 @@ fn level_link_choice_round_trips_and_the_default_writes_no_key() {
             ImportModel::from_mesh("part", cube(Point3::ZERO, Point3::new(10.0, 10.0, 5.0))),
         );
         let params = OpParams::Contour {
+            floor_stock: 0.0,
             tilt: None,
             stock_to_leave: 0.0,
             clearance_z: Height::fixed(10.0),
@@ -2684,6 +2687,7 @@ fn level_link_choice_round_trips_and_the_default_writes_no_key() {
             blend_turns: false, blend_radius: None,
             links,
             chain_overrides: Vec::new(),
+            passes: camcraft_app::machining2d::WallPasses::default(),
         };
         history.execute(
             &world,
@@ -2752,7 +2756,7 @@ fn side_choice_round_trips_and_a_hand_edited_inside_refuses_at_generate() {
             "C1",
             "EM-0600-4FL",
             SrcRef::Entity("part".into()),
-            OpParams::Contour { tilt: None,
+            OpParams::Contour { floor_stock: 0.0, tilt: None,
                 stock_to_leave: 0.0,
                 clearance_z: Height::fixed(10.0),
                 retract_z: Height::fixed(8.0),
@@ -2773,6 +2777,7 @@ fn side_choice_round_trips_and_a_hand_edited_inside_refuses_at_generate() {
                 blend_turns: false, blend_radius: None,
                 links: camcraft_app::links::Links::PLANAR,
                 chain_overrides: Vec::new(),
+                passes: camcraft_app::machining2d::WallPasses::default(),
             },
         )
         .expect("create"),
@@ -2827,7 +2832,7 @@ fn side_choice_round_trips_and_a_hand_edited_inside_refuses_at_generate() {
             "C2",
             "EM-0600-4FL",
             SrcRef::Selection(items),
-            OpParams::Contour { tilt: None,
+            OpParams::Contour { floor_stock: 0.0, tilt: None,
                 stock_to_leave: 0.0,
                 clearance_z: Height::fixed(10.0),
                 retract_z: Height::fixed(8.0),
@@ -2848,6 +2853,7 @@ fn side_choice_round_trips_and_a_hand_edited_inside_refuses_at_generate() {
                 blend_turns: false, blend_radius: None,
                 links: camcraft_app::links::Links::PLANAR,
                 chain_overrides: Vec::new(),
+                passes: camcraft_app::machining2d::WallPasses::default(),
             },
         )
         .expect("create C2"),
@@ -5654,4 +5660,94 @@ fn a_project_save_into_a_folder_without_write_access_is_refused_and_kept() {
     assert!(matches!(err, ProjectError::Io(_)), "{err}");
     assert_eq!(after, before, "the old project is whole");
     let _ = std::fs::remove_dir_all(&d);
+}
+
+/// Journeyman spec S1, check 7: the wall-pass fields round-trip through
+/// the project file. A project saved before the fields loads with the
+/// defaults (one roughing pass, no finishing, no spring pass); a project
+/// with the fields saves and loads back the same values.
+#[test]
+fn contour_wall_passes_round_trip_and_default_when_absent() {
+    use camcraft_app::machining2d::{FinishLevel, WallPasses};
+
+    // A contour with the wall passes set: the wire carries them and the
+    // read-back is exactly the same value.
+    let params = OpParams::Contour {
+        floor_stock: 0.0,
+        tilt: None,
+        stock_to_leave: 0.0,
+        clearance_z: Height::fixed(10.0),
+        retract_z: Height::fixed(8.0),
+        top_z: Height::fixed(5.0),
+        bottom_z: Height::fixed(-5.0),
+        stepdown: 5.0,
+        feed: 800.0,
+        plunge_feed: 200.0,
+        climb: true,
+        side: Side::Outside,
+        lead: Lead::None,
+        tolerance: 0.01,
+        tab_count: 0,
+        tab_width: 0.0,
+        tab_height: 0.0,
+        entry: camcraft_app::machining3d::Entry3D::Plunge,
+        helix_radius: 1.0,
+        blend_turns: false,
+        blend_radius: None,
+        links: camcraft_app::links::Links::PLANAR,
+        chain_overrides: Vec::new(),
+        passes: WallPasses {
+            rough_passes: 3,
+            rough_spacing: 2.5,
+            finish_passes: 2,
+            finish_spacing: 0.1,
+            spring_passes: 1,
+            finish_level: FinishLevel::Last,
+        },
+    };
+    let wire = project::params_to_json(&params);
+    assert_eq!(
+        project::params_from_json(&wire).expect("reads back"),
+        params,
+        "the wall passes round-trip"
+    );
+
+    // A contour with the fields at their defaults: the key is absent, so
+    // every earlier file reads the single pass it was saved with.
+    let plain = OpParams::Contour {
+        floor_stock: 0.0,
+        tilt: None,
+        stock_to_leave: 0.0,
+        clearance_z: Height::fixed(10.0),
+        retract_z: Height::fixed(8.0),
+        top_z: Height::fixed(5.0),
+        bottom_z: Height::fixed(-5.0),
+        stepdown: 5.0,
+        feed: 800.0,
+        plunge_feed: 200.0,
+        climb: true,
+        side: Side::Outside,
+        lead: Lead::None,
+        tolerance: 0.01,
+        tab_count: 0,
+        tab_width: 0.0,
+        tab_height: 0.0,
+        entry: camcraft_app::machining3d::Entry3D::Plunge,
+        helix_radius: 1.0,
+        blend_turns: false,
+        blend_radius: None,
+        links: camcraft_app::links::Links::PLANAR,
+        chain_overrides: Vec::new(),
+        passes: WallPasses::default(),
+    };
+    let wire = project::params_to_json(&plain);
+    assert!(
+        !wire.to_string().contains("passes"),
+        "the default stays off the wire: {wire}"
+    );
+    assert_eq!(
+        project::params_from_json(&wire).expect("reads back"),
+        plain,
+        "an absent key is the default"
+    );
 }

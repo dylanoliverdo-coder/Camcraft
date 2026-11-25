@@ -91,6 +91,7 @@ pub fn electrode_tool(x: f64, y: f64, length: f64, pickup: f64) -> Tool {
         kind: ToolKind::Electrode,
         diameter: x,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: 0.0,
         pitch: 0.0,
         nose_radius: 0.0,

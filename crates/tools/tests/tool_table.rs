@@ -155,6 +155,7 @@ fn hurco_export_roundtrips_and_escapes_xml_without_control_state() {
         kind: ToolKind::EndMill,
         diameter: 12.0,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: 0.0,
         pitch: 0.0,
         pitch_min: 0.0,

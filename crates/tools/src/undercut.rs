@@ -165,6 +165,7 @@ pub fn cutter(kind: ToolKind, d: f64, head_h: f64, neck_d: f64, neck_len: f64, a
         kind,
         diameter: d,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: angle,
         pitch: 0.0,
         pitch_min: 0.0,

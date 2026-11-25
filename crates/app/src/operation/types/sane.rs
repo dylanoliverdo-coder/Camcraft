@@ -62,6 +62,9 @@ impl OpParams {
         if let Some(why) = self.tilt().and_then(|t| t.refusal()) {
             return Some(why);
         }
+        if let Some(why) = self.floor_stock_refusal() {
+            return Some(why);
+        }
         if self.predrilled_elsewhere() {
             return Some(PREDRILLED_POCKET_ONLY.into());
         }
@@ -83,6 +86,30 @@ impl OpParams {
             return Some(why.into());
         }
         match self {
+            OpParams::Drill { chamfer_width, .. } => {
+                crate::drilling::chamfer_width_refusal(*chamfer_width).map(str::to_owned)
+            }
+            OpParams::Contour {
+                passes,
+                tab_count,
+                ..
+            } => {
+                if let Some(why) = passes.refusal() {
+                    return Some(why);
+                }
+                // Journeyman spec S1 (review round 3): tabs and wall
+                // passes are not specified together yet - refuse by name.
+                if *tab_count > 0
+                    && (passes.rough_passes > 1
+                        || passes.finish_passes > 0
+                        || passes.spring_passes > 0)
+                {
+                    return Some(
+                        "tabs and wall passes are not specified together yet - clear the tabs or set the wall passes to the single pass".into(),
+                    );
+                }
+                None
+            }
             OpParams::Finish3D { direction_angle, .. } => {
                 crate::finishing3d::parallel_angle_refusal(*direction_angle).map(str::to_owned)
             }
@@ -135,8 +162,10 @@ impl OpParams {
         let links_ok = links_ok && self.arc_turn_refusal().is_none();
         // #1489: a rest group the generator would refuse.
         let links_ok = links_ok && crate::operation::rest_op::rest_refusal(self).is_none();
+        let floor_ok = self.floor_stock_refusal().is_none();
         tilt_ok
             && links_ok
+            && floor_ok
             && match self {
             // The plasma door (#670): the parameter set's own sanity.
             OpParams::PlasmaProfile(p) => p.is_sane(),
@@ -217,6 +246,7 @@ impl OpParams {
                 tab_height,
                 helix_radius,
                 chain_overrides,
+                passes,
                 ..
             } => {
                 // Structural only, the pocket doors' word (M8.2 A): a
@@ -244,6 +274,9 @@ impl OpParams {
                     && nneg(*tab_height)
                     && pos(*helix_radius)
                     && lead_sane(lead)
+                    // Journeyman spec S1: the wall-pass door (the
+                    // generator's own `WallPasses::refusal`).
+                    && passes.refusal().is_none()
             }
             OpParams::Pocket {
                 stepover,
@@ -984,6 +1017,7 @@ impl OpParams {
                     && pos(*plunge_feed)
             }
             OpParams::Drill {
+                chamfer_width,
                 clearance_z,
                 retract_z,
                 top_z,
@@ -1011,7 +1045,10 @@ impl OpParams {
                     && *peck >= 0.0
                     && dwell.is_finite()
                     && *dwell >= 0.0
-                    && holes.iter().all(|h| h.is_usable())
+                    && crate::drilling::chamfer_width_refusal(*chamfer_width).is_none()
+                    && holes.iter().all(|h| {
+                        if *chamfer_width > 0.0 { h.is_usable_for_chamfer() } else { h.is_usable() }
+                    })
                     && cross.iter().all(|h| h.is_usable())
                     // #1557: a stated break-through is a length.
                     && break_through.is_none_or(nneg)

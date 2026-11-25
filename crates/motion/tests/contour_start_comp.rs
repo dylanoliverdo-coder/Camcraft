@@ -54,6 +54,7 @@ fn params(pick: Point2, comp: Compensation) -> ContourParams {
             approach: Approach { start_point: Some(pick), compensation: comp, ..Approach::DEFAULT },
             ..Links::PLANAR
         },
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     }
 }
 

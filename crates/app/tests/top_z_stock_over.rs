@@ -98,6 +98,7 @@ fn a_trochoidal_slot_under_stock_over_top_z_keeps_the_level_at_top_z() {
 #[test]
 fn a_staged_face_under_stock_over_top_z_keeps_the_level_at_top_z() {
     let t = generated(OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,
@@ -145,6 +146,7 @@ fn indexed_face(tilt: camcraft_app::operation::Tilt, stock_top: f64) {
     let frame = tilt.frame().expect("finite frame");
     let top = stock_top - 2.0;
     let t = generated(OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: Some(tilt),

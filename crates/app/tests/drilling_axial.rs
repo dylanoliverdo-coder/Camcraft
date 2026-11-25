@@ -150,6 +150,7 @@ fn hole(x: f64, y: f64, radius: f64) -> Hole {
 
 fn axial_params(holes: Vec<Hole>, bottom_z: Option<Height>) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(30.0),

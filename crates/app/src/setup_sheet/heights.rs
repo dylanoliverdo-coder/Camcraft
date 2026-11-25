@@ -385,6 +385,12 @@ pub(super) fn height_fields(params: &OpParams) -> [(&'static str, &'static str, 
             ("TOP", "Top of Part Z", Some(*top_z)),
             ("BOT", "Parting Plane Z", Some(*bottom_z)),
         ],
+        OpParams::Drill { clearance_z, retract_z, top_z, chamfer_width, .. } if *chamfer_width > 0.0 => [
+            ("CLR", "Clearance Z", Some(*clearance_z)),
+            ("RET", "Retract Z", *retract_z),
+            ("TOP", "Top of Part Z", Some(*top_z)),
+            ("BOT", "Bottom Z", None),
+        ],
         OpParams::Drill {
             clearance_z,
             retract_z,

@@ -207,6 +207,18 @@ impl<'c, 'a> Rest<'c, 'a> {
         cleared.min(self.cx.stock_top_z)
     }
 
+    /// An upright drill only clears as high as its cone does at this
+    /// radius. A lateral cut is outside this operation's proof.
+    pub(super) fn surface_before_drill(
+        &self, q: Point2, upto: usize, cutter: &super::Cutter, tip: f64,
+    ) -> f64 {
+        let lo = self.island_threshold(q);
+        self.near(q, lo)
+            .filter(|c| c.3 < upto && c.0 == c.1 && self.clears(c, q))
+            .map(|c| c.2 + cutter.lift_at_with_flat((q.x - c.0.x).hypot(q.y - c.0.y), tip))
+            .fold(self.cx.stock_top_z, f64::min)
+    }
+
     /// q's whole cut-order staircase (see [`Steps`]), for a reader that
     /// memoizes one column across many moves (law (c3)'s path-wide
     /// memo). One upward walk: a clearing chord becomes a step when its

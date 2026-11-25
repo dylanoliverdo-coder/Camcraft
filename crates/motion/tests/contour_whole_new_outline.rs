@@ -94,6 +94,7 @@ fn params(top: f64, stepdown: f64, tool_diameter: f64) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: false, blend_radius: None,
         links: camcraft_motion::links::Links::PLANAR,
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     }
 }
 

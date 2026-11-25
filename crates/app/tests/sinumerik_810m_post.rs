@@ -56,6 +56,7 @@ fn build_air_cut_world(spindle_rpm: f64) -> World {
     h.execute(&world, AddTool::new(&world, "5MM DRILL", tuned_tool("DR-0400", 5.0, 1800.0, 180.0)).expect("T2"));
 
     let contour = OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(30.0),
@@ -78,6 +79,7 @@ fn build_air_cut_world(spindle_rpm: f64) -> World {
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     h.execute(&world, CreateOperation::new(&world, "Perimeter Skim", "6MM EM", SrcRef::Stock, contour).expect("contour"));
     h.execute(&world, GenerateOperation::new(&world, "Perimeter Skim").expect("gen contour"));
@@ -87,6 +89,7 @@ fn build_air_cut_world(spindle_rpm: f64) -> World {
         Hole { xy: Point2::new(40.0, 20.0), radius: 2.5, entry_z: 20.0, floor_z: 14.0, through: false, stepped: false },
     ];
     let drill = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(30.0),

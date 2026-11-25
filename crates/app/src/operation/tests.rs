@@ -31,7 +31,7 @@ fn params_sanity_gates() {
     // unresolved reference is never a lie there: refusing happens at
     // generate, by name.
     let world = crate::world::new_world();
-    let ok = OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+    let ok = OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -44,7 +44,7 @@ fn params_sanity_gates() {
     assert!(ok.is_sane() && depth_sane(&world, None, None, &ok));
     // Staged facing is sane when it descends: a top below the
     // finished height, or a zero stepdown, is not.
-    let staged = OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+    let staged = OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -55,7 +55,7 @@ fn params_sanity_gates() {
         climb: true,
     };
     assert!(staged.is_sane() && depth_sane(&world, None, None, &staged));
-    let low = OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+    let low = OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -70,7 +70,7 @@ fn params_sanity_gates() {
         !depth_sane(&world, None, None, &low),
         "staged top below the finished height"
     );
-    let no_step = OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+    let no_step = OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -81,7 +81,7 @@ fn params_sanity_gates() {
         climb: true,
     };
     assert!(!no_step.is_sane(), "stepdown must be positive when set");
-    let bad = OpParams::Pocket { rest: None, tilt: None, blend_radius: None,
+    let bad = OpParams::Pocket { floor_stock: 0.0, rest: None, tilt: None, blend_radius: None,
         links: crate::links::Links::PLANAR,
         stepover: f64::NAN,
         stock_to_leave: 0.0,
@@ -128,7 +128,7 @@ fn stamp_follows_every_input() {
     // param path is deterministic here (Fixed heights resolve without
     // touching the world).
     let world = crate::world::new_world();
-    let a = OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+    let a = OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -139,7 +139,7 @@ fn stamp_follows_every_input() {
         climb: true,
     };
     // (No struct-update syntax on enum variants: write it out.)
-    let b = OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+    let b = OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.6),
@@ -149,7 +149,7 @@ fn stamp_follows_every_input() {
         plunge_feed: 100.0,
         climb: true,
     };
-    let c = OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+    let c = OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -246,7 +246,7 @@ fn face_stamp_moves_with_stepdown() {
     // answer for a staged one - and two stagings that cut different
     // stacks must not claim each other's cache either.
     let world = crate::world::new_world();
-    let face_with = |top_z: Option<Height>, stepdown: Option<f64>| OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+    let face_with = |top_z: Option<Height>, stepdown: Option<f64>| OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -503,7 +503,7 @@ fn the_arc_entry_splits_the_stamp_and_leaves_the_others_alone() {
     // Arc op is never served a Ramp or Helix cache - and the three old
     // words keep the bytes they always wrote.
     let world = crate::world::new_world();
-    let pocket = |entry: Entry3D| OpParams::Pocket { rest: None,
+    let pocket = |entry: Entry3D| OpParams::Pocket { floor_stock: 0.0, rest: None,
         blend_radius: None,
         links: crate::links::Links::PLANAR,
         tilt: None,

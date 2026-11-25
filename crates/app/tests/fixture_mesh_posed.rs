@@ -36,6 +36,7 @@ fn tilted_face_world() -> (World, History) {
     history.execute(&world, AddTool::new(&world, "EM-0400-2FL", tool).expect("tool"));
     let tilt = Tilt { basis_version: 1, a_deg: 0.0, b_deg: 10.0, origin: [30.0, 30.0, 20.0] };
     let params = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: Some(tilt),
         blend_turns: false, blend_radius: None,

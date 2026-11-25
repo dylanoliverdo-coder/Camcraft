@@ -180,6 +180,7 @@ fn faced_doc() -> (World, History) {
 
 fn face() -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false, blend_radius: None,

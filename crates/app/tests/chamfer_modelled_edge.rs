@@ -54,6 +54,7 @@ fn bevelled_brick(bevel: f64) -> Mesh {
 
 fn chamfer(width: f64) -> OpParams {
     let base = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         stepover: 3.0,

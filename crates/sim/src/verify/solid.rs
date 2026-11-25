@@ -25,6 +25,7 @@
 //! too, and steel at rapid feed is a crash.
 
 use super::corner_relief::CornerReliefZone;
+use super::hole_chamfer::HoleChamfer;
 use super::hole_wall::HoleAxis;
 use super::midpose;
 use super::probe::{Atom, Cutter, Frame, Prof};
@@ -113,6 +114,20 @@ pub fn solid_hits_threaded(
     judged(path, facets, cutter, law, Exemptions { walls, bores, ..Exemptions::none() })
 }
 
+/// Solid verdict for an upright drill with a physical tip flat and
+/// any specifically declared chamfer mouths.
+pub fn solid_hits_drilled(
+    path: &Toolpath,
+    facets: &[Triangle],
+    cutter: &Cutter,
+    law: &SolidLaw,
+    walls: &[HoleAxis],
+    tip_radius: f64,
+    chamfers: &[HoleChamfer],
+) -> Vec<Warning> {
+    judged(path, facets, cutter, law, Exemptions { walls, tip_radius, chamfers, ..Exemptions::none() })
+}
+
 /// [`solid_hits`] for a pocket or slot with inside-corner relief zones (#2400).
 pub fn solid_hits_relieved(
     path: &Toolpath,
@@ -146,12 +161,14 @@ struct Exemptions<'a> {
     walls: &'a [HoleAxis],
     bores: &'a [ThreadBore],
     reliefs: &'a [CornerReliefZone],
+    tip_radius: f64,
+    chamfers: &'a [HoleChamfer],
     stack_only: bool,
 }
 
 impl<'a> Exemptions<'a> {
     fn none() -> Self {
-        Self { walls: &[], bores: &[], reliefs: &[], stack_only: false }
+        Self { walls: &[], bores: &[], reliefs: &[], tip_radius: 0.0, chamfers: &[], stack_only: false }
     }
 }
 
@@ -166,7 +183,7 @@ fn judged(path: &Toolpath, facets: &[Triangle], cutter: &Cutter, law: &SolidLaw,
     if facets.is_empty() {
         return Vec::new();
     }
-    let atoms = cutter.atoms();
+    let atoms = cutter.atoms_with_flat(ex.tip_radius);
     let allow = if law.allow.is_finite() { law.allow.max(0.0) } else { 0.0 };
     let index = SolidIndex::build(facets);
     let (Some(mut index), false) = (index, atoms.is_empty()) else {
@@ -184,6 +201,7 @@ fn judged(path: &Toolpath, facets: &[Triangle], cutter: &Cutter, law: &SolidLaw,
     let poses = midpose::poses(path);
     let reach = atoms.iter().map(|a| a.z1).fold(0.0, f64::max);
     let stopped = super::fine_bore::stopped_rapids(path, cutter.radius, cutter.shank_radius);
+    let upright_chamfers = !ex.chamfers.is_empty() && path.moves.iter().all(|m| m.axis.is_none());
     let mut out = Vec::new();
     for (i, m) in path.moves.iter().enumerate() {
         if !(m.from.is_finite() && m.to.is_finite()) {
@@ -196,11 +214,25 @@ fn judged(path: &Toolpath, facets: &[Triangle], cutter: &Cutter, law: &SolidLaw,
             .map(|(a, b)| midpose::intervals(m, a, b, reach, ARC_SAG))
             .unwrap_or_default();
         let grow_mid = if m.arc.is_some() { ARC_SAG } else { 0.0 };
+        // A retract may withdraw through a chamfer only from the exact
+        // kerf the preceding verified cut made. No allowance on descent
+        // rapids, traverses, indexed or changing axes.
+        let previous_cut = i.checked_sub(1).and_then(|prev| path.moves.get(prev))
+            .filter(|prev| prev.kind != MoveKind::Rapid && prev.to == m.from);
+        let grant = if upright_chamfers {
+            ex.chamfers.iter().find(|h| {
+                h.holds(m, cutter, ex.tip_radius)
+                    && (m.kind != MoveKind::Rapid || (m.to.z > m.from.z
+                        && previous_cut.is_some_and(|c| h.holds(c, cutter, ex.tip_radius))))
+            })
+        } else {
+            None
+        };
         let mut hits = |set: &[Atom]| {
             !set.is_empty()
                 && (pieces(m, law.step).into_iter().any(|(a, b, grow)| {
                     let fr = Frame::new(a, axis);
-                    index.hits(&fr, fr.local(b), set, allow, grow, &axes_in(&fr, walls), bores, reliefs)
+                    index.hits_with_chamfer(&fr, fr.local(b), set, allow, grow, &axes_in(&fr, walls), bores, reliefs, grant)
                 }) || mid.iter().any(|iv| {
                     // The interval's tip travel swept exactly under the
                     // pose held at its midpoint: the pose's own turn

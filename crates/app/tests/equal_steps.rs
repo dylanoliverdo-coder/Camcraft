@@ -26,6 +26,7 @@ use serde_json::{json, Value};
 /// ladder steps 5 then 4, the equal ladder 4.5 twice.
 fn contour_op(equal: bool) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::of(HeightReference::TopOfStock, 10.0),
         retract_z: Height::of(HeightReference::TopOfStock, 5.0),
@@ -48,6 +49,7 @@ fn contour_op(equal: bool) -> OpParams {
         tilt: None,
         chain_overrides: Vec::new(),
         links: Links { approach: Approach { equal_steps: equal, ..Approach::DEFAULT }, ..Links::PLANAR },
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

@@ -232,7 +232,7 @@ pub(super) fn sinker_gate(world: &World, context: Option<&str>, params: &OpParam
 /// and setup name. Runs at construction, before any entity exists, so
 /// every surface (UI, CLI, scripts, undo replay) meets the same wall.
 pub(super) fn tool_gate(world: &World, params: &OpParams, tool: &str) -> Result<(), CommandError> {
-    if let Some(msg) = operation::tool_gate::tool_refusal(world, params.kind().info(), tool) {
+    if let Some(msg) = operation::tool_gate::operation_tool_refusal(world, params, tool) {
         return Err(CommandError::Invalid(msg));
     }
     thread_gate(world, params, tool)?;
@@ -311,6 +311,11 @@ pub(super) fn heights_gate(
     params: &OpParams,
 ) -> Result<(), CommandError> {
     if let Some(why) = operation::selection_heights_sane(world, setup, src, params) {
+        return Err(CommandError::Invalid(why));
+    }
+    // Journeyman S2: refuse non-finite floor stock or floor >= top by name, while keeping
+    // unresolved non-selection references symmetric with floor_stock == 0.0.
+    if let Some(why) = operation::floor_stock_depth_refusal(world, setup, Some(src), params) {
         return Err(CommandError::Invalid(why));
     }
     if !operation::depth_sane(world, setup, Some(src), params) {

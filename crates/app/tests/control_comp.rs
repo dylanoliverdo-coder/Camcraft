@@ -37,6 +37,7 @@ fn post_text(stem: &str) -> String {
 
 fn contour_params(comp: Compensation) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),
@@ -58,6 +59,7 @@ fn contour_params(comp: Compensation) -> OpParams {
         blend_turns: false, blend_radius: None,
         links: Links { approach: Approach { compensation: comp, ..Approach::DEFAULT }, ..Links::PLANAR },
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

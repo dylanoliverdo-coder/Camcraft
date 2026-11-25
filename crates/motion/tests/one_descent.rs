@@ -195,6 +195,7 @@ fn bore(entry: Entry3D, lead: Lead, links: Links) -> ContourParams {
         helix_radius: 1.5,
         blend_turns: false, blend_radius: None,
         links,
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     }
 }
 

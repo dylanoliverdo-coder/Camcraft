@@ -252,7 +252,7 @@ fn source_region(
         OpParams::Circular { center, radius, .. } => {
             Ok(Region::new(vec![disk_loop(*center, *radius)?])?)
         }
-        OpParams::Drill { holes, cross, .. } => {
+        OpParams::Drill { holes, cross, chamfer_width, .. } => {
             // A radial list asks for the silhouette only (M5.2 F2):
             // a cross hole opens on the bar's SKIN, so its mouth is
             // already in the projection, and its wall runs along X or
@@ -286,7 +286,10 @@ fn source_region(
                 .cloned()
                 .collect();
             for hole in holes {
-                loops.push(rim_loop(*hole)?);
+                // A point location has no rim to draw.
+                if *chamfer_width == 0.0 || hole.radius > 0.0 {
+                    loops.push(rim_loop(*hole)?);
+                }
             }
             Ok(Region::new(loops)?)
         }

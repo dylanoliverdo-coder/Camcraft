@@ -169,6 +169,7 @@ fn lathe_facing_rough_finish_chamfer_and_axial_drill_match_baked() {
             top_z: Height::fixed(22.0), bottom_z: Height::fixed(20.0), stepdown: 1.0, feed: 150.0, plunge_feed: 80.0,
         }),
         ("AX1", "DR-0400", OpParams::Drill {
+            chamfer_width: 0.0,
             break_through: None, break_through_from: Default::default(), clearance_z: Height::fixed(30.0), retract_z: None,
             top_z: Height::fixed(20.05), bottom_z: None, cycle: CycleChoice::Auto,
             peck: 0.0, dwell: 0.0, feed: 120.0, plunge_feed: 80.0, holes: vec![hole], cross: vec![],
@@ -305,6 +306,7 @@ fn lathe_boring_posts_like_baked() {
         &[("DR-1090", Some(pilot)), ("BR-1008", Some(bar))],
         vec![
             ("AX0", "DR-1090", OpParams::Drill {
+                chamfer_width: 0.0,
                 break_through: None, break_through_from: Default::default(), clearance_z: Height::fixed(60.0), retract_z: None,
                 top_z: Height::fixed(50.0), bottom_z: None, cycle: CycleChoice::Auto,
                 peck: 0.0, dwell: 0.0, feed: 120.0, plunge_feed: 80.0,

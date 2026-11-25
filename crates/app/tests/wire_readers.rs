@@ -96,6 +96,7 @@ fn milling_doc_with_a_lost_tool() -> World {
     let (name, tool) = camcraft_app::tools::catalog().into_iter().find(|(n, _)| *n == "EM-0400-2FL").expect("catalog");
     h.execute(&world, AddTool::new(&world, name, tool).expect("tool"));
     let face = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false, blend_radius: None,

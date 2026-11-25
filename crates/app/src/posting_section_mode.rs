@@ -112,6 +112,7 @@ mod tests {
 
     fn sample_face(tilt: Option<Tilt>) -> OpParams {
         OpParams::Face {
+            floor_stock: 0.0,
             stepover: 3.0,
             clearance_z: Height::fixed(10.0),
             cut_z: Height::fixed(0.0),

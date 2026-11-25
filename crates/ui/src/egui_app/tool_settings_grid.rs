@@ -204,6 +204,11 @@ fn kind_rows(ui: &mut Ui, state: &mut State) {
             num_plain_row(ui, &mut state.tool_ui.tip_angle)
         });
     }
+    if matches!(kind, 3 | 10) {
+        prop_row_hint(ui, "Tip diameter", "the flat across the tip, or 0 for a sharp point", |ui| {
+            num_row(ui, u, &mut state.tool_ui.tip_diameter)
+        });
+    }
 }
 
 /// The holder's two cylinders. #2016: when the editor's holder is a

@@ -14,7 +14,7 @@ use camcraft_app::tools::catalog;
 use camcraft_ui::state::{CommandKind, ErrorScope, State, UiTarget};
 
 fn face_params() -> OpParams {
-    OpParams::Face { holes: Default::default(),
+    OpParams::Face { floor_stock: 0.0, holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 3.0,

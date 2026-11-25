@@ -300,6 +300,7 @@ fn machining_document() -> (World, History) {
     h.execute(&world, AddTool::new(&world, "EM-0400-2FL", tool).expect("tool"));
     let top = b.1[2];
     let params = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false, blend_radius: None,

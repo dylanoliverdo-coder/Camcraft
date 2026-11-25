@@ -215,8 +215,9 @@ impl Tool {
             ToolKind::Drill | ToolKind::Taper => {
                 let tan = (self.tip_angle.to_radians() * 0.5).tan();
                 if self.tip_angle > 0.0 && tan.is_finite() && tan > 0.0 {
-                    let top = (r / tan).min(fl);
-                    let mut p = vec![line(0.0, 0.0), line(top, top * tan)];
+                    let tip = self.tip_diameter * 0.5;
+                    let top = ((r - tip) / tan).min(fl);
+                    let mut p = vec![line(0.0, tip), line(top, tip + top * tan)];
                     if fl > top {
                         p.push(line(fl, r));
                     }

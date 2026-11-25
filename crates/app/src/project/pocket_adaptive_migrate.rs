@@ -27,6 +27,7 @@ pub(super) fn settle(entities: &mut [EntityDto], from: u32) -> Vec<String> {
             continue;
         };
         let ParamsDto::Pocket {
+            floor_stock: _,
             links,
             stepover,
             stock_to_leave,

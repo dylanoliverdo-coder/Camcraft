@@ -17,6 +17,7 @@ impl Tool {
             ("diameter", self.diameter),
             ("corner radius", self.corner_r),
             ("tip angle", self.tip_angle),
+            ("tip diameter", self.tip_diameter),
             ("pitch", self.pitch),
             ("finest pitch", self.pitch_min),
             ("nose radius", self.nose_radius),
@@ -41,6 +42,12 @@ impl Tool {
         }
         if self.corner_r > d * 0.5 {
             return Some(format!("corner radius {} mm is more than half the {d} mm diameter", self.corner_r));
+        }
+        if self.tip_diameter < 0.0 || self.tip_diameter >= d {
+            return Some(format!("tip diameter {} mm must be non-negative and less than tool diameter {d} mm", self.tip_diameter));
+        }
+        if self.tip_diameter > 0.0 && (!matches!(self.kind, ToolKind::Drill | ToolKind::Taper) || self.tip_angle <= 0.0) {
+            return Some("a positive tip diameter requires a conical Drill or Taper tool".into());
         }
         if self.tip_angle >= 180.0 {
             return Some(format!("tip angle {} degrees must be under 180", self.tip_angle));

@@ -202,6 +202,9 @@ pub struct Tool {
     /// forms); inert for the rest - every other kind reads it as 0.0
     /// and draws flat.
     pub tip_angle: f64,
+    /// Diameter of the flat at the end of a Drill or Taper cone, mm.
+    /// Zero describes a sharp point, including tools in older projects.
+    pub tip_diameter: f64,
     /// Thread pitch in mm per turn (ISO coarse for the catalog taps).
     /// Inert unless kind is Tap, where the cycle feeds at rpm x pitch,
     /// or a thread mill (#894): the multi-form's one pitch, the
@@ -445,8 +448,10 @@ impl Tool {
                 // step. Nonsense angles (0, negative) read as a flat.
                 let tan_half = (self.tip_angle.to_radians() * 0.5).tan();
                 if tan_half > 0.0 && tan_half.is_finite() {
-                    let zr = (r / tan_half).min(zc);
-                    add_pt(&mut p, zr, (zr * tan_half).min(r));
+                    let tip = (self.tip_diameter * 0.5).max(0.0).min(r);
+                    add_pt(&mut p, 0.0, tip);
+                    let zr = ((r - tip) / tan_half).min(zc);
+                    add_pt(&mut p, zr, (tip + zr * tan_half).min(r));
                 }
             }
         }
@@ -506,6 +511,7 @@ pub fn probe_tool(ball_d: f64, stylus_len: f64) -> Tool {
         kind: ToolKind::Probe,
         diameter: ball_d,
         corner_r: ball_d * 0.5,
+        tip_diameter: 0.0,
         tip_angle: 0.0,
         pitch: 0.0,
         pitch_min: 0.0,
@@ -541,6 +547,7 @@ pub fn torch_tool(kerf: f64) -> Tool {
         kind: ToolKind::Torch,
         diameter: kerf,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: 0.0,
         pitch: 0.0,
         pitch_min: 0.0,

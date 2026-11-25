@@ -1,5 +1,6 @@
 //! The `verify` dispatcher: runs the verifier's laws (a)-(f2) in their fixed order, each specced from the public sources named in `verify`'s module law (split from `verify.rs` by M5.0.1 and into law modules by M13.7; structure only).
 
+use super::hole_chamfer::HoleChamfer;
 use super::types::{VerifyContext, Warning};
 use super::laws::{bands_vs_fixtures, rapids_vs_fixtures_spindle};
 use super::axis_door::axis_door;
@@ -29,6 +30,29 @@ pub fn verify_bodies(
     cx: &VerifyContext,
     bodies: &[std::ops::Range<usize>],
 ) -> Vec<Warning> {
+    verify_with_tip(path, cx, bodies, None, &[])
+}
+
+/// Verify an upright hole operation with its actual conical tip and
+/// optional declared chamfer mouths. Fixtures and all other rims keep
+/// the ordinary verification laws.
+pub fn verify_drill_bodies(
+    path: &Toolpath,
+    cx: &VerifyContext,
+    bodies: &[std::ops::Range<usize>],
+    tip_radius: f64,
+    chamfers: &[HoleChamfer],
+) -> Vec<Warning> {
+    verify_with_tip(path, cx, bodies, Some(tip_radius), chamfers)
+}
+
+fn verify_with_tip(
+    path: &Toolpath,
+    cx: &VerifyContext,
+    bodies: &[std::ops::Range<usize>],
+    drill_tip: Option<f64>,
+    chamfers: &[HoleChamfer],
+) -> Vec<Warning> {
     let mut warns: Vec<Warning> = Vec::new();
 
     // The axis door (#1312): a non-finite or zero-length tool axis is
@@ -56,9 +80,10 @@ pub fn verify_bodies(
     // (b) Gouge, then (b2) the solid law, with the op's real tip
     // (M13.7) - [`section`].
     let cutter = super::Cutter::judged(cx.tool, cx.cutter);
-    let lift = cutter.tip_height();
+    let tip = drill_tip.unwrap_or(0.0);
+    let lift = cutter.tip_height_with_flat(tip);
     if section::judged(cx.mode) {
-        section::tangency(path, cx, &rest, lift, chord_tol, &mut warns);
+        section::tangency(path, cx, &rest, lift, chord_tol, (tip, chamfers), &mut warns);
         section::solid(path, cx, &cutter, &mut warns);
     } else if cx.mode == Mode::Undercut {
         // #1444: no region tangency under a roof; the mesh still speaks.
@@ -89,7 +114,7 @@ pub fn verify_bodies(
 
     // (d) Rapids in stock - [`rapids`].
     let mut rapid_warns = Vec::new();
-    rapids::rapids_in_stock(path, cx, &rest, &cutter, &mut rapid_warns);
+    rapids::rapids_in_stock(path, cx, &rest, &cutter, drill_tip, &mut rapid_warns);
     // #1445: a fine bore's stopped-spindle rapids are read with the
     // stopped bar, inside the cylinder its own feed in cut. Only law (d)
     // is acquitted: the solid law's shank and holder collisions remain.

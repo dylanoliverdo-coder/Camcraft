@@ -30,6 +30,7 @@ use serde_json::{json, Value};
 
 fn contour_op(pick: Option<Point2>) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::of(HeightReference::TopOfStock, 10.0),
         retract_z: Height::of(HeightReference::TopOfStock, 5.0),
@@ -51,6 +52,7 @@ fn contour_op(pick: Option<Point2>) -> OpParams {
         tilt: None,
         links: Links { approach: Approach { start_point: pick, ..Approach::DEFAULT }, ..Links::PLANAR },
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

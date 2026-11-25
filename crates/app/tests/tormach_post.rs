@@ -461,6 +461,7 @@ fn a_face_job_on_the_built_in_770mx_passes_the_gate_and_posts_inch() {
     // G54 is unplaced (the world origin, the stock's floor): clearance at
     // Z 25 mm and the cut at Z 19.5 both stand ABOVE G54 Z0.
     let face = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,

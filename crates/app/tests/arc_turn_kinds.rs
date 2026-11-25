@@ -143,6 +143,7 @@ const MILL: &str = "EM-0400-2FL";
 
 fn face_params(blend: bool, radius: Option<f64>) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: blend,
@@ -282,6 +283,8 @@ fn generation_refuses_a_radius_past_the_tool_radius_by_name_on_each_kind() {
 
 fn contour_params(blend: bool, radius: Option<f64>) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
+        passes: Default::default(),
         chain_overrides: Vec::new(),
         tilt: None,
         stock_to_leave: 0.0,

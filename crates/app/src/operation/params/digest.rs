@@ -99,6 +99,25 @@ pub(super) fn w(h: &mut std::hash::DefaultHasher, v: f64) {
     h.write(&v.to_bits().to_le_bytes());
 }
 
+/// The wall-pass fields of a Contour (Journeyman spec S1): written only
+/// when they differ from the single pass, so every earlier contour keeps
+/// its cached digest.
+pub(super) fn write_wall_passes(p: &crate::machining2d::WallPasses, h: &mut std::hash::DefaultHasher) {
+    if *p == crate::machining2d::WallPasses::default() {
+        return;
+    }
+    h.write(b"wall-passes");
+    h.write_u32(p.rough_passes);
+    w(h, p.rough_spacing);
+    h.write_u32(p.finish_passes);
+    w(h, p.finish_spacing);
+    h.write_u32(p.spring_passes);
+    h.write_u8(match p.finish_level {
+        crate::machining2d::FinishLevel::Every => 0,
+        crate::machining2d::FinishLevel::Last => 1,
+    });
+}
+
 /// A height: its reference (tag, plus slot for a work offset) and its
 /// offset bits; a non-Fixed reference also writes its resolved Z (or an
 /// unresolved marker) - `stamp_with` says why.

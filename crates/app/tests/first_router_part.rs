@@ -169,6 +169,7 @@ fn build_demo_world() -> flecs_ecs::prelude::World {
     let top_clr = Height::of(HeightReference::TopOfStock, 15.0);
     let top_ret = Height::of(HeightReference::TopOfStock, 5.0);
     let drill_base = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: top_clr, retract_z: Some(top_ret), top_z: Height::of(HeightReference::TopOfStock, 0.0), bottom_z: None,
@@ -181,7 +182,7 @@ fn build_demo_world() -> flecs_ecs::prelude::World {
 
     let pocket = recognize::pockets_of(&world, "router-part").expect("pockets").into_iter().next().expect("pocket");
     let pocket_src = SrcRef::Selection(vec![GeoSel { entity: "router-part".into(), feature: FeatureSel::Face(pocket.floor) }]);
-    let pocket_params = OpParams::Pocket { pass_start: Default::default(),
+    let pocket_params = OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(),
         rest: None,
         stepover: 3.0, stock_to_leave: 0.0, clearance_z: top_clr, retract_z: Some(top_ret),
         top_z: Height::of(HeightReference::TopOfModel, 0.0), bottom_z: Height::of(HeightReference::TopOfModel, -4.0),
@@ -196,12 +197,14 @@ fn build_demo_world() -> flecs_ecs::prelude::World {
     let contour_picks = outer_bottom_chains(facets);
     assert!(!contour_picks.is_empty(), "outer bottom chains found");
     let contour_params = OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0, clearance_z: top_clr, retract_z: top_ret,
         top_z: Height::of(HeightReference::TopOfStock, 0.0), bottom_z: Height::of(HeightReference::BottomOfStock, 0.0),
         stepdown: 4.0, feed: 1800.0, plunge_feed: 400.0, climb: true, side: Side::Outside,
         lead: Lead::Arc { radius: 3.0 }, tolerance: 0.01, tab_count: 4, tab_width: 8.0, tab_height: 3.0,
         entry: Entry3D::Plunge, helix_radius: 1.0, blend_turns: false, blend_radius: None, tilt: None, links: Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     };
     h.execute(&world, CreateOperation::new(&world, "2D Contour1", "EM-0600-4FL", SrcRef::Selection(contour_picks), contour_params).expect("contour op"));
     h.execute(&world, EditOperationParams::with_coolant(&world, "2D Contour1", CoolantMode::Off).expect("dry contour"));

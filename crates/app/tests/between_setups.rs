@@ -30,6 +30,7 @@ const TOOL: &str = "EM-0400-2FL";
 
 fn face() -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,

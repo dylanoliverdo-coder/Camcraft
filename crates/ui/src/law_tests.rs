@@ -511,7 +511,7 @@ mod path_tests {
                 "Face1",
                 "EM-0400-2FL",
                 SrcRef::Stock,
-                OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+                OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                     stepover: 3.0,
                     clearance_z: Height::fixed(25.0),
                     cut_z: Height::fixed(19.5),
@@ -677,7 +677,7 @@ mod path_tests {
                 "Skin1",
                 "EM-0400-2FL",
                 SrcRef::Stock,
-                OpParams::Contour { tilt: None,
+                OpParams::Contour { floor_stock: 0.0, tilt: None,
                     stock_to_leave: 0.0,
                     clearance_z: Height::fixed(20.0),
                     retract_z: Height::fixed(15.0),
@@ -700,6 +700,7 @@ mod path_tests {
                     blend_turns: false, blend_radius: None,
                     links: camcraft_app::links::Links::PLANAR,
                     chain_overrides: Vec::new(),
+                    passes: camcraft_app::machining2d::WallPasses::default(),
                 },
             )
             .expect("operation"),
@@ -854,7 +855,7 @@ mod preview_tests {
                 name: "Face1".into(),
                 tool: "EM-0400-2FL".into(),
                 src: SrcRef::Stock,
-                params: OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+                params: OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                     stepover: 3.0,
                     clearance_z: Height::fixed(25.0),
                     cut_z: Height::fixed(19.5),
@@ -892,7 +893,7 @@ mod preview_tests {
         // read, never a leftover from the last generation.
         state.pending.push_back(CommandKind::EditOperationParams {
             name: "Face1".into(),
-            params: OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+            params: OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(10.0),
@@ -1194,7 +1195,7 @@ mod feature_pick_tests {
                 "G1",
                 "EM-0400-2FL",
                 SrcRef::Stock,
-                OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+                OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                     stepover: 3.0,
                     clearance_z: Height::fixed(25.0),
                     cut_z: Height::fixed(4.5),
@@ -1426,7 +1427,7 @@ mod height_plane_tests {
     use camcraft_app::tools::catalog;
 
     fn contour(clearance_z: Height) -> OpParams {
-        OpParams::Contour { tilt: None,
+        OpParams::Contour { floor_stock: 0.0, tilt: None,
             stock_to_leave: 0.0,
             clearance_z,
             retract_z: Height::fixed(15.0),
@@ -1447,11 +1448,12 @@ mod height_plane_tests {
             blend_turns: false, blend_radius: None,
             links: camcraft_app::links::Links::PLANAR,
             chain_overrides: Vec::new(),
+            passes: camcraft_app::machining2d::WallPasses::default(),
         }
     }
 
     fn pocket() -> OpParams {
-        OpParams::Pocket { pass_start: Default::default(), rest: None, tilt: None, blend_radius: None,
+        OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None, tilt: None, blend_radius: None,
             links: camcraft_app::links::Links::PLANAR,
             stepover: 3.0,
             stock_to_leave: 0.0,
@@ -1560,7 +1562,7 @@ mod height_plane_tests {
     fn height_planes_stand_in_only_when_the_level_is_undrawn() {
         let staged = state_with(
             "F1",
-            OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(18.0),
@@ -1585,7 +1587,7 @@ mod height_plane_tests {
         // Unstaged: region_z IS the cut, one outline at one level.
         let flat = state_with(
             "F2",
-            OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(18.0),
@@ -1728,7 +1730,7 @@ mod height_plane_tests {
         // level it will never cut. Staged, Top appears at the first level,
         // and editing the draft walks it live, the same honesty rule the
         // depth kinds follow.
-        let face_at = |top_z: Option<Height>| OpParams::Face { holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        let face_at = |top_z: Option<Height>| OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
             stepover: 8.0,
             clearance_z: Height::fixed(15.0),
             cut_z: Height::fixed(2.0),
@@ -1777,7 +1779,7 @@ mod height_plane_tests {
         // what the corner label rides on, not an accident of the last
         // resolve. Fixed planes stay bare - their number is the whole
         // story - and moving the source walks the chip with it.
-        let params = OpParams::Contour { tilt: None,
+        let params = OpParams::Contour { floor_stock: 0.0, tilt: None,
             stock_to_leave: 0.0,
             clearance_z: Height::of(HeightReference::TopOfStock, 5.0),
             retract_z: Height::fixed(15.0),
@@ -1798,6 +1800,7 @@ mod height_plane_tests {
             blend_turns: false, blend_radius: None,
             links: camcraft_app::links::Links::PLANAR,
             chain_overrides: Vec::new(),
+            passes: camcraft_app::machining2d::WallPasses::default(),
         };
         let mut state = state_with("C1", params);
         // G54 at z 3.0: stock top (20) + 5 = 25, G54 - 1 = 2.
@@ -1843,7 +1846,7 @@ mod height_plane_tests {
         // The same reference with G54 never placed: no rectangle at a
         // guessed z, no chip claiming a number. The planes that DO
         // resolve keep theirs - an honest mixed state, drawn as one.
-        let params = OpParams::Contour { tilt: None,
+        let params = OpParams::Contour { floor_stock: 0.0, tilt: None,
             stock_to_leave: 0.0,
             clearance_z: Height::fixed(25.0),
             retract_z: Height::fixed(15.0),
@@ -1864,6 +1867,7 @@ mod height_plane_tests {
             blend_turns: false, blend_radius: None,
             links: camcraft_app::links::Links::PLANAR,
             chain_overrides: Vec::new(),
+            passes: camcraft_app::machining2d::WallPasses::default(),
         };
         let state = state_with("C1", params);
         assert!(

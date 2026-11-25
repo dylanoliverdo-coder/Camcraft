@@ -143,7 +143,11 @@ impl Cutter {
     /// cone), 0 for a square end or a stack that describes no tool.
     #[must_use]
     pub fn tip_height(&self) -> f64 {
-        self.atoms().first().filter(|a| !a.is_flat()).map_or(0.0, |a| a.z1)
+        self.tip_height_with_flat(0.0)
+    }
+
+    pub(super) fn tip_height_with_flat(&self, tip: f64) -> f64 {
+        self.atoms_with_flat(tip).first().filter(|a| !a.is_flat()).map_or(0.0, |a| a.z1)
     }
 
     /// Height above the tip at which the cutting surface stands at
@@ -154,17 +158,21 @@ impl Cutter {
     /// tool, reads 0 - the tip plane, which can only over-report.
     #[must_use]
     pub fn lift_at(&self, rho: f64) -> f64 {
+        self.lift_at_with_flat(rho, 0.0)
+    }
+
+    pub(super) fn lift_at_with_flat(&self, rho: f64, tip: f64) -> f64 {
         if !(rho.is_finite() && rho > 0.0) {
             return 0.0;
         }
-        let Some(a) = self.atoms().into_iter().next() else { return 0.0 };
+        let Some(a) = self.atoms_with_flat(tip).into_iter().next() else { return 0.0 };
         let s = match a.prof {
             Prof::Flat(_) => 0.0,
             Prof::Bull { flat, cr } => {
                 let e = rho - flat;
                 if e <= 0.0 { 0.0 } else if e >= cr { a.z1 } else { cr - (cr * cr - e * e).max(0.0).sqrt() }
             }
-            Prof::Cone { k, .. } => rho / k,
+            Prof::Cone { k, tip, .. } => (rho - tip).max(0.0) / k,
             // A dovetail's bottom is flat; a ball rises as a sphere.
             Prof::Dove { .. } => 0.0,
             Prof::Ball(r) => if rho >= r { r } else { r - (r * r - rho * rho).max(0.0).sqrt() },
@@ -175,9 +183,17 @@ impl Cutter {
     /// The atoms bottom-up, heights above the tip. Empty when the
     /// numbers describe no tool (the caller fails closed).
     pub(super) fn atoms(&self) -> Vec<Atom> {
+        self.atoms_with_flat(0.0)
+    }
+
+    /// A conical tool whose program references the physical tip flat.
+    pub(super) fn atoms_with_flat(&self, tip: f64) -> Vec<Atom> {
         let ok = |v: f64| v.is_finite() && v >= 0.0;
         let r = self.radius;
         if !(r.is_finite() && r > 0.0) || ![self.flute_len, self.shank_len, self.holder_len].into_iter().all(ok) {
+            return Vec::new();
+        }
+        if !ok(tip) || tip >= r {
             return Vec::new();
         }
         let fl = self.flute_len;
@@ -200,9 +216,9 @@ impl Cutter {
             }
             z = fl;
         } else if self.tip_angle > 0.0 && tan_half.is_finite() && tan_half > 0.0 {
-            let top = (r / tan_half).min(fl);
+            let top = ((r - tip) / tan_half).min(fl);
             if top > 0.0 {
-                v.push(Atom { z0: 0.0, z1: top, prof: Prof::Cone { k: tan_half, r }, cap: false });
+                v.push(Atom { z0: 0.0, z1: top, prof: Prof::Cone { k: tan_half, r, tip }, cap: false });
                 z = top;
             }
         } else if cr > 0.0 {
@@ -243,8 +259,8 @@ pub(super) enum Prof {
     /// Toroidal corner: rho = flat + sqrt(cr^2 - (cr - s)^2); a ball is
     /// `flat = 0`.
     Bull { flat: f64, cr: f64 },
-    /// Point cone, capped at the flute radius.
-    Cone { k: f64, r: f64 },
+    /// Cone or frustum, widening from the tip radius to the flute radius.
+    Cone { k: f64, r: f64, tip: f64 },
     /// Dovetail head (#1444): rho = r - k s, widest at its bottom.
     Dove { r: f64, k: f64 },
     /// Lollipop head (#1444): the whole ball of radius r over [0, 2r].
@@ -277,7 +293,7 @@ impl Atom {
                 let t = (cr - s).clamp(0.0, cr);
                 flat + (cr * cr - t * t).max(0.0).sqrt()
             }
-            Prof::Cone { k, r } => (k * s).min(r),
+            Prof::Cone { k, r, tip } => (tip + k * s).min(r),
             Prof::Dove { r, k } => (r - k * s).max(0.0),
             Prof::Ball(r) => (2.0 * r * s - s * s).max(0.0).sqrt(),
         }

@@ -114,6 +114,7 @@ fn create(world: &World, h: &mut History, name: &str, tool: &str, src: SrcRef, p
 
 fn drill(x: f64, y: f64) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(30.0),
@@ -142,6 +143,7 @@ fn drilled() -> (World, History) {
 fn faced() -> (World, History) {
     let (world, mut h) = world_with(StockShape::Box { dx: 20.0, dy: 2.0, dz: 8.0 }, -4.0, false);
     let params = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,

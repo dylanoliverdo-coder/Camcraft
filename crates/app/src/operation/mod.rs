@@ -67,6 +67,8 @@ use crate::schema::Operation;
 use crate::verify::{self, VerifyContext, Warning};
 
 mod heights;
+mod floor_stock;
+pub(crate) use floor_stock::floor_stock_depth_refusal;
 pub use heights::*;
 mod heights_sel;
 pub use heights_sel::*;
@@ -235,6 +237,7 @@ mod cross_part;
 mod cross_spindle;
 mod cross_stock;
 mod cross_traverse;
+pub(crate) mod drill_chamfer;
 mod drill_reach;
 mod bore_reach;
 use camcraft_motion::break_through;

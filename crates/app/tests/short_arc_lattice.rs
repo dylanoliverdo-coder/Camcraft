@@ -36,6 +36,7 @@ fn fanuc() -> String {
 
 fn contour() -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: None,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(10.0),
@@ -58,6 +59,7 @@ fn contour() -> OpParams {
         blend_radius: None,
         links: Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

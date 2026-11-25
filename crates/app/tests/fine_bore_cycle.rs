@@ -70,6 +70,7 @@ fn bar(bar: f64) -> Tool {
 
 fn params(cycle: CycleChoice, dwell: f64) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(25.0),

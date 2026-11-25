@@ -288,6 +288,7 @@ fn the_simulation_draws_the_stack_the_reach_laws_judge() {
             TOOL,
             SrcRef::Stock,
             OpParams::Face {
+                floor_stock: 0.0,
                 holes: Default::default(),
                 tilt: None,
                 blend_turns: false, blend_radius: None,

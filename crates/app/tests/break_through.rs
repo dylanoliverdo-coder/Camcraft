@@ -67,6 +67,7 @@ fn drill(break_through: Option<f64>) -> OpParams {
 
 fn drill_from(break_through: Option<f64>, break_through_from: BreakThroughFrom) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         clearance_z: Height::fixed(30.0),
         retract_z: None,
         top_z: Height::fixed(12.0),
@@ -378,6 +379,7 @@ fn issue_2441_through_hole_drill_adds_point_length_and_posts_full_breakthrough()
     let mill = catalog().into_iter().find(|(n, _)| *n == "EM-1000-4FL").map(|(_, t)| t).expect("EM-1000-4FL");
     h.execute(&world, AddTool::new(&world, "EM-1000-4FL", mill).expect("mill"));
     let face = OpParams::Face {
+        floor_stock: 0.0,
         holes: camcraft_app::machining2d::FaceHoles::CutAir,
         tilt: None,
         blend_turns: false, blend_radius: None,
@@ -395,6 +397,7 @@ fn issue_2441_through_hole_drill_adds_point_length_and_posts_full_breakthrough()
 
     let point_len = 3.0 / 59.0_f64.to_radians().tan();
     let p = OpParams::Drill {
+        chamfer_width: 0.0,
         clearance_z: Height::of(HeightReference::TopOfStock, 15.0),
         retract_z: Some(Height::of(HeightReference::TopOfStock, 2.0)),
         top_z: Height::of(HeightReference::TopOfModel, 0.0),
@@ -443,6 +446,7 @@ fn issue_2441_stock_sim_models_drill_point_cone_lip_when_stopped_at_floor() {
     // twist drill only cuts full Ø6 up to z=+1.803, so at r=2.5 it
     // must leave a ~1.502 mm conical lip in BOTH sim engines.
     let p = OpParams::Drill {
+        chamfer_width: 0.0,
         clearance_z: Height::of(HeightReference::TopOfStock, 15.0),
         retract_z: Some(Height::of(HeightReference::TopOfStock, 2.0)),
         top_z: Height::of(HeightReference::TopOfStock, 0.0),

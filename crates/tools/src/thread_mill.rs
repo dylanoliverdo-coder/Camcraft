@@ -139,6 +139,7 @@ pub fn thread_mill(d: f64, pitch: f64, pitch_min: f64, cutting_len: f64) -> Tool
         kind: if single { ToolKind::ThreadMillSingle } else { ToolKind::ThreadMill },
         diameter: d,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: FORM_ANGLE,
         pitch,
         pitch_min: if single { pitch_min } else { 0.0 },

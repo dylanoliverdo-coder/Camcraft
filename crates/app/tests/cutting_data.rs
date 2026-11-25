@@ -107,7 +107,7 @@ fn faced_doc() -> (World, History) {
     h.execute(&world, AddTool::new(&world, "EM-0400-2FL", catalog_tool("EM-0400-2FL")).expect("tool"));
     let stock = SetStock::new(&world, StockShape::Box { dx: 60.0, dy: 60.0, dz: 20.0 }, Default::default());
     h.execute(&world, stock.expect("stock"));
-    let face = OpParams::Face { holes: Default::default(),
+    let face = OpParams::Face { floor_stock: 0.0, holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 3.0,

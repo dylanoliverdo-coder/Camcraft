@@ -49,6 +49,7 @@ fn params(lead: Lead, links: Links) -> ContourParams {
         blend_turns: false,
         blend_radius: None,
         links,
+        passes: camcraft_motion::machining2d::WallPasses::default(),
     }
 }
 

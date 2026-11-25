@@ -126,6 +126,7 @@ fn an_offset_bar_reads_its_own_side_at_a_minus_90_and_the_underside() {
 fn contour(tilt: Tilt) -> OpParams {
     let from_model = |offset| Height { reference: HeightReference::TopOfModel, offset };
     OpParams::Contour {
+        floor_stock: 0.0,
         tilt: Some(tilt),
         stock_to_leave: 0.0,
         clearance_z: from_model(10.0),
@@ -147,6 +148,7 @@ fn contour(tilt: Tilt) -> OpParams {
         blend_turns: false, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 
@@ -253,7 +255,7 @@ fn tilted_reference_pocket_preserves_part(src: SrcRef) {
         &world,
         camcraft_app::commands::ImportModel::from_mesh("part", part),
     );
-    let params = OpParams::Pocket { pass_start: Default::default(),
+    let params = OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(),
         rest: None,
         blend_radius: None,
         stepover: 4.0,

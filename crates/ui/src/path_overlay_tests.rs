@@ -38,6 +38,7 @@ fn state_with_large_path() -> State {
             "EM-0400-2FL",
             SrcRef::Stock,
             OpParams::Face {
+                floor_stock: 0.0,
                 holes: Default::default(),
                 tilt: None,
                 blend_turns: false, blend_radius: None,

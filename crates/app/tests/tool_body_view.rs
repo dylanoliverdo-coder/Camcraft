@@ -119,6 +119,7 @@ fn an_operation_reads_its_tools_body() {
     );
     history.execute(&world, AddTool::new(&world, TOOL, catalog_tool(TOOL)).expect("tool"));
     let face = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         blend_turns: false, blend_radius: None,

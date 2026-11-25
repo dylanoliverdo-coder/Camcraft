@@ -48,7 +48,7 @@ fn op(tool: &str, params: OpParams) -> Operation {
 fn a_stock_face_enters_from_air_for_a_tool_that_is_not_centre_cutting() {
     let (world, _h) = world_with("EM-0800-4FL");
     for (top_z, stepdown) in [(None, None), (Some(Height::fixed(20.0)), Some(1.0))] {
-        let face = OpParams::Face { holes: Default::default(),
+        let face = OpParams::Face { floor_stock: 0.0, holes: Default::default(),
             blend_turns: false, blend_radius: None,
             tilt: None,
             stepover: 4.0,
@@ -95,7 +95,7 @@ fn an_inner_patch_face_runs_its_entry_out_to_air_for_a_tool_that_is_not_centre_c
     for (top_z, stepdown, climb) in
         [(None, None, true), (None, None, false), (Some(Height::fixed(20.0)), Some(1.0), true)]
     {
-        let params = OpParams::Face { holes: Default::default(),
+        let params = OpParams::Face { floor_stock: 0.0, holes: Default::default(),
             blend_turns: false, blend_radius: None,
             tilt: None,
             stepover: 4.0,
@@ -156,6 +156,7 @@ fn an_inner_patch_face_runs_its_entry_out_to_air_for_a_tool_that_is_not_centre_c
 fn a_drill_cycle_with_a_tool_that_is_not_centre_cutting_is_refused_by_name() {
     let (world, _h) = world_with("DR-0400");
     let drill = OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(30.0),

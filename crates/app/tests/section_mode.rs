@@ -95,6 +95,7 @@ fn make_face_world() -> World {
     history.execute(&world, stock_cmd);
     add_tool(&world, &mut history, "EM-0400-2FL");
     let params = OpParams::Face {
+        floor_stock: 0.0,
         holes: FaceHoles::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,
@@ -121,7 +122,7 @@ fn make_tilted_pocket_world() -> World {
     add_tool(&world, &mut history, "EM-0600-4FL");
     let block = cube(Point3::new(0.0, 0.0, -20.0), Point3::new(40.0, 30.0, -10.0));
     history.execute(&world, ImportModel::from_mesh("part", block));
-    let params = OpParams::Pocket { pass_start: Default::default(),
+    let params = OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(),
         rest: None,
         blend_radius: None,
         links: Links::PLANAR,

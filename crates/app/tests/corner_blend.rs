@@ -92,6 +92,7 @@ fn cp(blend: bool) -> ContourParams {
         helix_radius: 1.0,
         blend_turns: blend, blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 
@@ -144,7 +145,7 @@ fn blended_pockets_verify_silent() {
 }
 
 fn pocket_op(blend: bool) -> OpParams {
-    OpParams::Pocket { pass_start: Default::default(), rest: None,
+    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         stepover: 3.0,
@@ -169,6 +170,7 @@ fn pocket_op(blend: bool) -> OpParams {
 
 fn contour_op(blend: bool) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         stock_to_leave: 0.0,
         clearance_z: Height::fixed(25.0),
         retract_z: Height::fixed(22.0),
@@ -190,6 +192,7 @@ fn contour_op(blend: bool) -> OpParams {
         tilt: None,
         links: camcraft_app::links::Links::PLANAR,
         chain_overrides: Vec::new(),
+        passes: camcraft_app::machining2d::WallPasses::default(),
     }
 }
 

@@ -194,6 +194,7 @@ fn milling_test_finish_band(
         .find(|&i| KindInfo::ALL.get(i).is_some_and(|k| k.label == "3D Finish"))
         .expect("3D Finish kind");
     let seed = OpParams::Face {
+        floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
         stepover: 3.0,

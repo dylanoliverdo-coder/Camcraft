@@ -137,6 +137,10 @@ pub struct ContourParams {
     /// every file before the option (the old `level_link` stay-down ramp
     /// is level Keep down with a Ramp transition).
     pub links: Links,
+    /// Wall passes per level (Journeyman spec S1): the roughing,
+    /// finishing and spring passes. The default is today's single pass,
+    /// byte for byte.
+    pub passes: super::contour_passes::WallPasses,
 }
 
 impl ContourParams {
@@ -185,6 +189,12 @@ impl ContourParams {
         if self.tolerance <= 0.0 {
             return Err(GenError::Invalid("tolerance must be positive".into()));
         }
+        // Wall passes (spec S1): a count the generator cannot honour is
+        // refused by name, and a spacing asked for with its count at the
+        // default is not a spacing at all.
+        if let Some(why) = self.passes.refusal() {
+            return Err(GenError::Invalid(why));
+        }
         match self.lead {
             Lead::None => {}
             Lead::Linear { length } if length >= 0.0 && length.is_finite() => {}
@@ -195,6 +205,18 @@ impl ContourParams {
         }
         if self.tab_count > 0 && (self.tab_width <= 0.0 || self.tab_height < 0.0) {
             return Err(GenError::Invalid("tabs need positive width".into()));
+        }
+        // Journeyman spec S1 (review round 3): tabs and wall passes are
+        // not specified together yet - a standing tab is material the
+        // pass room law cannot see. Refuse by name, never drop.
+        if self.tab_count > 0
+            && (self.passes.rough_passes > 1
+                || self.passes.finish_passes > 0
+                || self.passes.spring_passes > 0)
+        {
+            return Err(GenError::Invalid(
+                "tabs and wall passes are not specified together yet - clear the tabs or set the wall passes to the single pass".into(),
+            ));
         }
         self.links.validate().map_err(|e| GenError::Invalid(e.into()))?;
         if self.blend_turns {

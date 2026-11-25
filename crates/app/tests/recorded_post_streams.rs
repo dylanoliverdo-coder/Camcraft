@@ -91,6 +91,7 @@ fn drill_retract() -> String {
         kind: ToolKind::Drill,
         diameter: 6.0,
         corner_r: 0.0,
+        tip_diameter: 0.0,
         tip_angle: 118.0,
         pitch: 0.0,
         nose_radius: 0.0,
@@ -124,6 +125,7 @@ fn drill_retract() -> String {
     };
     let holes = [hole(10.0, -20.0), hole(30.0, -15.0)];
     let p = CycleParams {
+        chamfer_width: 0.0,
         through_clear: camcraft_app::drilling::THROUGH_CLEAR,
         break_through_from: Default::default(),
         clearance_z: 10.0,

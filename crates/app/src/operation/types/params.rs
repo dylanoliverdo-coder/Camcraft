@@ -96,6 +96,8 @@ impl Tilt {
 #[derive(Clone, Debug, PartialEq)]
 pub enum OpParams {
     Face {
+        /// Signed axial allowance above Cut Z, mm (Journeyman S2).
+        floor_stock: f64,
         stepover: f64,
         clearance_z: Height,
         cut_z: Height,
@@ -130,6 +132,8 @@ pub enum OpParams {
         tilt: Option<Tilt>,
     },
     Contour {
+        /// Signed axial allowance above Bottom Z, mm (Journeyman S2).
+        floor_stock: f64,
         stock_to_leave: f64,
         clearance_z: Height,
         retract_z: Height,
@@ -180,8 +184,14 @@ pub enum OpParams {
         /// sketch contours; empty by default so legacy operations stamp
         /// identically.
         chain_overrides: Vec<super::sel::ChainOverride>,
+        /// Wall passes per level (Journeyman spec S1): the roughing,
+        /// finishing and spring passes. The default is today's single
+        /// pass, byte for byte.
+        passes: crate::machining2d::WallPasses,
     },
     Pocket {
+        /// Signed axial allowance above Bottom Z, mm (Journeyman S2).
+        floor_stock: f64,
         stepover: f64,
         stock_to_leave: f64,
         clearance_z: Height,
@@ -526,6 +536,8 @@ pub enum OpParams {
     /// of every hole at once; `None` (the normal shape) machines each
     /// hole to its own floor, plus the through-hole exit allowance.
     Drill {
+        // Journeyman S6: width at the hole mouth, in mm; zero keeps the legacy depth.
+        chamfer_width: f64,
         clearance_z: Height,
         /// Hop plane between holes; `None` hops to clearance, like the
         /// pocket family.
@@ -1844,6 +1856,11 @@ impl OpParams {
             // The boring ride and the thread mill carry the drill's
             // four - the hole list's floors are params data, not
             // section heights (M2.4 C).
+            OpParams::Drill { clearance_z, retract_z, top_z, chamfer_width, .. } if *chamfer_width > 0.0 => {
+                f(*clearance_z);
+                opt(retract_z, &mut f);
+                f(*top_z);
+            }
             OpParams::Drill { clearance_z, retract_z, top_z, bottom_z, .. }
             | OpParams::Bore { clearance_z, retract_z, top_z, bottom_z, .. }
             | OpParams::Thread { clearance_z, retract_z, top_z, bottom_z, .. } => {

@@ -122,6 +122,7 @@ impl ParamsDto {
             }
             OpParams::TrochoidalSlot { .. } => ParamsDto::TrochoidalSlot(TrochoidDto::from_params(p)),
             OpParams::Face {
+                floor_stock,
                 stepover,
                 clearance_z,
                 cut_z,
@@ -134,6 +135,7 @@ impl ParamsDto {
                 holes,
                 tilt,
             } => ParamsDto::Face {
+                floor_stock: *floor_stock,
                 stepover: *stepover,
                 clearance_z: (*clearance_z).into(),
                 cut_z: (*cut_z).into(),
@@ -147,6 +149,7 @@ impl ParamsDto {
                 tilt: (*tilt).map(Into::into),
             },
             OpParams::Contour {
+                floor_stock,
                 stock_to_leave,
                 clearance_z,
                 retract_z,
@@ -168,7 +171,9 @@ impl ParamsDto {
                 links,
                 tilt,
                 chain_overrides,
+                passes,
             } => ParamsDto::Contour {
+                floor_stock: *floor_stock,
                 stock_to_leave: *stock_to_leave,
                 clearance_z: (*clearance_z).into(),
                 retract_z: (*retract_z).into(),
@@ -216,8 +221,10 @@ impl ParamsDto {
                         reverse: o.reverse,
                     })
                     .collect(),
+                passes: (*passes).into(),
             },
             OpParams::Pocket {
+                floor_stock,
                 links,
                 stepover,
                 stock_to_leave,
@@ -240,6 +247,7 @@ impl ParamsDto {
                 tilt,
                 pass_start,
             } => ParamsDto::Pocket {
+                floor_stock: *floor_stock,
                 links: links_to_dto(links, &p.default_links()),
                 stepover: *stepover,
                 stock_to_leave: *stock_to_leave,
@@ -1336,6 +1344,7 @@ impl ParamsDto {
                 tilt: (*tilt).map(Into::into),
             },
             OpParams::Drill {
+                chamfer_width,
                 clearance_z,
                 retract_z,
                 top_z,
@@ -1350,6 +1359,7 @@ impl ParamsDto {
                 break_through,
                 break_through_from,
             } => ParamsDto::Drill {
+                chamfer_width: *chamfer_width,
                 break_through: *break_through,
                 break_through_from: Some(match break_through_from {
                     crate::drilling::BreakThroughFrom::FullDiameter => BreakThroughFromDto::FullDiameter,
@@ -1464,6 +1474,7 @@ impl ParamsDto {
             // single-level face, byte-exact; present ones land on the
             // domain as staged facing.
             ParamsDto::Face {
+                floor_stock,
                 stepover,
                 clearance_z,
                 cut_z,
@@ -1476,6 +1487,7 @@ impl ParamsDto {
                 holes,
                 tilt,
             } => OpParams::Face {
+                floor_stock: *floor_stock,
                 stepover: *stepover,
                 clearance_z: (*clearance_z).into(),
                 cut_z: (*cut_z).into(),
@@ -1489,6 +1501,7 @@ impl ParamsDto {
                 tilt: (*tilt).map(Into::into),
             },
             ParamsDto::Contour {
+                floor_stock,
                 stock_to_leave,
                 clearance_z,
                 retract_z,
@@ -1512,7 +1525,9 @@ impl ParamsDto {
                 links,
                 tilt,
                 chain_overrides,
+                passes,
             } => OpParams::Contour {
+                floor_stock: *floor_stock,
                 stock_to_leave: *stock_to_leave,
                 clearance_z: (*clearance_z).into(),
                 retract_z: (*retract_z).into(),
@@ -1562,8 +1577,10 @@ impl ParamsDto {
                         reverse: o.reverse,
                     })
                     .collect(),
+                passes: (*passes).into(),
             },
             ParamsDto::Pocket {
+                floor_stock,
                 links,
                 stepover,
                 stock_to_leave,
@@ -1587,6 +1604,7 @@ impl ParamsDto {
                 tilt,
                 pass_start,
             } => OpParams::Pocket {
+                floor_stock: *floor_stock,
                 links: links_from_dto(links.as_ref(), crate::links::Links::PLANAR),
                 stepover: *stepover,
                 stock_to_leave: *stock_to_leave,
@@ -2658,6 +2676,7 @@ impl ParamsDto {
                 tilt: (*tilt).map(Into::into),
             },
             ParamsDto::Drill {
+                chamfer_width,
                 clearance_z,
                 retract_z,
                 top_z,
@@ -2672,6 +2691,7 @@ impl ParamsDto {
                 break_through,
                 break_through_from,
             } => OpParams::Drill {
+                chamfer_width: *chamfer_width,
                 break_through: *break_through,
                 break_through_from: match break_through_from.unwrap_or_default() {
                     BreakThroughFromDto::FullDiameter => crate::drilling::BreakThroughFrom::FullDiameter,
@@ -2800,6 +2820,7 @@ mod face_holes_law {
 
     fn face(holes: FaceHoles) -> OpParams {
         OpParams::Face {
+            floor_stock: 0.0,
             holes,
             blend_turns: false, blend_radius: None,
             tilt: None,

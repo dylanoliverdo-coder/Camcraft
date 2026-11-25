@@ -27,6 +27,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             blend_turns, blend_radius,
             holes,
             tilt,
+            ..
         } => {
             if tab == SEC_HEIGHTS {
                 orientation_editor(ui, u, tilt);
@@ -122,6 +123,8 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             links,
             tilt,
             chain_overrides,
+            passes,
+            ..
         } => {
             if tab == SEC_GEO {
                 let mut s_idx = match side {
@@ -177,6 +180,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
                 // is legal; the status line names every corner left
                 // sharp and the corner rest the rounding leaves.
                 super::kind_editors::arc_turn_rows(ui, u, "Arc turns at corners", blend_turns, blend_radius);
+                super::contour_pass_rows::wall_pass_rows(ui, u, passes);
             }
             if tab == SEC_LEADS {
                 let mut l_idx = match lead {
@@ -246,6 +250,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             corner_relief,
             tilt,
             pass_start,
+            ..
         } => {
             if tab == SEC_LEADS {
                 lead_page::leads_tab(ui, u, "p", Some((&mut *entry, helix_radius)), links);

@@ -209,6 +209,8 @@ mod deburr_page;
 mod mill2d_more_page;
 mod vcarve_page;
 mod mill2d_page;
+// Journeyman spec S1: the 2D Contour's wall-pass rows.
+mod contour_pass_rows;
 // #1815: 2D Pocket's "Rest machining" group on the Passes tab.
 mod rest_pocket_page;
 mod mill3d_page;

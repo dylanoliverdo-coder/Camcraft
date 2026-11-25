@@ -110,6 +110,7 @@ pub fn thread(radius: f64, pitch: Option<f64>, hand: ThreadHand, climb: bool) ->
 pub fn drill(radius: f64, floor: f64) -> OpParams {
     let hole = Hole { xy: Point2::new(0.0, 0.0), radius, entry_z: TOP, floor_z: floor, through: false, stepped: false };
     OpParams::Drill {
+        chamfer_width: 0.0,
         break_through: None,
         break_through_from: Default::default(),
         clearance_z: Height::fixed(TOP + 10.0),

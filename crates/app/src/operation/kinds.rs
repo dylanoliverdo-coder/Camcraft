@@ -716,6 +716,7 @@ fn retract_of(p: &OpParams) -> Option<Height> {
 
 fn seed_face(c: &Carried) -> OpParams {
     OpParams::Face {
+        floor_stock: 0.0,
         stepover: c.stepover,
         clearance_z: c.clearance,
         cut_z: Height::of(HeightReference::TopOfStock, 0.0),
@@ -738,6 +739,7 @@ fn seed_face(c: &Carried) -> OpParams {
 
 fn seed_contour(c: &Carried) -> OpParams {
     OpParams::Contour {
+        floor_stock: 0.0,
         side: Side::Auto,
         stock_to_leave: 0.0,
         clearance_z: c.clearance,
@@ -765,11 +767,15 @@ fn seed_contour(c: &Carried) -> OpParams {
         links: crate::links::Links::PLANAR,
         tilt: c.tilt,
         chain_overrides: Vec::new(),
+        // Journeyman spec S1: the single wall pass every file before the
+        // option held.
+        passes: crate::machining2d::WallPasses::default(),
     }
 }
 
 fn seed_pocket(c: &Carried) -> OpParams {
     OpParams::Pocket {
+        floor_stock: 0.0,
         blend_radius: None,
         rest: None,
         links: crate::links::Links::PLANAR,
@@ -982,6 +988,7 @@ fn seed_trace(c: &Carried) -> OpParams {
 
 fn seed_drill(c: &Carried) -> OpParams {
     OpParams::Drill {
+        chamfer_width: 0.0,
         clearance_z: c.clearance,
         retract_z: None,
         top_z: c.top,
