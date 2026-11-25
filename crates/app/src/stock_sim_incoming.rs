@@ -15,15 +15,18 @@ pub(super) fn report(
     after: &Dexel,
     dev: &mut Deviation,
 ) -> Option<String> {
-    if dev.gouge_cells == 0 {
+    // An undercut cutter's pass rides its own plan and lowers no column top
+    // (#1444), so an unchanged top cannot say the program left that cell
+    // alone: a program with one keeps the full gate.
+    if dev.gouge_cells == 0 || planned.iter().any(|p| p.undercut.is_some()) {
         return None;
     }
-    // The setup and lattice the walk started from (`carry::walk`, which
-    // passes `start`): the first cutting op's setup or, for a program of
-    // touch probes only, which plans nothing, the setup the probes run in,
-    // its uncut stock judged on the span-sized lattice an infinite radius
-    // gives (#592). Only that stock's acknowledgement counts: a probe in
-    // any other setup keeps the full gate.
+    // The setup and lattice the walk started from (`carry::walk`; `start`
+    // is where it stands, as it never spanned): the first cutting op's
+    // setup or, for a program of touch probes only, which plans nothing,
+    // the setup the probes run in, its uncut stock judged on the span-sized
+    // lattice an infinite radius gives (#592). Only that stock's
+    // acknowledgement counts: a probe in any other setup keeps the full gate.
     let setup = planned.first().map_or(start, |p| p.setup.as_deref());
     let judged = crate::setup::effective(world, setup);
     if unplanned_probe_setups(world)?.iter().any(|s| *s != judged) {
@@ -51,7 +54,7 @@ fn note(world: &World, setup: Option<&str>, radius: f64, after: &Dexel, dev: &mu
         )
     });
     Some(format!(
-        "note: incoming stock '{source}' already has {} deficient cells, worst {depth} {}{at}. This program leaves those cells at their incoming heights",
+        "note: incoming stock '{source}' already has {} deficient cell(s), worst {depth} {}{at}. This program leaves those cells at their incoming heights",
         inherited.cells,
         units.suffix()
     ))

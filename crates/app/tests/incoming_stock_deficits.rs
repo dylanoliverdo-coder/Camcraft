@@ -469,6 +469,44 @@ fn a_torch_program_across_setups_the_sim_cannot_cross_refuses() {
 }
 
 #[test]
+fn acknowledged_an_undercut_program_keeps_the_full_gate() {
+    // A T-slot pass in the casting beside the part, away from the step. An
+    // undercut lowers no column top in the column sim (#1444), so "unchanged"
+    // cannot be read from the tops: the deficits block as gouges, no note.
+    use camcraft_app::operation::SlotUndercutOp;
+    use camcraft_app::tools::ToolKind;
+    let (world, mut h) = setup(true, TOOL);
+    op(&world, &mut h, "Op1", bore(Point2::new(0.0, 0.0), 8.0, FLOOR));
+    let tslot = camcraft_app::undercut::cutter(ToolKind::TSlot, 8.0, 3.0, 4.0, 20.0, 0.0);
+    h.execute(&world, AddTool::new(&world, "TS-08", tslot).expect("t-slot cutter"));
+    let params = OpParams::SlotUndercut(SlotUndercutOp {
+        a: Point2::new(25.0, -25.0),
+        b: Point2::new(25.0, -5.0),
+        bulge: 0.0,
+        width: 8.0,
+        run_in: 12.0,
+        neck_slot: 5.0,
+        clearance_z: Height::fixed(40.0),
+        retract_z: Some(Height::fixed(30.0)),
+        top_z: Height::fixed(MOUTH),
+        bottom_z: Height::fixed(6.0),
+        stepover: 3.0,
+        feed: 120.0,
+        plunge_feed: 60.0,
+        climb: true,
+    });
+    let src = SrcRef::Entity("part".into());
+    h.execute(&world, CreateOperation::new(&world, "Undercut1", "TS-08", src, params).expect("create undercut"));
+    h.execute(&world, GenerateOperation::new(&world, "Undercut1").expect("generate undercut"));
+    let report = posting::verification_report(&world);
+    assert!(
+        !report.not_judged.clone().unwrap_or_default().contains("incoming stock"),
+        "an undercut program was told its deficits are unchanged: {report:?}"
+    );
+    assert!(report.problems.iter().any(|p| p.starts_with("gouge")), "the inherited deficits no longer block: {report:?}");
+}
+
+#[test]
 fn the_acknowledgement_needs_the_mark() {
     let world = new_world();
     let mut h = History::default();
