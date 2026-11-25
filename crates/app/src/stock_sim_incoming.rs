@@ -21,6 +21,9 @@ pub(super) fn report(
     // of touch probes only plans nothing, yet its uncut stock is judged on
     // the span-sized lattice an infinite radius gives (#592), and so here.
     let setup = planned.first().and_then(|p| p.setup.as_deref());
+    if !unplanned_ops_leave_the_judged_stock(world, setup)? {
+        return None;
+    }
     let source = crate::stock_source::incoming_stock_source(world, setup)?;
     let radius = planned.iter().map(|op| op.radius).fold(f64::INFINITY, f64::min);
     let before = stock_grid(world, setup, radius).ok()?;
@@ -41,6 +44,28 @@ pub(super) fn report(
         inherited.cells,
         units.suffix()
     ))
+}
+
+/// Whether the program's ops the column plan left out keep the receipt
+/// true: the "unchanged" claim reads only the planned cuts. A torch or a
+/// wire removes material the column never sees (#670, #108's skip), so a
+/// program with one keeps the full gate. A touch probe removes nothing,
+/// but it must machine against the stock the verdict judged: an empty
+/// plan judges the first setup's stock, and another setup's probe (or
+/// its acknowledgement) says nothing about that stock.
+fn unplanned_ops_leave_the_judged_stock(world: &World, setup: Option<&str>) -> Option<bool> {
+    use crate::tools::ToolKind;
+    let judged = crate::setup::effective(world, setup);
+    for (_, e) in crate::posting::program_ops(world).ok()? {
+        let op = crate::model::operation_of(world, &e)?;
+        let kind = crate::model::find_by_name(world, &op.tool).and_then(|t| crate::model::tool_of(world, &t))?.kind;
+        match kind {
+            ToolKind::Torch | ToolKind::Wire => return Some(false),
+            ToolKind::Probe if crate::setup::effective(world, op.setup.as_deref()) != judged => return Some(false),
+            _ => {}
+        }
+    }
+    Some(true)
 }
 
 #[derive(Default)]

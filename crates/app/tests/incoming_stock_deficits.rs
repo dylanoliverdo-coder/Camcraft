@@ -180,9 +180,31 @@ fn acknowledged_a_cut_into_the_step_still_blocks() {
 /// The setup and one top-face probe touch on the part away from the step and
 /// the hole: a program of touch probes only, which removes nothing.
 fn probe_job(acknowledge: bool) -> World {
+    let (world, mut h) = setup(acknowledge, "PRB-0400");
+    add_probe(&world, &mut h);
+    world
+}
+
+/// Two setups, each with its own copy of the stepped casting marked raw stock
+/// only, `acknowledge` naming which of the two carry the acknowledgement, and
+/// the program's only op a touch probe in the second.
+fn two_setup_probe_job(acknowledge: [bool; 2]) -> World {
+    use camcraft_app::commands::{ActivateSetup, CreateSetup};
+    let (world, mut h) = setup(false, "PRB-0400");
+    h.execute(&world, CreateSetup::new(&world, Some("Setup1"), None).expect("setup 1"));
+    h.execute(&world, CreateSetup::new(&world, Some("Setup2"), Some("Setup1")).expect("setup 2"));
+    for (name, ack) in [("Setup1", acknowledge[0]), ("Setup2", acknowledge[1])] {
+        h.execute(&world, ActivateSetup::new(&world, Some(name)).expect("activate"));
+        h.execute(&world, SetStockSourceOnly::with_inherited_deficits(&world, true, ack).expect("mark"));
+    }
+    add_probe(&world, &mut h);
+    world
+}
+
+/// One top-face probe touch, in the active setup.
+fn add_probe(world: &World, h: &mut History) {
     use camcraft_app::operation::HeightReference;
     use camcraft_app::probing::{ProbeDir, ProbeMode};
-    let (world, mut h) = setup(acknowledge, "PRB-0400");
     let p = OpParams::Probe {
         clearance_z: Height::of(HeightReference::TopOfModel, 25.0),
         mode: ProbeMode::Face,
@@ -201,9 +223,23 @@ fn probe_job(acknowledge: bool) -> World {
         tolerance: 0.5,
     };
     let src = SrcRef::Entity("part".into());
-    h.execute(&world, CreateOperation::new(&world, "Probe1", "PRB-0400", src, p).expect("probe op"));
-    h.execute(&world, GenerateOperation::new(&world, "Probe1").expect("generate probe"));
-    world
+    h.execute(world, CreateOperation::new(world, "Probe1", "PRB-0400", src, p).expect("probe op"));
+    h.execute(world, GenerateOperation::new(world, "Probe1").expect("generate probe"));
+}
+
+#[test]
+fn another_setups_acknowledgement_never_relieves_a_probe_program() {
+    // The probe machines against the second setup's stock; an empty plan is
+    // judged on the first setup's. Neither acknowledgement may stand in for
+    // the other.
+    for acknowledge in [[true, false], [false, true]] {
+        let world = two_setup_probe_job(acknowledge);
+        let report = posting::verification_report(&world);
+        assert!(
+            !report.not_judged.clone().unwrap_or_default().contains("incoming stock"),
+            "{acknowledge:?}: one setup's acknowledgement relieved a probe in another: {report:?}"
+        );
+    }
 }
 
 #[test]
@@ -226,6 +262,57 @@ fn acknowledged_a_probe_only_program_posts_with_the_located_note() {
     let (_, y, z) = located(&note);
     assert!((STEP_Y..=20.0).contains(&y) && (z - STEP_TOP).abs() < 1e-6, "the worst cell is not on the step: {note}");
     post(&world, "probe-acknowledged").expect("an acknowledged probe-only program was refused");
+}
+
+/// The stepped casting and the part on the plasma table, acknowledged, and a
+/// torch profile of the part: the torch cuts through along a kerf the column
+/// sim has no atom for, so it plans nothing there.
+fn torch_job() -> World {
+    use camcraft_app::operation::{PlasmaComp, PlasmaOp};
+    const TORCH: &str = "PT-KERF-150";
+    let world = new_world();
+    let mut h = History::default();
+    h.execute(&world, camcraft_app::commands::LoadMachine::builtin(&world, "Tormach 1300PL").expect("plasma table"));
+    h.execute(&world, ImportModel::from_mesh("casting", stepped_casting()));
+    h.execute(&world, ImportModel::from_mesh("part", part()));
+    let shape = StockShape::FromModel { source: "casting".into() };
+    h.execute(&world, SetStock::new(&world, shape, Location::default()).expect("stock"));
+    h.execute(&world, AddTool::new(&world, TORCH, camcraft_app::tools::torch_tool(1.5)).expect("torch"));
+    h.execute(&world, SetStockSourceOnly::with_inherited_deficits(&world, true, true).expect("mark"));
+    let p = OpParams::PlasmaProfile(PlasmaOp {
+        clearance_z: Height::fixed(40.0),
+        top_z: Height::fixed(MOUTH),
+        bottom_z: Height::fixed(0.0),
+        kerf: None,
+        comp: PlasmaComp::Computer,
+        reversed: false,
+        lead_in: 4.0,
+        lead_out: 3.0,
+        small_hole_dia: 32.0,
+        small_hole_feed: 0.65,
+        overburn: 1.0,
+        feed: Some(2500.0),
+        pierce_height: None,
+        cut_height: None,
+        pierce_delay: None,
+    });
+    let src = SrcRef::Entity("part".into());
+    h.execute(&world, CreateOperation::new(&world, "Plasma1", TORCH, src, p).expect("torch op"));
+    h.execute(&world, GenerateOperation::new(&world, "Plasma1").expect("generate torch"));
+    world
+}
+
+#[test]
+fn acknowledged_a_torch_program_keeps_the_full_gate() {
+    // The receipt's "unchanged" reads only the planned cuts; a torch's cut
+    // is not among them, so its program never gets the note.
+    let world = torch_job();
+    let report = posting::verification_report(&world);
+    assert!(
+        !report.not_judged.clone().unwrap_or_default().contains("incoming stock"),
+        "a torch program was told its deficits are unchanged: {report:?}"
+    );
+    assert!(report.problems.iter().any(|p| p.starts_with("gouge")), "the inherited deficits no longer block: {report:?}");
 }
 
 #[test]
