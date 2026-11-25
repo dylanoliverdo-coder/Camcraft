@@ -453,7 +453,7 @@ fn a_probe_program_across_setups_the_sim_cannot_cross_refuses() {
     h.execute(&world, ActivateSetup::new(&world, Some("Setup1")).expect("activate"));
     add_probe_named(&world, &mut h, "Probe2");
     let why = refused_with_no_file(&world, "probe-both-setups");
-    assert!(why.contains(posting::NOT_JUDGED) && why.contains("cuts nothing across setups"), "refused, but not for the stock: {why}");
+    assert!(why.contains(posting::NOT_JUDGED) && why.contains("do not verify the stock under probes or torches"), "refused, but not for the stock: {why}");
 }
 
 #[test]
@@ -462,7 +462,7 @@ fn a_torch_program_across_setups_the_sim_cannot_cross_refuses() {
         let world = torch_job_in(true, acknowledge);
         let why = refused_with_no_file(&world, &format!("torch-both-setups-{acknowledge}"));
         assert!(
-            why.contains(posting::NOT_JUDGED) && why.contains("cuts nothing across setups"),
+            why.contains(posting::NOT_JUDGED) && why.contains("do not verify the stock under probes or torches"),
             "refused, but not for the stock (acknowledged {acknowledge}): {why}"
         );
     }

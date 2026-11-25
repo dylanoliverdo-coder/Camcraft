@@ -129,11 +129,11 @@ fn judge_clause(world: &World) -> SimClause {
             let line = format!("{NOT_JUDGED}: {reason}");
             let problem = uncovered(world)
                 .map(|why| format!("{line} - and {why}, so nothing judged it; refusing"))
-                // A program that cuts nothing across setups: no generator
+                // Probes or torches only, across setups: no generator
                 // verdict judges the stock under it, so nothing did.
                 .or_else(|| {
                     crate::stock_sim::carry::cuts_nothing_across_setups(world).then(|| {
-                        format!("{line} - and the program cuts nothing across setups, so no generator verdict judges the stock under it; refusing")
+                        format!("{line} - and the operation checks do not verify the stock under probes or torches across this setup change; refusing")
                     })
                 })
                 // #1628: the parts beside an op's source, judged again live.
