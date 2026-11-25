@@ -24,8 +24,17 @@ pub(super) fn report(
     let inherited = separate_unchanged(&before, after, dev)?;
     let units = crate::units::of(world);
     let depth = crate::units::len(inherited.worst, units, 2);
+    // Located like the gouge line, so a person can find the worst cell.
+    let at = inherited.at.map_or_else(String::new, |q| {
+        format!(
+            " at ({}, {}, z {})",
+            crate::units::len(q.x, units, 2),
+            crate::units::len(q.y, units, 2),
+            crate::units::len(q.z, units, 2)
+        )
+    });
     Some(format!(
-        "note: incoming stock '{source}' already has {} deficient cells, worst {depth} {}. This program leaves those cells at their incoming heights",
+        "note: incoming stock '{source}' already has {} deficient cells, worst {depth} {}{at}. This program leaves those cells at their incoming heights",
         inherited.cells,
         units.suffix()
     ))

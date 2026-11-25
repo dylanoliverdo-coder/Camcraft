@@ -30,8 +30,11 @@ impl SetStockSourceOnly {
         Self::with_inherited_deficits(world, on, false)
     }
 
-    /// Acknowledge existing stock deficits for this session only.
-    pub(crate) fn with_inherited_deficits(
+    /// [`Self::new`], and with `report_inherited_deficits` the post reports
+    /// cells of this stock already below the part, and left at their
+    /// incoming heights, as a note instead of gouges. Needs `on`. For this
+    /// session only: opening the project clears it.
+    pub fn with_inherited_deficits(
         world: &World,
         on: bool,
         report_inherited_deficits: bool,
