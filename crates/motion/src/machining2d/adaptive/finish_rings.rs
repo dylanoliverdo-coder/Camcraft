@@ -11,8 +11,8 @@
 use crate::cl::{MoveKind, PathBuilder};
 use crate::geo2d::{Loop, Point2, Region};
 use crate::machining2d::arc_cross::crossing_free_on;
-use crate::machining2d::arc_proof::ProofTally;
-use crate::machining2d::arcs::{ARC_FIT_TOL, Seg, fit_arcs};
+use crate::machining2d::arc_proof::{ProofTally, fit_proved};
+use crate::machining2d::arcs::{ARC_FIT_TOL, Seg};
 use crate::machining2d::face::GenError;
 use crate::machining2d::levels::{Cert, Motion, WalkState, walk_one_level};
 use crate::machining2d::pocket::{PocketParams, non_sliver_center};
@@ -155,9 +155,11 @@ fn start_ring_near(pts: &[Point2], anchor: Point2) -> Vec<Point2> {
 }
 
 /// Emit wall finishing rings at level `z` after trochoidal clearing/cleanup.
-/// Checks fitted finishing arcs with `crossing_free_on` against all prior
-/// moves in `bld`, expands curved prior arcs with `chords(ARC_FIT_TOL)`, and
-/// enters from retract whenever `bld.at().z` is not already at cut plane `z`.
+/// Fits each ring with `fit_proved` at the ring budget (`ARC_FIT_TOL * 0.25`)
+/// against `center_final` so no arc escapes curved walls, checks surviving arcs
+/// with `crossing_free_on` against all prior moves in `bld` (expanding curved
+/// prior arcs with `chords(ARC_FIT_TOL)`), and enters from retract whenever
+/// `bld.at().z` is not already at cut plane `z`.
 pub(crate) fn emit_troch_finish_level(
     bld: &mut PathBuilder,
     fin_passes: &[Vec<Point2>],
@@ -206,11 +208,7 @@ pub(crate) fn emit_troch_finish_level(
     let mut proof = ProofTally::default();
     let raw_runs: Vec<Vec<Seg>> = fin_passes
         .iter()
-        .map(|ring| {
-            let segs = fit_arcs(ring, ARC_FIT_TOL);
-            proof.arcs += segs.iter().filter(|s| matches!(s, Seg::Arc { .. })).count();
-            segs
-        })
+        .map(|ring| fit_proved(ring, ARC_FIT_TOL * 0.25, center_final, &mut proof))
         .collect();
     let safe_runs = crossing_free_on(bld, fin_passes, raw_runs, &mut proof, emit);
     emit(bld, &safe_runs);

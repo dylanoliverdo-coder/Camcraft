@@ -612,3 +612,258 @@ fn s5_avoid_with_finish_keeps_clear_of_protected_zone() {
         .fold(f64::INFINITY, f64::min);
     assert!((min_x - 3.0).abs() < 1e-2, "western wall should finish at x=3.0 mm (got {min_x:.4})");
 }
+
+/// Synthetic concave 4-lobed multi-arc pocket with radiused walls (50 x 50 mm
+/// envelope, 4 circular lobes at (±12, ±12) radius 11 mm merged with a central
+/// radius 17 mm disc).
+fn four_lobe_pocket() -> Region {
+    let mut area = circle(0.0, 0.0, 17.0, 128);
+    for (cx, cy) in [(12.0, 12.0), (-12.0, 12.0), (-12.0, -12.0), (12.0, -12.0)] {
+        area = area.union(&circle(cx, cy, 11.0, 96)).expect("lobe union");
+    }
+    area
+}
+
+/// Assert every non-rapid move of `path` stays confined within `center_final`
+/// grown by `tol` (matching `adaptive_troch::CONFINE_TOL = 2e-3` mm).
+fn assert_confined(path: &Toolpath, center_final: &Region, tol: f64, label: &str) {
+    let grown = center_final.offset(tol).expect("grow center_final");
+    for (i, m) in path.moves.iter().enumerate() {
+        if m.kind == MoveKind::Rapid {
+            continue;
+        }
+        for (a, b) in m.segments3(0.01) {
+            for q in [a, b] {
+                assert!(
+                    grown.contains(Point2::new(q.x, q.y)),
+                    "{label}: cutting move {i} point ({:.4}, {:.4}, {:.4}) escaped center_final + {tol} mm",
+                    q.x,
+                    q.y,
+                    q.z
+                );
+            }
+        }
+    }
+}
+
+/// Curved concave circular pocket: Trochoidal + S5 (`passes = 1` and `2`,
+/// `Every` and `Last`, climb & conventional) and Spiral + S5 must generate
+/// without confinement refusal, keep every cutting move inside `center_final`
+/// within `CONFINE_TOL`, stay crossing-free, cut in the requested climb sense,
+/// and hit exact final wall clearance.
+#[test]
+fn s5_curved_circular_pocket_trochoidal_and_spiral_stay_confined() {
+    let area = circle(0.0, 0.0, 25.0, 128);
+    let mut p = base_params(true);
+    p.tool_diameter = 10.0;
+    p.stock_to_leave = 0.0;
+    p.top_z = 0.0;
+    p.bottom_z = -4.0;
+    p.stepdown = 2.0;
+    let center_final = area.offset(-5.0).expect("center_final");
+
+    // Baseline: Trochoidal with finish_passes = 0 generates cleanly.
+    let base_troch = adaptive_trochoidal_with_finish(
+        &area,
+        &p,
+        &AdaptiveTrochParams::default(),
+        None,
+        &AdaptiveFinish::default(),
+    )
+    .expect("trochoidal passes=0 baseline");
+    assert_confined(&base_troch, &center_final, 2e-3, "circular troch passes=0");
+
+    // Trochoidal + S5: passes=1 (step 0.508 mm) and passes=2, Every and Last, climb and conventional.
+    let cases = [
+        (1, 0.508, FinishLevel::Every, true),
+        (1, 0.508, FinishLevel::Last, true),
+        (2, 0.508, FinishLevel::Every, true),
+        (2, 0.508, FinishLevel::Last, false),
+    ];
+    for (passes, step, level, climb) in cases {
+        let mut pc = p;
+        pc.climb = climb;
+        let finish = AdaptiveFinish {
+            finish_passes: passes,
+            finish_spacing: step,
+            spring_passes: 0,
+            finish_level: level,
+        };
+        let label = format!("circular troch passes={passes} level={level:?} climb={climb}");
+        let path = adaptive_trochoidal_with_finish(&area, &pc, &AdaptiveTrochParams::default(), None, &finish)
+            .unwrap_or_else(|e| panic!("{label} refused: {e}"));
+        assert_confined(&path, &center_final, 2e-3, &label);
+        assert!(camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty(), "{label}: crossed");
+
+        let runs = cut_runs_at(&path, -4.0);
+        let final_ring = runs.last().expect("final finishing ring");
+        let r_med = median_radius(final_ring);
+        assert!((r_med - 20.0).abs() < 0.02, "{label}: final ring radius {r_med:.4}, want 20.00");
+        let turn = signed_turn(final_ring);
+        if climb {
+            assert!(turn > 0.0, "{label}: climb inside ring must turn CCW (got {turn})");
+        } else {
+            assert!(turn < 0.0, "{label}: conventional inside ring must turn CW (got {turn})");
+        }
+    }
+
+    // Spiral + S5 on the same curved circular pocket must also stay confined inside center_final.
+    for (passes, level, climb) in [(1, FinishLevel::Every, true), (2, FinishLevel::Last, false)] {
+        let mut pc = p;
+        pc.climb = climb;
+        let finish = AdaptiveFinish {
+            finish_passes: passes,
+            finish_spacing: 0.508,
+            spring_passes: 0,
+            finish_level: level,
+        };
+        let label = format!("circular spiral passes={passes} level={level:?} climb={climb}");
+        let path = adaptive_with_finish(&area, &pc, &CornerRelief::default(), &StartSide::default(), &finish)
+            .unwrap_or_else(|e| panic!("{label} refused: {e}"));
+        assert_confined(&path, &center_final, 2e-3, &label);
+        assert!(camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty(), "{label}: crossed");
+
+        let runs = cut_runs_at(&path, -4.0);
+        let final_ring = runs.last().expect("final finishing ring");
+        let r_med = median_radius(final_ring);
+        assert!((r_med - 20.0).abs() < 0.02, "{label}: final ring radius {r_med:.4}, want 20.00");
+        let turn = signed_turn(final_ring);
+        if climb {
+            assert!(turn > 0.0, "{label}: climb inside ring must turn CCW (got {turn})");
+        } else {
+            assert!(turn < 0.0, "{label}: conventional inside ring must turn CW (got {turn})");
+        }
+    }
+
+    // Fine 200-gon circular pocket (sagitta ~0.00247 mm, between CONFINE_TOL=0.002
+    // and ARC_FIT_TOL*0.25=0.0025): fit_arcs fits circular arcs even at the ring
+    // budget, proving that `fit_proved` confines the final wall ring while still
+    // keeping proved G2/G3 arcs on inner finishing passes (j < n_f).
+    let fine_area = circle(0.0, 0.0, 25.0, 200);
+    let fine_center = fine_area.offset(-5.0).expect("fine center_final");
+    let fin2 = AdaptiveFinish {
+        finish_passes: 2,
+        finish_spacing: 0.508,
+        spring_passes: 0,
+        finish_level: FinishLevel::Last,
+    };
+    for (name, path) in [
+        (
+            "fine-200 troch",
+            adaptive_trochoidal_with_finish(&fine_area, &p, &AdaptiveTrochParams::default(), None, &fin2)
+                .expect("fine-200 troch passes=2"),
+        ),
+        (
+            "fine-200 spiral",
+            adaptive_with_finish(&fine_area, &p, &CornerRelief::default(), &StartSide::default(), &fin2)
+                .expect("fine-200 spiral passes=2"),
+        ),
+    ] {
+        assert_confined(&path, &fine_center, 2e-3, name);
+        assert!(camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty(), "{name}: crossed");
+        let runs = cut_runs_at(&path, -4.0);
+        assert!(runs.len() >= 2, "{name}: expected at least 2 finishing rings");
+        let inner_ring = &runs[runs.len() - 2];
+        let outer_ring = &runs[runs.len() - 1];
+        assert!(
+            inner_ring.iter().any(|m| m.arc.is_some()),
+            "{name}: inner finishing pass (0.508 mm inside center_final) should keep proved G2/G3 arcs"
+        );
+        assert!((median_radius(inner_ring) - 19.492).abs() < 0.02, "{name}: inner ring radius");
+        assert!((median_radius(outer_ring) - 20.0).abs() < 0.02, "{name}: outer ring radius");
+    }
+}
+
+/// Synthetic concave 4-lobed multi-arc pocket with radiused walls: both
+/// Trochoidal + S5 and Spiral + S5 must generate cleanly, stay strictly
+/// confined inside `center_final`, remain crossing-free, respect climb sense,
+/// and reach exact final wall clearance in the lobes.
+#[test]
+fn s5_curved_four_lobe_pocket_trochoidal_and_spiral_stay_confined() {
+    let area = four_lobe_pocket();
+    let mut p = base_params(true);
+    p.tool_diameter = 8.0;
+    p.helix_radius = 2.0;
+    p.stepover = 2.0;
+    p.stock_to_leave = 0.0;
+    p.top_z = 0.0;
+    p.bottom_z = -4.0;
+    p.stepdown = 2.0;
+    let center_final = area.offset(-4.0).expect("center_final");
+
+    for (passes, level, climb) in [
+        (1, FinishLevel::Every, true),
+        (1, FinishLevel::Last, false),
+        (2, FinishLevel::Every, true),
+        (2, FinishLevel::Last, true),
+    ] {
+        let mut pc = p;
+        pc.climb = climb;
+        let finish = AdaptiveFinish {
+            finish_passes: passes,
+            finish_spacing: 0.508,
+            spring_passes: 0,
+            finish_level: level,
+        };
+        let label = format!("4-lobe troch passes={passes} level={level:?} climb={climb}");
+        let path = adaptive_trochoidal_with_finish(&area, &pc, &AdaptiveTrochParams::default(), None, &finish)
+            .unwrap_or_else(|e| panic!("{label} refused: {e}"));
+        assert_confined(&path, &center_final, 2e-3, &label);
+        assert!(camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty(), "{label}: crossed");
+
+        let runs = cut_runs_at(&path, -4.0);
+        let final_ring = runs.last().expect("final finishing ring");
+        let turn = signed_turn(final_ring);
+        if climb {
+            assert!(turn > 0.0, "{label}: climb inside ring must turn CCW (got {turn})");
+        } else {
+            assert!(turn < 0.0, "{label}: conventional inside ring must turn CW (got {turn})");
+        }
+        // Check exact final wall reach into the (+12, +12) lobe's outer quadrant:
+        // lobe wall is at radius 11 mm around (12, 12), so cutter center sits at 7.0 mm.
+        let lobe_rs: Vec<f64> = final_ring
+            .iter()
+            .flat_map(|m| m.chords(0.005))
+            .filter(|(a, _)| a.x > 12.0 && a.y > 12.0)
+            .map(|(a, _)| (a.x - 12.0).hypot(a.y - 12.0))
+            .collect();
+        assert!(!lobe_rs.is_empty(), "{label}: final ring must traverse (+12, +12) lobe");
+        let lobe_max_r = lobe_rs.iter().copied().fold(0.0_f64, f64::max);
+        let lobe_min_r = lobe_rs.iter().copied().fold(f64::INFINITY, f64::min);
+        assert!(
+            (lobe_max_r - 7.0).abs() < 0.03 && (lobe_min_r - 7.0).abs() < 0.03,
+            "{label}: (+12, +12) lobe center radius [{lobe_min_r:.4}, {lobe_max_r:.4}], want ~7.00 mm"
+        );
+    }
+
+    for (passes, level) in [(1, FinishLevel::Every), (2, FinishLevel::Last)] {
+        let finish = AdaptiveFinish {
+            finish_passes: passes,
+            finish_spacing: 0.508,
+            spring_passes: 0,
+            finish_level: level,
+        };
+        let label = format!("4-lobe spiral passes={passes} level={level:?}");
+        let path = adaptive_with_finish(&area, &p, &CornerRelief::default(), &StartSide::default(), &finish)
+            .unwrap_or_else(|e| panic!("{label} refused: {e}"));
+        assert_confined(&path, &center_final, 2e-3, &label);
+        assert!(camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty(), "{label}: crossed");
+
+        let runs = cut_runs_at(&path, -4.0);
+        let final_ring = runs.last().expect("final finishing ring");
+        assert!(signed_turn(final_ring) > 0.0, "{label}: climb inside ring must turn CCW");
+        let lobe_rs: Vec<f64> = final_ring
+            .iter()
+            .flat_map(|m| m.chords(0.005))
+            .filter(|(a, _)| a.x > 12.0 && a.y > 12.0)
+            .map(|(a, _)| (a.x - 12.0).hypot(a.y - 12.0))
+            .collect();
+        assert!(!lobe_rs.is_empty(), "{label}: final ring must traverse (+12, +12) lobe");
+        let lobe_max_r = lobe_rs.iter().copied().fold(0.0_f64, f64::max);
+        let lobe_min_r = lobe_rs.iter().copied().fold(f64::INFINITY, f64::min);
+        assert!(
+            (lobe_max_r - 7.0).abs() < 0.03 && (lobe_min_r - 7.0).abs() < 0.03,
+            "{label}: (+12, +12) lobe center radius [{lobe_min_r:.4}, {lobe_max_r:.4}], want ~7.00 mm"
+        );
+    }
+}

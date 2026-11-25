@@ -305,11 +305,7 @@ fn adaptive_finish_inside(
     }
     let fin_runs: Vec<Vec<Seg>> = fin_passes
         .iter()
-        .map(|pass| {
-            let segs = fit_arcs(pass, ARC_FIT_TOL);
-            proof.arcs += segs.iter().filter(|s| matches!(s, Seg::Arc { .. })).count();
-            segs
-        })
+        .map(|pass| fit_proved(pass, ARC_FIT_TOL * 0.25, &center_final, &mut proof))
         .collect();
     let n_clear = clear_passes.len();
     let mut all_passes = clear_passes.clone();
