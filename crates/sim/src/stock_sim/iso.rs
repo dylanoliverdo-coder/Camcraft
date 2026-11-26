@@ -322,12 +322,25 @@ fn tet(out: &mut Vec<Triangle>, p: [Point3; 4], v: [f64; 4]) {
     let outside: Vec<usize> = (0..4).filter(|&c| v[c] >= 0.0).collect();
     let cross = |a: usize, b: usize| {
         let (da, db) = (v[a], v[b]);
-        let t = if (da - db).abs() > f64::EPSILON { (da / (da - db)).clamp(0.0, 1.0) } else { 0.5 };
         // #4107: a crossing within NODE_SNAP of a sample sits on it. A value
-        // a few picometres from zero (a floor on the lattice) put the corner
-        // that close to the sample, under the 1e-9 weld; on the sample the
-        // facets that share it are exactly zero-area and `push` drops them.
-        let t = if t < NODE_SNAP { 0.0 } else if t > 1.0 - NODE_SNAP { 1.0 } else { t };
+        // of about 1e-12 (a floor on the lattice) put the corner about 1e-12
+        // mm from the sample, under the 1e-9 weld; on the sample the facets
+        // that share it are exactly zero-area and `push` drops them. The test
+        // reads |da| and |db| against |da - db|, which are the same numbers
+        // when the edge is crossed from its other end, so two tetrahedra that
+        // share the edge snap together or not at all.
+        let span = (da - db).abs();
+        let t = if span > f64::EPSILON {
+            if da.abs() < NODE_SNAP * span {
+                0.0
+            } else if db.abs() < NODE_SNAP * span {
+                1.0
+            } else {
+                (da / (da - db)).clamp(0.0, 1.0)
+            }
+        } else {
+            0.5
+        };
         let (pa, pb) = (p[a], p[b]);
         Point3::new(pa.x + (pb.x - pa.x) * t, pa.y + (pb.y - pa.y) * t, pa.z + (pb.z - pa.z) * t)
     };
@@ -398,6 +411,29 @@ mod tests {
         // the tetrahedral split, so within 5% of 480.
         assert!(v > 0.0, "outward-facing: {v}");
         assert!((v - 480.0).abs() < 0.05 * 480.0, "volume {v} vs 480");
+    }
+
+    /// The corner `tet` puts on the edge from p0 to p1 (the one on the x axis).
+    fn corner_on_the_x_edge(v: [f64; 4]) -> Point3 {
+        let p = [Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 0.0, 0.0), Point3::new(0.0, 1.0, 0.0), Point3::new(0.0, 0.0, 1.0)];
+        let mut out = Vec::new();
+        tet(&mut out, p, v);
+        let t = out.first().unwrap_or_else(|| panic!("no facet for {v:?}"));
+        *[t.a, t.b, t.c].iter().find(|q| q.y == 0.0 && q.z == 0.0).unwrap_or_else(|| panic!("no corner on the edge for {v:?}"))
+    }
+
+    #[test]
+    fn an_edge_gets_the_same_corner_from_either_end_at_the_snap_threshold() {
+        // #4107: one tetrahedron crosses the edge from its inside end (one
+        // corner inside), its neighbour from the outside end (three inside).
+        // Near the snap threshold both must snap, or neither.
+        let x0 = NODE_SNAP / (1.0 - NODE_SNAP); // t = NODE_SNAP when the far value is 1
+        for k in -4000_i64..4000 {
+            let d = f64::from_bits((x0.to_bits() as i64 + k) as u64);
+            let one_in = corner_on_the_x_edge([-d, 1.0, 1e-3, 1e-3]);
+            let three_in = corner_on_the_x_edge([-d, 1.0, -1.0, -1.0]);
+            assert!((one_in.x - three_in.x).abs() < 1e-12, "value {d:e}: {} from inside, {} from outside", one_in.x, three_in.x);
+        }
     }
 
     #[test]
