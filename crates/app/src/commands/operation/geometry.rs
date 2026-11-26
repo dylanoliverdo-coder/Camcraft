@@ -92,7 +92,8 @@ impl SetOperationGeometry {
         params = crate::operation::slot_from_picks(world, prev.setup.as_deref(), &params, src_items(&src)).unwrap_or(params);
         if let Some(ovs) = overrides {
             match &mut params {
-                OpParams::Contour { chain_overrides, .. } => {
+                OpParams::Contour { chain_overrides, .. }
+                | OpParams::Chamfer2D { chain_overrides, .. } => {
                     *chain_overrides = ovs;
                     if let Some(why) = crate::operation::chain_overrides_refusal(world, &params) {
                         return Err(CommandError::Invalid(why));
@@ -105,7 +106,7 @@ impl SetOperationGeometry {
                 }
                 _ if !ovs.is_empty() => {
                     return Err(CommandError::Invalid(format!(
-                        "per-chain side and direction overrides apply to 2D Contour only, not {}",
+                        "per-chain side and direction overrides apply to 2D Contour and 2D Chamfer only, not {}",
                         params.kind()
                     )));
                 }

@@ -657,6 +657,10 @@ pub enum ParamsDto {
         /// 3+2 index; see the Face arm.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tilt: Option<TiltDto>,
+        /// Journeyman spec S10: optional per-chain overrides for DXF sketch
+        /// chamfers; absent on earlier files so they load and save unchanged.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        chain_overrides: Vec<ChainOverrideDto>,
     },
     /// Circular pocket / vault (M2.4 B): the pocket's arm with the
     /// authored disk's two numbers in place of a picked region -

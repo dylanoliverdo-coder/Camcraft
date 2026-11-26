@@ -126,6 +126,7 @@ fn chamfer(width: f64) -> OpParams {
         side: Side::Auto,
         tolerance: 0.01,
         tilt: None,
+        chain_overrides: Vec::new(),
     }
 }
 

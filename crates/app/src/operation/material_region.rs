@@ -109,6 +109,14 @@ fn region_turn_core(
         let (r, turn) = controlled(plan.region().ok()?)?;
         return Some((r, turn, None));
     }
+    if super::chamfer_sketch::is_sketch_chamfer(world, &op.src, &op.params) {
+        if frame.is_some() {
+            return None;
+        }
+        let plan = super::chamfer_sketch::resolve_plan(world, &op.src, &op.params).ok()?;
+        let (r, turn) = controlled(plan.region().ok()?)?;
+        return Some((r, turn, None));
+    }
     if let SrcRef::Selection(items) = &op.src
         // #1868: sketch picks of a slot kind bound a slot, not a region.
         && !super::slot_sketch::is_sketch_slot(world, &op.src, &op.params)
@@ -196,6 +204,11 @@ fn region_turn_core(
 pub fn chains_of(world: &World, op: &Operation) -> Vec<Vec<Point2>> {
     if super::contour_sketch::is_sketch_contour(world, &op.src, &op.params) {
         return super::contour_sketch::resolve_plan(world, &op.src, &op.params)
+            .map(|p| p.open_chains())
+            .unwrap_or_default();
+    }
+    if super::chamfer_sketch::is_sketch_chamfer(world, &op.src, &op.params) {
+        return super::chamfer_sketch::resolve_plan(world, &op.src, &op.params)
             .map(|p| p.open_chains())
             .unwrap_or_default();
     }

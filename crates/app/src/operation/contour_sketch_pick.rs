@@ -98,7 +98,9 @@ pub(super) fn open_side_word(s: OpenChainSide) -> &'static str {
 /// closed/open side fields on the same chain) when the override is set.
 pub(crate) fn chain_overrides_refusal(world: &World, params: &OpParams) -> Option<String> {
     let overrides: &[ChainOverride] = match params {
-        OpParams::Contour { chain_overrides, .. } => chain_overrides,
+        OpParams::Contour { chain_overrides, .. } | OpParams::Chamfer2D { chain_overrides, .. } => {
+            chain_overrides
+        }
         _ => return None,
     };
     for o in overrides {

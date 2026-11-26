@@ -895,6 +895,7 @@ fn seed_chamfer2d(c: &Carried) -> OpParams {
         side: Side::Auto,
         tolerance: 0.01,
         tilt: c.tilt,
+        chain_overrides: Vec::new(),
     }
 }
 

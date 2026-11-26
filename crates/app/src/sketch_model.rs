@@ -116,7 +116,10 @@ pub fn source_problem(world: &World, declared: Option<&str>, src: &SrcRef, param
                 }
             } else if !matches!(
                 params,
-                OpParams::Contour { .. } | OpParams::Slot { .. } | OpParams::TrochoidalSlot { .. }
+                OpParams::Contour { .. }
+                    | OpParams::Chamfer2D { .. }
+                    | OpParams::Slot { .. }
+                    | OpParams::TrochoidalSlot { .. }
             ) {
                 return Some(format!(
                     "'{}' is a DXF profile - an operation takes the whole profile as its source; picked chains of a profile are not supported yet",
@@ -186,7 +189,9 @@ pub fn generation_problem(world: &World, op: &Operation) -> Option<String> {
     if let Some(why) = source_problem(world, op.setup.as_deref(), &op.src, &op.params) {
         return Some(why);
     }
-    if matches!(op.params, OpParams::Contour { .. }) || crate::operation::wire_sketch::selected(&op.src, &op.params) {
+    if matches!(op.params, OpParams::Contour { .. } | OpParams::Chamfer2D { .. })
+        || crate::operation::wire_sketch::selected(&op.src, &op.params)
+    {
         return None;
     }
     // #1868: a slot kind reads one picked chain of a profile; the whole

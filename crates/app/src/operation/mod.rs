@@ -204,6 +204,7 @@ pub(crate) use contour_sketch_pick::chain_overrides_refusal;
 pub use sketch_memo::{
     display_heights, sketch_chain_info_builds, sketch_chain_infos, sketch_z_builds, sketch_z_fresh_reads,
 };
+mod chamfer_sketch;
 mod contour_sketch;
 mod finish_clip;
 mod finish_entry;

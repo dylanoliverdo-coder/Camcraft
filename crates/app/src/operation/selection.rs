@@ -92,6 +92,7 @@ pub fn contour_auto_side(
     params: &OpParams,
 ) -> Option<bool> {
     if !super::contour_sketch::is_sketch_contour(world, src, params)
+        && !super::chamfer_sketch::is_sketch_chamfer(world, src, params)
         && matches!(src, SrcRef::Stock | SrcRef::Entity(_))
     {
         return Some(false);

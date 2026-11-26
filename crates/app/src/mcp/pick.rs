@@ -250,11 +250,11 @@ pub(super) fn set_operation_geometry(env: &mut Env, a: &Map<String, Value>) -> R
     let e = model::find_by_name(&env.world, &key).ok_or_else(|| format!("no operation named '{key}'"))?;
     let op = model::operation_of(&env.world, &e).ok_or_else(|| format!("'{key}' is not an operation"))?;
     kind_door(&env.world, op.params.kind().info().label, &op.params, &items)?;
-    let cmd = if matches!(op.params, OpParams::Contour { .. }) {
+    let cmd = if matches!(op.params, OpParams::Contour { .. } | OpParams::Chamfer2D { .. }) {
         SetOperationGeometry::with_chain_overrides(&env.world, &key, items, overrides)
     } else if !overrides.is_empty() {
         return Err(format!(
-            "per-chain overrides apply to 2D Contour only, not {}",
+            "per-chain overrides apply to 2D Contour and 2D Chamfer only, not {}",
             op.params.kind()
         ));
     } else {
@@ -285,7 +285,8 @@ pub(super) fn geometry_view(env: &Env, key: &str) -> Result<Value, String> {
         ),
     };
     let chain_overrides: Vec<Value> = match &op.params {
-        OpParams::Contour { chain_overrides, .. } => chain_overrides
+        OpParams::Contour { chain_overrides, .. }
+        | OpParams::Chamfer2D { chain_overrides, .. } => chain_overrides
             .iter()
             .map(|o| {
                 json!({
@@ -360,15 +361,15 @@ pub(super) fn s_set_geometry() -> Value {
             "operation": { "type": "string", "description": "Operation name (key or label)." },
             "picks": {
                 "type": "array",
-                "description": "The features to machine, in order. For 2D Contour on DXF profiles, sketch_chain entries may also carry optional per-chain \"side\" (\"inside\"|\"outside\"|null), \"open_side\" (\"none\"|\"left\"|\"right\"|null), and \"reverse\" (boolean) overrides.",
+                "description": "The features to machine, in order. For 2D Contour and 2D Chamfer on DXF profiles, sketch_chain entries may also carry optional per-chain \"side\" (\"inside\"|\"outside\"|null), \"open_side\" (\"none\"|\"left\"|\"right\"|null), and \"reverse\" (boolean) overrides.",
                 "items": {
                     "type": "object",
                     "properties": {
                         "model": { "type": "string", "description": "The model or DXF profile the feature is on." },
                         "id": { "type": "string", "description": "A feature id from list_features: face:0x…, chain:0x…, patch:0x…, vertex:0x…, sketch_chain:<hex>, or sketch_layer:<layer>." },
-                        "side": { "type": ["string", "null"], "enum": ["inside", "outside", null], "description": "Optional per-chain side override for closed sketch_chain picks on 2D Contour." },
-                        "open_side": { "type": ["string", "null"], "enum": ["none", "left", "right", null], "description": "Optional per-chain cutter side for open sketch_chain picks on 2D Contour (\"none\" rides centerline; \"left\"/\"right\" offsets to that side of the chain direction)." },
-                        "reverse": { "type": "boolean", "description": "Optional direction flip for sketch_chain picks on 2D Contour." }
+                        "side": { "type": ["string", "null"], "enum": ["inside", "outside", null], "description": "Optional per-chain side override for closed sketch_chain picks on 2D Contour or 2D Chamfer." },
+                        "open_side": { "type": ["string", "null"], "enum": ["none", "left", "right", null], "description": "Optional per-chain cutter side for open sketch_chain picks on 2D Contour or 2D Chamfer (\"left\"/\"right\" of the chain direction; required on 2D Chamfer open edges)." },
+                        "reverse": { "type": "boolean", "description": "Optional direction flip for sketch_chain picks on 2D Contour or 2D Chamfer." }
                     },
                     "required": ["model", "id"],
                     "additionalProperties": false

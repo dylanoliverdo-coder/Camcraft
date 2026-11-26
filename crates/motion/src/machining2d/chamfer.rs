@@ -1,16 +1,15 @@
-//! 2D chamfer: a cone-ruled ride along the picked edge (M2.4 B).
+//! 2D chamfer: a cone-ruled ride along the picked edge (M2.4 B, Journeyman spec S10).
 //!
-//! Provenance: the chamfer mill's cut law is machine-tool handbook
-//! geometry - a conical cutter whose tangent generatrix lies ON the
-//! chamfer face. The face joins the point `width` back from the wall
-//! (in the top plane) to the point `width * tan(angle)` down the wall;
-//! a cone of half-angle from the axis `90 - angle` degrees, riding the
-//! wall with its virtual tip at the corner, has exactly that surface.
-//! The included angle across such a tool's cone is `180 - 2 * angle`
-//! (a 90-degree chamfer mill for a 45-degree chamfer, the shop's own
-//! catalog law). Written clean-room from that geometry, no vendor
-//! material; the CL convention (moves carry TIP positions) is this
-//! codebase's own, so the posted Z is the corner depth.
+//! Provenance: Journeyman spec S10 (docs/journeyman/specs/S10-chamfer-on-sketch-chains.md);
+//! the chamfer mill's cut law is machine-tool handbook geometry (*Machinery's Handbook*, 31st ed.,
+//! Industrial Press 2020; P. Smid, *CNC Programming Handbook*, 3rd ed., 2007) - a conical cutter
+//! whose tangent generatrix lies ON the chamfer face. The face joins the point `width` back from
+//! the wall (in the top plane) to the point `width * tan(angle)` down the wall; a cone of
+//! half-angle from the axis `90 - angle` degrees, riding the wall with its virtual tip at the
+//! corner, has exactly that surface. The included angle across such a tool's cone is
+//! `180 - 2 * angle` (a 90-degree chamfer mill for a 45-degree chamfer). Written clean-room from
+//! that geometry, no vendor parameters, text or code; the CL convention (moves carry TIP
+//! positions) is this codebase's own, so the posted Z is the corner depth.
 //!
 //! The path is one closed circuit per picked loop at one constant Z -
 //! `top_z - width * tan(angle_deg)`, the derived floor the operation
@@ -156,4 +155,181 @@ pub fn chamfer(region: &crate::geo2d::Region, p: &ChamferParams) -> Result<Toolp
         .filter(EdgeBreak::is_sane)
         .collect();
     Ok(path)
+}
+
+/// One closed sketch chain for [`chamfer_chains`] (Journeyman spec S10):
+/// its outline loop, whether the material stands outside it (`inside = true`
+/// for a bore edge, `false` for a boss edge), and its climb flag.
+#[derive(Clone, Debug)]
+pub struct ChamferClosedChain {
+    pub loop_: Loop,
+    pub inside: bool,
+    pub climb: bool,
+}
+
+/// Chamfer closed loops (largest `|area|` first, matching [`chamfer`]) and
+/// then open chains (in caller order, already oriented in travel order), all
+/// at the single constant corner depth `p.corner_z()` with the shared
+/// retract/rapid/dive link between rides (Journeyman spec S10).
+pub fn chamfer_chains(
+    closed: &[ChamferClosedChain],
+    open: &[Vec<Point2>],
+    p: &ChamferParams,
+) -> Result<Toolpath, GenError> {
+    p.validate()?;
+    if closed.is_empty() && open.is_empty() {
+        return Err(GenError::Empty("no chamfer chains to cut".into()));
+    }
+    let z = p.corner_z();
+    if !z.is_finite() {
+        return Err(GenError::Invalid("corner depth left the finite horizon".into()));
+    }
+
+    let mut ordered_closed: Vec<&ChamferClosedChain> = closed.iter().collect();
+    ordered_closed.sort_by(|x, y| y.loop_.area().abs().total_cmp(&x.loop_.area().abs()));
+
+    let mut passes: Vec<Vec<Point2>> = Vec::with_capacity(ordered_closed.len() + open.len());
+    for c in ordered_closed {
+        // Canonicalize each closed loop through `Region::new` (the same
+        // representation `chamfer` reads from a picked solid loop) so it is
+        // guaranteed CCW (interior on the left) and matches a picked loop's
+        // seam and moves verbatim: boss (`inside == false`) rides CW under
+        // climb, bore (`inside == true`) rides CCW under climb (#1555).
+        let reg = crate::geo2d::Region::new(vec![c.loop_.clone()])?;
+        for l in reg.loops() {
+            let mut pass: Vec<Point2> = super::ring::walked(l.points(), c.climb == c.inside, false);
+            if let Some(&start) = pass.first() {
+                pass.push(start);
+            }
+            passes.push(pass);
+        }
+    }
+
+    for chain in open {
+        if chain.len() < 2 {
+            return Err(GenError::Invalid("an open chamfer chain needs at least two points".into()));
+        }
+        if !chain.iter().all(|q| q.x.is_finite() && q.y.is_finite()) {
+            return Err(GenError::Invalid("an open chamfer chain holds non-finite points".into()));
+        }
+        passes.push(chain.clone());
+    }
+
+    let mut b = PathBuilder::approached(Point3::new(0.0, 0.0, p.clearance_z));
+    let motion = Motion::new(p.clearance_z, p.retract_z, p.feed, p.plunge_feed);
+    run_levels(&mut b, &passes, &[z], &motion, None, None, None);
+    let cur = b.at();
+    b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
+
+    let mut path = b.finish();
+    if !path.all_finite() {
+        return Err(GenError::Invalid("path left the finite horizon".into()));
+    }
+    let slope = p.angle_deg.to_radians().tan();
+    path.breaks = passes
+        .iter()
+        .map(|pass| EdgeBreak {
+            edge: pass.iter().map(|q| Point3::new(q.x, q.y, p.top_z)).collect(),
+            depth: p.top_z - z,
+            slope,
+            volume: None,
+        })
+        .filter(EdgeBreak::is_sane)
+        .collect();
+    Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geo2d::Region;
+
+    fn base_params(width: f64, angle_deg: f64) -> ChamferParams {
+        ChamferParams {
+            width,
+            angle_deg,
+            clearance_z: 10.0,
+            retract_z: Some(5.0),
+            top_z: 0.0,
+            feed: 500.0,
+            plunge_feed: 100.0,
+            climb: true,
+            inside: false,
+        }
+    }
+
+    #[test]
+    fn closed_rectangle_matches_chamfer_region_move_for_move() {
+        let rect = Loop::new(vec![
+            Point2::new(0.0, 0.0),
+            Point2::new(40.0, 0.0),
+            Point2::new(40.0, 20.0),
+            Point2::new(0.0, 20.0),
+        ])
+        .expect("rect");
+        let p = base_params(0.5, 45.0);
+        let solid_path = chamfer(&Region::new(vec![rect.clone()]).expect("region"), &p).expect("solid chamfer");
+        let chain_path = chamfer_chains(
+            &[ChamferClosedChain { loop_: rect, inside: false, climb: true }],
+            &[],
+            &p,
+        )
+        .expect("chain chamfer");
+        assert_eq!(chain_path.moves, solid_path.moves);
+        assert!(chain_path.moves.iter().filter(|m| m.kind == MoveKind::Feed).all(|m| (m.to.z + 0.5).abs() < 1e-9));
+    }
+
+    #[test]
+    fn angle_30_corner_depth_matches_width_tan_30() {
+        let p = base_params(0.5, 30.0);
+        let open = vec![vec![Point2::new(0.0, 0.0), Point2::new(40.0, 0.0)]];
+        let path = chamfer_chains(&[], &open, &p).expect("open chamfer");
+        let z = path.moves.iter().find(|m| m.kind == MoveKind::Feed).expect("feed").to.z;
+        assert!((z - (-0.5 * 30f64.to_radians().tan())).abs() < 1e-9);
+        assert!((z - (-0.2887)).abs() < 1e-4, "z={z}");
+    }
+
+    #[test]
+    fn nested_boss_and_bore_travel_cw_and_ccw_largest_first() {
+        let outer = Loop::new(vec![
+            Point2::new(0.0, 0.0),
+            Point2::new(40.0, 0.0),
+            Point2::new(40.0, 40.0),
+            Point2::new(0.0, 40.0),
+        ])
+        .expect("outer");
+        let inner = Loop::new(vec![
+            Point2::new(10.0, 10.0),
+            Point2::new(30.0, 10.0),
+            Point2::new(30.0, 30.0),
+            Point2::new(10.0, 30.0),
+        ])
+        .expect("inner");
+        let p = base_params(0.5, 45.0);
+        // Pass inner first to verify largest-first ordering.
+        let path = chamfer_chains(
+            &[
+                ChamferClosedChain { loop_: inner, inside: true, climb: true },
+                ChamferClosedChain { loop_: outer, inside: false, climb: true },
+            ],
+            &[],
+            &p,
+        )
+        .expect("nested");
+        let feeds: Vec<_> = path.moves.iter().filter(|m| m.kind == MoveKind::Feed).collect();
+        assert_eq!(feeds.len(), 8);
+        // First 4 moves: outer loop (boss -> CW signed area < 0).
+        let signed = |ms: &[&crate::cl::Move]| -> f64 {
+            ms.iter().map(|m| m.from.x * m.to.y - m.to.x * m.from.y).sum::<f64>() * 0.5
+        };
+        assert!(signed(&feeds[..4]) < -1000.0, "outer boss rides CW: {:?}", &feeds[..4]);
+        assert!(signed(&feeds[4..]) > 300.0, "inner bore rides CCW: {:?}", &feeds[4..]);
+    }
+
+    #[test]
+    fn empty_chain_list_is_refused() {
+        let p = base_params(0.5, 45.0);
+        let err = chamfer_chains(&[], &[], &p).expect_err("empty chains");
+        assert!(matches!(err, GenError::Empty(_)), "{err}");
+    }
 }

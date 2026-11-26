@@ -9,6 +9,8 @@
 
 #[path = "contour_dxf_sketch_s9/mod.rs"]
 mod s9;
+#[path = "contour_dxf_sketch_s10/mod.rs"]
+mod s10;
 
 use std::path::{Path, PathBuf};
 
