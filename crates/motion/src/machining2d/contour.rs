@@ -371,7 +371,12 @@ pub(super) fn emit_band(
                 super::contour_step::lift_over(b, p, hop_z, last_mat_top, hop_z);
                 b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, hop_z), None);
                 super::contour_link::guard(b, p, e2, lead_top, p.entry_top(), "the dive past a tab");
-                b.push(MoveKind::Plunge, Point3::new(e2.x, e2.y, lead_top), Some(p.plunge_feed));
+                if p.links.approach.feed_from.is_auto() {
+                    b.push(MoveKind::Plunge, Point3::new(e2.x, e2.y, lead_top), Some(p.plunge_feed));
+                } else {
+                    crate::feed_from::push_stated_rapid(b, e2, lead_top, p.entry_top(), p.links.approach.feed_from, false);
+                    b.push(MoveKind::Plunge, Point3::new(e2.x, e2.y, lead_top), Some(p.links.approach.plunge(p.plunge_feed)));
+                }
             }
             last_mat_top = super::contour_step::level_mat_top(p, inside, tabbed, rzi, rz, first_entry, arm, hop_z);
             first_entry = false;

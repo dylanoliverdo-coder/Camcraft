@@ -2,9 +2,11 @@
 //! 400-line seam): the axial feed down from just over the material, the
 //! at-depth link from a dive to the pass start - or the named second
 //! dive - and M8.1's substituted dive. Provenance: standard CNC plunge
-//! entries per public G-code manuals and machining handbooks; the laws
-//! are this crate's (M8.1's plan law, M11.3's one-entry law). No vendor
-//! material consulted.
+//! entries per public G-code manuals and machining handbooks (Smid 2007,
+//! RS-274/ISO 6983); Journeyman spec S7 (`feed_from`,
+//! docs/journeyman/specs/S7-descent-feed-height.md); the laws are this
+//! crate's (M8.1's plan law, M11.3's one-entry law). No vendor material
+//! consulted.
 
 use crate::approach::{CENTER_CUT_REFUSAL, NOT_CENTER_CUTTING};
 use crate::cl::{Move, MoveKind, PathBuilder, lattice};
@@ -25,15 +27,20 @@ use super::levels::{Cert, Motion};
 /// under the retract plane, then the feed. A zero plunge height feeds
 /// the whole way, as every pre-M11.3 path did.
 pub(super) fn feed_down(b: &mut PathBuilder, xy: Point2, z: f64, mat_top: f64, m: &Motion, feed: f64) {
-    let h = m.links.approach.plunge_height;
-    let hz = (mat_top + h).min(m.hop_z.max(mat_top));
-    if h > 0.0 && hz.is_finite() && hz < b.at().z && hz > z {
-        b.push(MoveKind::Rapid, Point3::new(xy.x, xy.y, hz), None);
+    let a = &m.links.approach;
+    if a.feed_from.is_auto() {
+        let h = a.plunge_height;
+        let hz = (mat_top + h).min(m.hop_z.max(mat_top));
+        if h > 0.0 && hz.is_finite() && hz < b.at().z && hz > z {
+            b.push(MoveKind::Rapid, Point3::new(xy.x, xy.y, hz), None);
+        }
+    } else {
+        crate::feed_from::push_stated_rapid(b, xy, z, mat_top, a.feed_from, false);
     }
     // The centre-cutting law's backstop (`plunge_law`): every planar
     // plunge asks it; a site that can stand a helix or ramp in asked
     // first.
-    plunge_law::guard(b, m.links.approach.center_cutting, m.tool_r(), xy, z, mat_top, "a plunge");
+    plunge_law::guard(b, a.center_cutting, m.tool_r(), xy, z, mat_top, "a plunge");
     b.push(MoveKind::Plunge, Point3::new(xy.x, xy.y, z), Some(feed));
 }
 

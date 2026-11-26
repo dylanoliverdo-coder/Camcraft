@@ -97,6 +97,14 @@ impl OpParams {
         )
     }
 
+    /// Whether this operation kind supports a stated 2D plunge rapid-to-feed
+    /// height (`Approach::feed_from`, Journeyman spec S7): the 7 2D level-ladder
+    /// operations carrying `Links`.
+    #[must_use]
+    pub fn supports_links_feed_from(&self) -> bool {
+        self.supports_links_retract_feed()
+    }
+
     /// The links a kind posted before M11.2 - what a file without the
     /// key means and what the stamp and the file leave unwritten: the
     /// 3-D ladder's pass links have always stayed down where proved, the

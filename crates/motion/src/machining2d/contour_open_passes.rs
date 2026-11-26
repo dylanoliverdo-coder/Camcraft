@@ -26,7 +26,7 @@ pub(crate) fn open_pass_runs(
     let mut path = crate::cl::Toolpath::default();
     let mut first = true;
     let mut level_cut = false;
-    for &z in &zs {
+    for (zi, &z) in zs.iter().enumerate() {
         let mut level_any = false;
         for pass in passes_at_level(p, &zs, z) {
             let d = pass.offset;
@@ -54,7 +54,19 @@ pub(crate) fn open_pass_runs(
                     continue;
                 }
             };
-            let seg = super::contour_along_chain_zs(&ride, p, std::slice::from_ref(&z))?;
+            let mat_top = if zi == 0
+                || (pass.finishing && p.passes.finish_level == super::contour_passes::FinishLevel::Last)
+            {
+                p.entry_top()
+            } else {
+                zs[zi - 1]
+            };
+            let seg = super::contour_chain::contour_along_chain_from_top(
+                &ride,
+                p,
+                std::slice::from_ref(&z),
+                mat_top,
+            )?;
             if first {
                 // Keep the notes naming passes dropped before the first one
                 // that fits (Journeyman spec S9 review round 2).

@@ -114,7 +114,7 @@ fn leads_tab_inner(
         group(ui, "Entry", None, |ui| entry_group(ui, u, tag, entry, helix_radius, links));
     }
     group(ui, "Linking", None, |ui| linking_group(ui, u, tag, entry, links, has_retract, show_finish_levels));
-    plunge_group(ui, u, &mut links.approach);
+    plunge_group(ui, u, tag, &mut links.approach, show_retract_feed);
     feeds_group(ui, u, &mut links.approach, show_retract_feed);
     engagement_group(ui, &mut links.approach);
 }
@@ -231,6 +231,48 @@ mod s8_finish_levels_ui_tests {
             assert_eq!(
                 shown, expect_visible,
                 "{kind:?}: expected Finish depth levels visible={expect_visible}, got {shown}"
+            );
+        }
+    }
+
+    #[test]
+    fn feed_from_control_shows_only_on_2d_links_ops_and_switches_fields() {
+        use camcraft_app::links::FeedFrom;
+        for (kind, expect_visible) in [
+            (OpType::Contour, true),
+            (OpType::Pocket, true),
+            (OpType::Adaptive2D, true),
+            (OpType::Offset2D, true),
+            (OpType::Slot, true),
+            (OpType::Circular, true),
+            (OpType::Bore, true),
+            (OpType::Pocket3D, false),
+        ] {
+            let mut state = opened(seed_params(kind.ordinal()));
+            state.op_tab = op_tabs::SEC_LEADS;
+            let mut harness = page(state);
+            harness.run();
+            let shown = harness.query_by_label("Feed from").is_some();
+            assert_eq!(
+                shown, expect_visible,
+                "{kind:?}: expected Feed from visible={expect_visible}, got {shown}"
+            );
+        }
+        // Material mode displays "Gap above material"; Absolute mode displays "Absolute Z".
+        for (mode, expect_label) in [
+            (FeedFrom::Auto, "Height above material"),
+            (FeedFrom::Material { gap: 1.0 }, "Gap above material"),
+            (FeedFrom::Absolute { z: 0.5 }, "Absolute Z"),
+        ] {
+            let mut params = seed_params(OpType::Pocket.ordinal());
+            params.links_mut().expect("pocket links").approach.feed_from = mode;
+            let mut state = opened(params);
+            state.op_tab = op_tabs::SEC_LEADS;
+            let mut harness = page(state);
+            harness.run();
+            assert!(
+                harness.query_by_label(expect_label).is_some(),
+                "{mode:?}: expected label '{expect_label}'"
             );
         }
     }

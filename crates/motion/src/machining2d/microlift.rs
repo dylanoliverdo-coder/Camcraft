@@ -103,7 +103,7 @@ pub(super) fn profile(a: Point2, ret: &Return) -> Vec<(Point2, f64)> {
 /// the next pass's start on plane `z`.
 pub(super) fn link(b: &mut PathBuilder, ret: &Return, z: f64, mat_top: f64, m: &Motion) {
     let hz = crate::fed_retract::switch_z(mat_top, m.links.approach.plunge_height, m.hop_z);
-    link_at_retract(b, ret, z, m.hop_z, m.feed, hz, m.links.approach.retract_feed);
+    link_at_retract(b, ret, z, m.hop_z, m.feed, hz, m.links.approach.retract_feed, mat_top, m.links.approach.feed_from);
 }
 
 fn push_prof(b: &mut PathBuilder, prof: &[(Point2, f64)], z: f64, hop_z: f64, feed: f64, high: bool, ret_lift: (f64, f64)) {
@@ -137,10 +137,21 @@ fn try_prof(b: &mut PathBuilder, prof: &[(Point2, f64)], z: f64, hop_z: f64, fee
 /// [`link`] on bare numbers: the hop plane a `high` return rides and
 /// the cutting feed (the 3-D ladder's per-level port, `machining3d::hsm`).
 pub(crate) fn link_at(b: &mut PathBuilder, ret: &Return, z: f64, hop_z: f64, feed: f64) {
-    link_at_retract(b, ret, z, hop_z, feed, hop_z, 0.0);
+    link_at_retract(b, ret, z, hop_z, feed, hop_z, 0.0, hop_z, crate::feed_from::FeedFrom::Auto);
 }
 
-fn link_at_retract(b: &mut PathBuilder, ret: &Return, z: f64, hop_z: f64, feed: f64, hz: f64, retract_feed: f64) {
+#[allow(clippy::too_many_arguments)]
+fn link_at_retract(
+    b: &mut PathBuilder,
+    ret: &Return,
+    z: f64,
+    hop_z: f64,
+    feed: f64,
+    hz: f64,
+    retract_feed: f64,
+    mat_top: f64,
+    feed_from: crate::feed_from::FeedFrom,
+) {
     let at = b.at();
     let Some(end) = ret.down.last().or(ret.via.last()).or(ret.up.last()).copied() else {
         return;
@@ -160,6 +171,9 @@ fn link_at_retract(b: &mut PathBuilder, ret: &Return, z: f64, hop_z: f64, feed: 
         let hop = hop_z.max(z + 0.1);
         crate::fed_retract::lift_up(b, hop, hz, retract_feed);
         b.push(MoveKind::Rapid, Point3::new(end.x, end.y, hop), None);
+        if !feed_from.is_auto() {
+            crate::feed_from::push_stated_rapid(b, end, z, mat_top, feed_from, false);
+        }
         b.push(MoveKind::Plunge, Point3::new(end.x, end.y, z), Some(feed));
         return;
     }
@@ -187,6 +201,9 @@ fn link_at_retract(b: &mut PathBuilder, ret: &Return, z: f64, hop_z: f64, feed: 
     let hop = hop_z.max(z + lift);
     crate::fed_retract::lift_up(b, hop, hz, retract_feed);
     b.push(MoveKind::Rapid, Point3::new(end.x, end.y, hop), None);
+    if !feed_from.is_auto() {
+        crate::feed_from::push_stated_rapid(b, end, z, mat_top, feed_from, false);
+    }
     b.push(MoveKind::Plunge, Point3::new(end.x, end.y, z), Some(feed));
 }
 

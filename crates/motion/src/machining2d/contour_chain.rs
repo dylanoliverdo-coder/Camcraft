@@ -2,10 +2,11 @@
 //! which taught it the level link): the cutter center rides a picked
 //! run's own points level by level. Provenance: open-profile contouring
 //! of published CAM practice (lead off the run's ends, plunge at the
-//! start, retract between levels); RS-274 / ISO 6983 linear and circular
-//! interpolation; the approach's lead extensions are the standard
-//! contour lead vocabulary of published CAM practice. No vendor
-//! material consulted.
+//! start, retract between levels); Journeyman spec S7 (`feed_from`,
+//! docs/journeyman/specs/S7-descent-feed-height.md; Smid 2007); RS-274 /
+//! ISO 6983 linear and circular interpolation; the approach's lead
+//! extensions are the standard contour lead vocabulary of published CAM
+//! practice. No vendor material consulted.
 
 use crate::cl::{MoveKind, PathBuilder, Toolpath};
 use crate::entry::Entry3D;
@@ -38,16 +39,17 @@ pub fn contour_along_chain(
     p: &ContourParams,
 ) -> Result<Toolpath, GenError> {
     let zs = p.levels()?;
-    contour_along_chain_zs(pts, p, &zs)
+    contour_along_chain_from_top(pts, p, &zs, p.entry_top())
 }
 
-/// [`contour_along_chain`] over the cut levels `zs` (Journeyman spec S1,
-/// review round 3): the open-run passes run level by level, so a caller
-/// that cuts one level at a time passes one level here.
-pub(crate) fn contour_along_chain_zs(
+/// [`contour_along_chain`] over the cut levels `zs` with an explicit starting
+/// material top `first_mat_top` (Journeyman specs S1 & S7: multi-pass open
+/// runs pass the previous level's depth for levels after the first).
+pub(crate) fn contour_along_chain_from_top(
     pts: &[Point2],
     p: &ContourParams,
     zs: &[f64],
+    first_mat_top: f64,
 ) -> Result<Toolpath, GenError> {
     p.validate()?;
     if pts.len() < 2 {
@@ -128,7 +130,7 @@ pub(crate) fn contour_along_chain_zs(
             hop
         }
     };
-    let mut lift_mat_top = p.entry_top();
+    let mut lift_mat_top = first_mat_top;
     for (k, &z) in zs.iter().enumerate() {
         if k > 0 {
             crate::fed_retract::lift_approach(&mut b, lift_z, lift_mat_top, hop, &p.links.approach);
@@ -140,7 +142,12 @@ pub(crate) fn contour_along_chain_zs(
         // law refuses a tool that is not centre-cutting by name.
         let cc = p.links.approach.center_cutting;
         plunge_law::guard(&mut b, cc, p.tool_diameter * 0.5, entry, z, p.entry_top(), "the dive at the lead-in");
-        b.push(MoveKind::Plunge, Point3::new(entry.x, entry.y, z), Some(p.plunge_feed));
+        if p.links.approach.feed_from.is_auto() {
+            b.push(MoveKind::Plunge, Point3::new(entry.x, entry.y, z), Some(p.plunge_feed));
+        } else {
+            crate::feed_from::push_stated_rapid(&mut b, entry, z, lift_mat_top, p.links.approach.feed_from, false);
+            b.push(MoveKind::Plunge, Point3::new(entry.x, entry.y, z), Some(p.links.approach.plunge(p.plunge_feed)));
+        }
         push_segs(&mut b, &lead, z, p.feed);
         push_segs(&mut b, &walk, z, p.feed);
         push_segs(&mut b, &out, z, p.feed);

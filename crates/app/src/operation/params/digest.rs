@@ -369,6 +369,11 @@ impl OpParams {
                     h.write_u32(a.finish_levels);
                     w(h, a.finish_stepdown);
                 }
+                match a.feed_from {
+                    crate::links::FeedFrom::Auto => {}
+                    crate::links::FeedFrom::Material { gap } => { h.write_u8(0xCD); w(h, gap); }
+                    crate::links::FeedFrom::Absolute { z } => { h.write_u8(0xCE); w(h, z); }
+                }
                 match a.lead_out {
                     None => h.write_u8(0xFF),
                     Some(Lead::None) => h.write_u8(0),

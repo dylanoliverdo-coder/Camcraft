@@ -60,8 +60,13 @@ pub(super) fn post(p: &PocketParams, levels: &[(f64, usize)], plans: &[(Region, 
             b.push(MoveKind::Rapid, Point3::new(e.x, e.y, travel), None);
             let above = (p.top_z + p.links.approach.plunge_height.max(0.0)).min(travel).max(z);
             last_above = above;
-            b.push(MoveKind::Rapid, Point3::new(e.x, e.y, above), None);
-            b.push(MoveKind::Plunge, Point3::new(e.x, e.y, z), Some(p.plunge_feed));
+            if p.links.approach.feed_from.is_auto() {
+                b.push(MoveKind::Rapid, Point3::new(e.x, e.y, above), None);
+                b.push(MoveKind::Plunge, Point3::new(e.x, e.y, z), Some(p.plunge_feed));
+            } else {
+                crate::feed_from::push_stated_rapid(&mut b, *e, z, p.links.approach.entry_top(p.top_z), p.links.approach.feed_from, true);
+                b.push(MoveKind::Plunge, Point3::new(e.x, e.y, z), Some(p.links.approach.plunge(p.plunge_feed)));
+            }
             for q in rest {
                 b.push(MoveKind::Feed, Point3::new(q.x, q.y, z), Some(p.feed));
             }

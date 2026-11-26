@@ -79,6 +79,27 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
             fields.remove(k);
         }
     }
+    // Journeyman spec S7: replacing `links.approach.feed_from` with a new
+    // variant object replaces the whole enum tag instead of retaining stale
+    // variant keys from RFC 7386 merge.
+    if let Some(ff) = patch
+        .get("links")
+        .and_then(Value::as_object)
+        .and_then(|l| l.get("approach"))
+        .and_then(Value::as_object)
+        .and_then(|a| a.get("feed_from"))
+        && let Some(ao) = fields
+            .get_mut("links")
+            .and_then(Value::as_object_mut)
+            .and_then(|l| l.get_mut("approach"))
+            .and_then(Value::as_object_mut)
+    {
+        if ff.is_null() {
+            ao.remove("feed_from");
+        } else {
+            ao.insert("feed_from".into(), ff.clone());
+        }
+    }
     let mut tagged = Map::new();
     tagged.insert(key.clone(), Value::Object(fields));
     let tagged = Value::Object(tagged);
@@ -168,6 +189,33 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
                 if has_fs {
                     ao.insert("finish_stepdown".into(), json!(links.approach.finish_stepdown));
                 }
+            }
+        }
+        // Journeyman spec S7: gate `feed_from` to 2D Links ops and accept an
+        // explicit reset to `"auto"` while keeping unknown sub-keys refused.
+        if app_patch.contains_key("feed_from") {
+            if !next.supports_links_feed_from() {
+                return Err(
+                    "bad params patch: feed_from is only supported on 2D milling operations (not 3D, rotary, or multi-axis operations)"
+                        .into(),
+                );
+            }
+            if let Some(links) = next.links()
+                && let Some(lo) = back
+                    .entry("links")
+                    .or_insert_with(|| Value::Object(Default::default()))
+                    .as_object_mut()
+                && let Some(ao) = lo
+                    .entry("approach")
+                    .or_insert_with(|| Value::Object(Default::default()))
+                    .as_object_mut()
+            {
+                let v = match links.approach.feed_from {
+                    crate::links::FeedFrom::Auto => json!("auto"),
+                    crate::links::FeedFrom::Material { gap } => json!({ "material": { "gap": gap } }),
+                    crate::links::FeedFrom::Absolute { z } => json!({ "absolute": { "z": z } }),
+                };
+                ao.insert("feed_from".into(), v);
             }
         }
     }

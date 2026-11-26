@@ -25,6 +25,7 @@ extern crate self as camcraft_motion;
 pub mod stock_top_frame;
 pub mod approach;
 pub mod fed_retract;
+pub mod feed_from;
 pub mod path_picks;
 pub mod drilling;
 pub mod break_through;
