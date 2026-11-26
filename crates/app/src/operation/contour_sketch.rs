@@ -37,6 +37,8 @@ pub(super) struct ResolvedSketchChain {
     pub(super) natural_auto: bool,
     pub(super) open_side_err: Option<String>,
     pub(super) auto_role_err: Option<String>,
+    /// Deterministic index of the chain within its owning DXF profile.
+    pub(super) rank: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -67,6 +69,36 @@ impl SketchContourPlan {
             .filter(|i| !i.closed)
             .map(|i| i.pts.clone())
             .collect()
+    }
+
+    /// Journeyman spec S9: viewport preview runs for open chains — centerline
+    /// when `open_side == None`, or the offset tool-centre run at
+    /// `tool_r + stock_to_leave` when `Left` / `Right` (omitted if refused).
+    pub(super) fn open_runs(&self, tool_r: f64, stock_to_leave: f64) -> Vec<Vec<Point2>> {
+        let mut out = Vec::new();
+        for item in self.items.iter().filter(|i| !i.closed) {
+            if item.open_side_err.is_some() {
+                continue;
+            }
+            match item.open_side {
+                OpenChainSide::None => out.push(item.pts.clone()),
+                OpenChainSide::Left | OpenChainSide::Right => {
+                    let dir_pts: Vec<Point2> = if item.reversed {
+                        item.pts.iter().copied().rev().collect()
+                    } else {
+                        item.pts.clone()
+                    };
+                    if let Ok(run) = machining2d::open_side_offset(
+                        &dir_pts,
+                        item.open_side == OpenChainSide::Left,
+                        tool_r + stock_to_leave,
+                    ) {
+                        out.push(run);
+                    }
+                }
+            }
+        }
+        out
     }
 
     pub(super) fn region(&self) -> Result<Option<Region>, GenError> {

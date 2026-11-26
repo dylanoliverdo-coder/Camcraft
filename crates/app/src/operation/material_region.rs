@@ -203,8 +203,16 @@ fn region_turn_core(
 #[must_use]
 pub fn chains_of(world: &World, op: &Operation) -> Vec<Vec<Point2>> {
     if super::contour_sketch::is_sketch_contour(world, &op.src, &op.params) {
+        // Spec S9: an open chain cut to one side previews its offset tool-centre run.
+        let tool_r = crate::model::find_by_name(world, &op.tool)
+            .and_then(|t| crate::model::tool_of(world, &t))
+            .map_or(0.0, |t| t.diameter * 0.5);
+        let stock_to_leave = match &op.params {
+            OpParams::Contour { stock_to_leave, .. } => *stock_to_leave,
+            _ => 0.0,
+        };
         return super::contour_sketch::resolve_plan(world, &op.src, &op.params)
-            .map(|p| p.open_chains())
+            .map(|p| p.open_runs(tool_r, stock_to_leave))
             .unwrap_or_default();
     }
     if super::chamfer_sketch::is_sketch_chamfer(world, &op.src, &op.params) {

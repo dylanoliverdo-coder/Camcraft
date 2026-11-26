@@ -92,6 +92,32 @@ fn clean_chain(pts: &[Point2]) -> Result<Vec<Point2>, GenError> {
     Ok(out)
 }
 
+/// Compute the single tool-centre offset polyline for directed open chain `pts`
+/// at distance `d` on its `left` (true) or right (false) side, oriented for
+/// climb milling under M3 (material on the right of travel). Shared by
+/// `contour_open_side` and viewport preview so both show the exact same run.
+pub fn open_side_offset(pts: &[Point2], left: bool, d: f64) -> Result<Vec<Point2>, GenError> {
+    let chain = clean_chain(pts)?;
+    if crosses_itself(&chain) {
+        return Err(GenError::Invalid(
+            "the open chain crosses or touches itself - pick a simple open chain".into(),
+        ));
+    }
+    if !(d.is_finite() && d > TOL) {
+        return Err(GenError::Invalid(format!(
+            "the open chain's offset (tool radius plus stock to leave) is {d:.3} mm - it must be positive"
+        )));
+    }
+    let Some(mut r) = offset_run_side(&chain, d, left)? else {
+        return Err(GenError::Invalid(format!(
+            "the open chain's offset of {d:.3} mm folds onto itself or breaks into pieces - \
+             pick a gentler chain or a smaller tool / offset"
+        )));
+    };
+    r.reverse();
+    Ok(r)
+}
+
 /// Contour along the directed open chain `pts`, placing the tool centre at
 /// `d = tool_radius + stock_to_leave` on the `left` (true) or right (false)
 /// side of `pts`. With `p.climb` on, travel runs with the material (the side
@@ -300,5 +326,32 @@ mod tests {
         assert!((feeds[0].from.x - 0.0).abs() < 1e-3 && (feeds[0].from.y - 5.0).abs() < 1e-3);
         let last = feeds[feeds.len() - 1];
         assert!((last.to.x - 50.0).abs() < 1e-3 && (last.to.y - 5.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn dropped_first_wall_pass_note_is_preserved_in_narrow_u() {
+        // Inside a 13 mm wide U with R=5 and 3 roughing passes at 1 mm spacing
+        // (offsets 7, 6, 5 mm), the outermost 7 mm pass folds and is dropped
+        // before 6 mm and 5 mm fit; the dropped-pass note must survive.
+        let u = [
+            Point2::new(0.0, 30.0),
+            Point2::new(0.0, 0.0),
+            Point2::new(13.0, 0.0),
+            Point2::new(13.0, 30.0),
+        ];
+        let mut p = base_params();
+        p.passes = WallPasses { rough_passes: 3, rough_spacing: 1.0, ..WallPasses::default() };
+        let path = contour_open_side(&u, true, &p).expect("6 and 5 mm passes fit");
+        let feeds = cut_moves(&path);
+        let mut floors: Vec<f64> = Vec::new();
+        for m in feeds.iter().filter(|m| (m.from.y - m.to.y).abs() < 1e-9 && m.from.y < 10.0) {
+            if floors.last().is_none_or(|y| (y - m.from.y).abs() > 1e-3) {
+                floors.push(m.from.y);
+            }
+        }
+        assert_eq!(floors.len(), 2, "two floor passes expected: {floors:?}");
+        assert!((floors[0] - 6.0).abs() < 1e-3 && (floors[1] - 5.0).abs() < 1e-3, "{floors:?}");
+        let notes = path.notes.join("\n");
+        assert!(notes.contains("a wall pass at 7.000 mm from the open run does not fit"), "{notes}");
     }
 }

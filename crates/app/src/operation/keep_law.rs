@@ -37,6 +37,11 @@
 //!   source on a part source - each declared cross hole's round wall,
 //!   about its own axis, excused; never the stock it was read off.
 //!
+//! - **DXF profile source, 2D Chamfer** (Journeyman S10 follow-up,
+//!   `keep_law_drawn`): a part on whose edges every break stands is its
+//!   own part, judged in the program sim with breaks credited; every other
+//!   part keeps the solid law as `Warning::ProfileChamferGouge`.
+//!
 //! - **Part source, neighbouring parts** (#1621): a part-source
 //!   operation's own law reads its source's mesh only, so a cut on part
 //!   B that enters part A beside it had no finding on the operation -
@@ -311,14 +316,19 @@ pub(super) fn kept_parts_named(
 /// Rewrite `Warning::Gouge` into `Warning::StockChamferGouge` so every
 /// channel names the cause and the part-source workaround. #2313: a
 /// stock-source Deburr the same, as `Warning::StockDeburrGouge`.
+/// Journeyman S10 follow-up: a 2D Chamfer on a DXF profile (`drawn`) as
+/// `Warning::ProfileChamferGouge` - its source is no stock; what is left
+/// to judge is a part it meets away from that part's edges.
 pub(super) fn note_stock_chamfer_gouges(
     params: &OpParams,
     part_solid: bool,
+    drawn: bool,
     warns: &mut [crate::verify::Warning],
 ) {
     use crate::verify::Warning;
     let named: fn(usize) -> Warning = match params {
         _ if part_solid => return,
+        OpParams::Chamfer2D { .. } if drawn => |at| Warning::ProfileChamferGouge { at },
         OpParams::Chamfer2D { .. } => |at| Warning::StockChamferGouge { at },
         OpParams::Deburr { .. } | OpParams::MultiAxisDeburr { .. } => |at| Warning::StockDeburrGouge { at },
         _ => return,

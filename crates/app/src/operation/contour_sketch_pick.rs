@@ -259,6 +259,11 @@ pub(super) fn collect_chains(
         };
         let chain_id = chain.id();
         let closed = chain.is_closed();
+        // Deterministic position within the owning DXF profile (spec S10:
+        // open chamfer chains ride in profile order regardless of pick order).
+        let rank = crate::sketch::find(world, entity_name)
+            .and_then(|(_, sk)| sk.data.chains().all().position(|c| c.id() == chain_id))
+            .unwrap_or(usize::MAX);
         let pts = transform_chain_pts(pose, &chain.sample(tolerance))?;
         if (closed && pts.len() < 3) || (!closed && pts.len() < 2) {
             return Err(GenError::Invalid(format!(
@@ -333,6 +338,7 @@ pub(super) fn collect_chains(
             natural_auto,
             open_side_err,
             auto_role_err,
+            rank,
         });
         Ok(())
     })?;

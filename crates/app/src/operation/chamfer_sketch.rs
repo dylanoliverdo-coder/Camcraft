@@ -175,7 +175,13 @@ pub(super) fn generate_plan(
     };
 
     let mut closed = Vec::new();
-    let mut open = Vec::new();
+    let mut profiles: Vec<&str> = Vec::new();
+    for item in &plan.items {
+        if !profiles.contains(&item.entity.as_str()) {
+            profiles.push(&item.entity);
+        }
+    }
+    let mut open_items: Vec<&ResolvedSketchChain> = Vec::new();
     for item in &plan.items {
         if item.closed {
             let eff_side = item.eff_side.unwrap_or(match op_side {
@@ -188,8 +194,20 @@ pub(super) fn generate_plan(
                 climb: item.eff_climb,
             });
         } else {
-            open.push(orient_open_for_chamfer(item, op_climb)?);
+            open_items.push(item);
         }
+    }
+    // Spec S10: ride open chains in deterministic (profile_order, chain_rank) order
+    // regardless of the order they were picked in `SrcRef::Selection`.
+    open_items.sort_by_key(|i| {
+        (
+            profiles.iter().position(|e| *e == i.entity).unwrap_or(usize::MAX),
+            i.rank,
+        )
+    });
+    let mut open = Vec::with_capacity(open_items.len());
+    for item in open_items {
+        open.push(orient_open_for_chamfer(item, op_climb)?);
     }
 
     let mut path = machining2d::chamfer_chains(&closed, &open, cp)?;

@@ -129,6 +129,10 @@ pub struct GenJob {
     /// the plain solid law (`keep_law::neighbour_parts`); empty for a
     /// stock source and a one-part document.
     pub(super) neighbour_parts: Vec<Triangle>,
+    /// Journeyman S10 follow-up: for a 2D Chamfer on a DXF profile, the
+    /// triangle count of each part in `keep_parts`, part by part
+    /// (`keep_law_drawn::drawn_part_sizes`); `None` for every other job.
+    pub(super) drawn_parts: Option<Vec<usize>>,
     /// The area controls resolved against the world (M11.5); `None` for
     /// the identity - an untouched operation carries nothing new.
     pub(super) area: Option<Result<AreaCtx, GenError>>,
@@ -523,6 +527,7 @@ pub fn collect_job(world: &World, op: &Operation, op_name: &str) -> Result<GenJo
         around_part,
         keep_parts: super::keep_law::parts_in_stock(world, setup, &op.params, part_solid),
         neighbour_parts: super::keep_law::neighbour_parts(world, setup, &op.params, &op.src, part_solid),
+        drawn_parts: super::keep_law_drawn::drawn_part_sizes(world, setup, &op.params, &op.src, part_solid),
         area,
         avoid,
         wcs_origin,

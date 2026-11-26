@@ -54,6 +54,7 @@ mod contour_comp_room;
 mod contour_depth;
 mod contour_entry;
 mod contour_link;
+mod contour_open_passes;
 mod contour_open_side;
 mod contour_params;
 mod contour_passes;
@@ -165,7 +166,7 @@ pub use contour_passes::{
 pub use contour_whole::{contour_whole_bodies, contour_whole_bodies_with};
 pub use contour_auto::{auto_side, AutoSide, AUTO_BAND, AUTO_PROBE_DZ};
 pub use contour_chain::contour_along_chain;
-pub use contour_open_side::contour_open_side;
+pub use contour_open_side::{contour_open_side, open_side_offset};
 pub(crate) use contour_chain::contour_along_chain_zs;
 pub use contour_run_side::{contour_open_run, offset_run_side, SectionAt};
 pub use contour_run_stock::contour_open_run_sided;

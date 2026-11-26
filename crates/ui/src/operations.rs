@@ -268,7 +268,9 @@ pub fn fold_warnings_located(warnings: &[Warning]) -> Vec<(String, Option<usize>
         match w {
             Warning::Crossing { .. } => (0, false),
             Warning::Gouge { .. } => (1, false),
-            Warning::StockChamferGouge { .. } | Warning::StockDeburrGouge { .. } => (1, true),
+            Warning::StockChamferGouge { .. }
+            | Warning::ProfileChamferGouge { .. }
+            | Warning::StockDeburrGouge { .. } => (1, true),
             Warning::ShankHit { part, .. } => (2, *part),
             Warning::RapidInStock { .. } => (3, false),
             Warning::RapidInPart { .. } => (3, true),
@@ -319,6 +321,7 @@ pub fn fold_warnings_located(warnings: &[Warning]) -> Vec<(String, Option<usize>
             Warning::Crossing { moves } => moves[1],
             Warning::Gouge { at }
             | Warning::StockChamferGouge { at }
+            | Warning::ProfileChamferGouge { at }
             | Warning::StockDeburrGouge { at }
             | Warning::ShankHit { at, .. }
             | Warning::HolderHit { at, .. }

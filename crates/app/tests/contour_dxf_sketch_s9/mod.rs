@@ -284,3 +284,48 @@ fn s9_checks_8_9_10_refusals_folding_crossing_and_closed_open_side() {
     .expect("closed chain open_side refused at SetOperationGeometry");
     assert!(err.to_string().contains("closed sketch chain") && err.to_string().contains("left"), "{err}");
 }
+
+#[test]
+fn s9_narrow_u_dropped_wall_pass_note_and_viewport_preview_offset() {
+    let stock = StockShape::Box { dx: 120.0, dy: 120.0, dz: 10.0 };
+    let loc = Location { pos: Point3::new(0.0, 0.0, -10.0), ..Location::default() };
+
+    // Inside a 13 mm wide U with R=5 and 3 rough passes at 1 mm spacing (7, 6, 5 mm),
+    // the outermost 7 mm pass is dropped before 6 and 5 fit; the note must survive.
+    let u_dxf = dxf_polyline("open", &[(0.0, 30.0), (0.0, 0.0), (13.0, 0.0), (13.0, 30.0)], false);
+    let (uw, mut uh, u_cid) = world_with_dxf(&u_dxf, &stock, loc);
+    let mut pu = s9_contour(-2.0);
+    if let OpParams::Contour { chain_overrides, passes, .. } = &mut pu {
+        *chain_overrides = open_ov(u_cid, OpenChainSide::Left, false);
+        *passes = WallPasses { rough_passes: 3, rough_spacing: 1.0, ..WallPasses::default() };
+    }
+    run(&uw, &mut uh, CreateOperation::new(&uw, "UDrop", TOOL10, SrcRef::Entity("part".into()), pu), "UDrop");
+    run(&uw, &mut uh, GenerateOperation::new(&uw, "UDrop"), "gen UDrop");
+    let u_feeds = feed_moves(&uw, "UDrop");
+    let mut floors: Vec<f64> = Vec::new();
+    for m in u_feeds.iter().filter(|m| (m.from.y - m.to.y).abs() < 1e-9 && m.from.y < 10.0) {
+        if floors.last().is_none_or(|y| (y - m.from.y).abs() > 1e-3) {
+            floors.push(m.from.y);
+        }
+    }
+    assert_eq!(floors.len(), 2, "two passes cross the U floor: {floors:?}");
+    assert!((floors[0] - 6.0).abs() < 1e-3 && (floors[1] - 5.0).abs() < 1e-3, "{floors:?}");
+    let ue = model::find_by_name(&uw, "UDrop").expect("UDrop op");
+    let notes = model::toolpath_of(&uw, &ue).expect("UDrop tp").path.notes.join("\n");
+    assert!(notes.contains("a wall pass at 7.000 mm from the open run does not fit"), "{notes}");
+
+    // Viewport preview (`chains_of`) draws the offset tool-centre run when `open_side` is set.
+    let line_dxf = dxf_polyline("open", &[(0.0, 0.0), (50.0, 0.0)], false);
+    let (lw, mut lh, l_cid) = world_with_dxf(&line_dxf, &stock, loc);
+    let mut pl = s9_contour(-2.0);
+    if let OpParams::Contour { stock_to_leave, chain_overrides, .. } = &mut pl {
+        *stock_to_leave = 0.5;
+        *chain_overrides = open_ov(l_cid, OpenChainSide::Left, false);
+    }
+    run(&lw, &mut lh, CreateOperation::new(&lw, "Prev", TOOL10, SrcRef::Entity("part".into()), pl), "Prev");
+    let pe = model::find_by_name(&lw, "Prev").expect("Prev op");
+    let pop = model::operation_of(&lw, &pe).expect("Prev op data");
+    let chains = operation::chains_of(&lw, &pop);
+    assert_eq!(chains.len(), 1, "one preview run: {chains:?}");
+    assert!(chains[0].iter().all(|p| (p.y - 5.5).abs() < 1e-3), "preview offset at y=5.5: {:?}", chains[0]);
+}

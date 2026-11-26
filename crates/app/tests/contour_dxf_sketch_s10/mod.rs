@@ -278,3 +278,51 @@ fn s10_checks_2_3_4_5_7_closed_open_refusal_angle_and_nested_auto() {
     let err = GenerateOperation::new(&w3, "BadCone").err().expect("90-deg tool on 30-deg chamfer refused");
     assert!(err.to_string().contains("120-degree cone"), "{err}");
 }
+
+#[test]
+fn s10_open_chains_ride_in_profile_order_regardless_of_pick_order() {
+    let stock = StockShape::Box { dx: 120.0, dy: 120.0, dz: 10.0 };
+    let loc = Location { pos: Point3::new(0.0, 0.0, -10.0), ..Location::default() };
+    let dxf = dxf_polylines(&[
+        ("c", &[(0.0, -40.0), (40.0, -40.0), (40.0, -20.0), (0.0, -20.0)], true),
+        ("c", &[(0.0, 0.0), (40.0, 0.0)], false),
+        ("c", &[(0.0, 27.0), (40.0, 27.0)], false),
+    ]);
+    let (w, mut h, ids) = world_with_dxf(&dxf, &stock, loc);
+    let (closed, open, want_ys) = {
+        let (_, sk) = sketch::find(&w, "part").expect("part");
+        let chains = sk.data.chains();
+        let closed: Vec<ChainId> = ids.iter().copied().filter(|c| chains.find(*c).is_some_and(|k| k.is_closed())).collect();
+        let open: Vec<ChainId> = ids.iter().copied().filter(|c| !closed.contains(c)).collect();
+        let ys: Vec<f64> = open.iter().map(|c| chains.find(*c).expect("open").sample(0.05)[0].y).collect();
+        (closed, open, ys)
+    };
+    assert_eq!((closed.len(), open.len()), (1, 2));
+
+    let mut params = s10_chamfer(0.5, 45.0);
+    if let OpParams::Chamfer2D { chain_overrides, .. } = &mut params {
+        *chain_overrides = open
+            .iter()
+            .map(|&chain| ChainOverride {
+                entity: "part".into(),
+                chain,
+                side: None,
+                reverse: false,
+                open_side: OpenChainSide::Left,
+            })
+            .collect();
+    }
+    // Pick open chains in reversed order ahead of the closed loop.
+    let picks = SrcRef::Selection(vec![
+        GeoSel { entity: "part".into(), feature: FeatureSel::SketchChain(open[1]) },
+        GeoSel { entity: "part".into(), feature: FeatureSel::SketchChain(open[0]) },
+        GeoSel { entity: "part".into(), feature: FeatureSel::SketchChain(closed[0]) },
+    ]);
+    run(&w, &mut h, CreateOperation::new(&w, "Ord", CONE90, picks, params), "Ord");
+    run(&w, &mut h, GenerateOperation::new(&w, "Ord"), "gen Ord");
+    let feeds = feed_moves(&w, "Ord");
+    assert_eq!(feeds.len(), 6, "4 closed moves + 2 open moves: {feeds:?}");
+    assert!(feeds[..4].iter().all(|m| m.from.y < -19.0 && m.to.y < -19.0), "closed loop first: {:?}", &feeds[..4]);
+    assert!((feeds[4].from.y - want_ys[0]).abs() < 1e-3 && (feeds[4].to.y - want_ys[0]).abs() < 1e-3, "first open by profile order: {:?}", feeds[4]);
+    assert!((feeds[5].from.y - want_ys[1]).abs() < 1e-3 && (feeds[5].to.y - want_ys[1]).abs() < 1e-3, "second open by profile order: {:?}", feeds[5]);
+}

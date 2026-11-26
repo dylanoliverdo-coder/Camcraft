@@ -270,6 +270,8 @@ mod air_law;
 pub mod mark_law;
 // #1603: the part a pocket-family op keeps, judged on the op.
 pub mod keep_law;
+// Journeyman spec S10 follow-up: drawn-edge part split for DXF profile chamfers.
+mod keep_law_drawn;
 // #1749: the 3D Pocket's footprint past its open edges.
 mod open_side;
 pub use open_side::AIR_BAND_FIXTURE;

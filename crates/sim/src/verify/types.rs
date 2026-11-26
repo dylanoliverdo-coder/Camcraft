@@ -392,6 +392,11 @@ pub enum Warning {
     /// part (#1637): choosing the part as source instead of the stock
     /// avoids cutting into the part edge. Blocking like `Gouge`.
     StockChamferGouge { at: usize },
+    /// A 2D Chamfer on a DXF profile whose break enters a part away from
+    /// that part's edges (Journeyman S10 follow-up): a chain off every
+    /// wall of the part, or drawn below its edge, so the cone cuts the
+    /// part where nothing is an edge to break. Blocking like `Gouge`.
+    ProfileChamferGouge { at: usize },
     /// Move `at` violates a protected "Do not touch" face or edge (#2055):
     /// `item` is its 1-based list index, `part` which section of the tool
     /// assembly came inside clearance, and `short_mm` the shortfall.
@@ -480,6 +485,10 @@ impl core::fmt::Display for Warning {
                     "move {at} cuts past the finish surface (stock-source chamfer breaks into a part; chamfer with the part as source)"
                 )
             }
+            Warning::ProfileChamferGouge { at } => write!(
+                f,
+                "move {at} cuts past the finish surface (profile chamfer breaks into a part away from its edges; draw the chain on the part's top edge, or chamfer with the part as source)"
+            ),
             Warning::StockDeburrGouge { at } => {
                 write!(f, "move {at} cuts past the finish surface (stock-source deburr breaks into a part; use the part as source)")
             }
