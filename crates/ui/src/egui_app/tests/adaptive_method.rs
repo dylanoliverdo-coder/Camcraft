@@ -178,6 +178,26 @@ fn pocket_passes_tab_shows_wall_finishing_rows_and_other_ops_hide_direction() {
     assert_eq!(harness.query_all_by_label("Finish levels").count(), 1, "shown when spring_passes > 0");
     assert_eq!(combos_showing(&harness, "Climb"), 1);
 
+    // Rest machining on Pocket disables finishing controls and explains why.
+    if let OpParams::Pocket { rest, .. } = &mut harness.state_mut().state.op_ui.params {
+        *rest = Some(camcraft_app::machining2d::RestParams {
+            source: camcraft_app::machining2d::RestSource::EnteredTool,
+            previous_tool_diameter: 12.0,
+            previous_corner_radius: 0.0,
+            previous_stock_to_leave: 0.0,
+            allowance: 0.0,
+        });
+    }
+    harness.run();
+    assert!(
+        harness
+            .query_all_by(|n| n.value().as_deref().is_some_and(|v| v.contains("wall finishing passes"))
+                || n.label().is_some_and(|l| l.contains("wall finishing passes")))
+            .count()
+            >= 1,
+        "Pocket Passes tab must explain why finishing controls are disabled under rest machining"
+    );
+
     // Non-Pocket operations do not show Pocket's Finish direction control.
     let mut adapt = passes_of(OpType::Adaptive2D);
     if let OpParams::Adaptive2D { finish, .. } = &mut adapt.state_mut().state.op_ui.params {

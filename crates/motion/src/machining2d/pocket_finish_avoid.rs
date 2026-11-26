@@ -25,7 +25,9 @@ use super::pass_start::{PassStart, StartSide};
 use super::pocket::{PocketParams, PocketStrategy, non_sliver_center};
 use super::pocket_avoid::pocket_avoid_entered_on;
 use super::pocket_avoid_level::{check_reliefs_avoid, enforce_level_crossing_free};
-use super::pocket_finish::{PocketFinish, empty_clear_msg, level_runs_finishing, pocket_with_finish};
+use super::pocket_finish::{
+    PocketFinish, check_spacing_vs_tool, empty_clear_msg, pocket_with_finish,
+};
 use super::pocket_finish_rings::{
     fit_clear_pass, fit_finish_ring, plan_clearing, plan_pocket_finish_rings, resolve_strategy,
 };
@@ -53,6 +55,7 @@ pub fn pocket_avoid_with_finish(
         return pocket_avoid_entered_on(region, p, holes, avoid, relief, side);
     }
     p.validate()?;
+    check_spacing_vs_tool(finish, p)?;
     relief.validate()?;
     if region.is_empty() {
         return Err(GenError::Empty("empty pocket region".into()));
@@ -79,7 +82,10 @@ pub fn pocket_avoid_with_finish(
     let mut tally = FilletTally::default();
     let mut proof = ProofTally::default();
 
-    for (li, &z) in zs.iter().enumerate() {
+    // Pre-compute per-level keep-outs so `FinishLevel::Last` knows the deepest
+    // reachable level when an `avoid` obstacle blocks the bottom level.
+    let mut prepared: Vec<Option<(Region, Region, Region)>> = Vec::with_capacity(zs.len());
+    for &z in &zs {
         let ko = avoid.keepout_region(z, z, AVOID_PAD).map_err(GenError::Invalid)?;
         let ko_entry = avoid.keepout_region(z, p.clearance_z.max(z), AVOID_PAD).map_err(GenError::Invalid)?;
         check_reliefs_avoid(&relief_plan.reliefs, &ko, &ko_entry, avoid)?;
@@ -97,9 +103,19 @@ pub fn pocket_avoid_with_finish(
             base_clear.difference(&ko_g)?
         };
         if level_final.is_empty() || level_clear.is_empty() {
+            prepared.push(None);
+        } else {
+            prepared.push(Some((ko_all, level_final, level_clear)));
+        }
+    }
+    let last_active_li = prepared.iter().rposition(Option::is_some);
+    let mut ran_finish = false;
+
+    for (li, (&z, slot)) in zs.iter().zip(prepared).enumerate() {
+        let Some((ko_all, level_final, level_clear)) = slot else {
             blocked_levels.push(z);
             continue;
-        }
+        };
         let level_side = super::ring_side::resolve(&level_clear, strategy, p.tool_diameter * 0.5, side)?;
         let p_clear = PocketParams { stock_to_leave: p.stock_to_leave + clear_gap, ..*p };
         let what = format!("level at Z {z:.2}");
@@ -165,7 +181,11 @@ pub fn pocket_avoid_with_finish(
             &mut b, z, &clear_passes, Some(&clear_runs), &clear_motion,
             Some(cert_entry.as_ref().unwrap_or(&cert_clear)), Some(&cert_clear), prev_center.as_ref(), &mut ws,
         );
-        if level_runs_finishing(finish, li, zs.len()) {
+        let run_fin_here = match finish.finish_level {
+            FinishLevel::Every => true,
+            FinishLevel::Last => last_active_li == Some(li),
+        };
+        if run_fin_here {
             let anchor = clear_passes.last().and_then(|v| v.last()).copied().unwrap_or(Point2::new(0.0, 0.0));
             let ko_opt = (!ko_all.is_empty()).then_some(&ko_all);
             let mut fin_passes = plan_pocket_finish_rings(region, p, finish, ko_opt, anchor)?;
@@ -196,6 +216,14 @@ pub fn pocket_avoid_with_finish(
                     &mut b, z, &fin_passes, Some(&fin_runs), &fin_motion,
                     Some(&cert_fin), Some(&cert_fin), None, &mut ws,
                 );
+                ran_finish = true;
+                if finish.finish_level == FinishLevel::Last && li + 1 < zs.len() {
+                    notes.push(format!(
+                        "2D Pocket finishing: the bottom level at Z {:.3} was blocked by 'Do not touch' ({}); \
+                         last-level finishing ran at the lowest clear level Z {:.3}",
+                        zs[zs.len() - 1], avoid.names_list(), z
+                    ));
+                }
             }
         }
         prev_center = Some(level_clear);
@@ -206,6 +234,12 @@ pub fn pocket_avoid_with_finish(
             "cannot cut clear of protected 'Do not touch' {}: no safe cutting room remains",
             avoid.names_list()
         )));
+    }
+    if !ran_finish {
+        notes.push(format!(
+            "2D Pocket finishing: wall finishing passes could not run because 'Do not touch' ({}) blocked the finishing level",
+            avoid.names_list()
+        ));
     }
     for n in notes {
         b.note(n);

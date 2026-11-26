@@ -16,7 +16,7 @@ use crate::geometry::Point3;
 use super::arc_cross::post_crossing_free;
 use super::arc_proof::ProofTally;
 use super::arcs::Seg;
-use super::blend_cross::{Bans, Blend, round_walks};
+use super::blend_cross::{Bans, Blend, post_blended_prefix_crossing_free};
 use super::contour_passes::{FinishLevel, MAX_WALL_PASSES};
 use super::corner_relief::{CornerRelief, ResolvedRelief, plan_corner_reliefs};
 use super::corner_relief_spur::inject_relief_spurs;
@@ -182,6 +182,19 @@ pub(super) fn level_runs_finishing(finish: &PocketFinish, idx: usize, count: usi
     }
 }
 
+/// Refuse a finishing spacing wider than the tool diameter: wider steps would
+/// leave an uncut ring of standing stock between clearing and finishing passes.
+pub(super) fn check_spacing_vs_tool(finish: &PocketFinish, p: &PocketParams) -> Result<(), GenError> {
+    if finish.finish_passes > 0 && finish.finish_spacing > p.tool_diameter {
+        return Err(GenError::Invalid(format!(
+            "2D Pocket finishing: finish_spacing ({:.3} mm) exceeds tool_diameter ({:.3} mm) \
+             and would leave an uncut ring of standing stock between passes",
+            finish.finish_spacing, p.tool_diameter
+        )));
+    }
+    Ok(())
+}
+
 /// 2D Pocket with optional wall finishing and spring passes (spec S4).
 /// When `finish` is inactive, delegates byte-for-byte to `pocket_started_on`.
 pub fn pocket_with_finish(
@@ -199,6 +212,7 @@ pub fn pocket_with_finish(
         return pocket_started_on(region, p, holes, relief, side);
     }
     p.validate()?;
+    check_spacing_vs_tool(finish, p)?;
     relief.validate()?;
     if region.is_empty() {
         return Err(GenError::Empty("empty pocket region".into()));
@@ -237,17 +251,17 @@ pub fn pocket_with_finish(
     let mut b = PathBuilder::approached(Point3::new(0.0, 0.0, p.clearance_z));
     clear_notes.into_iter().for_each(|n| b.note(n));
     let mut proof = ProofTally::default();
-    let mut clear_runs: Vec<Vec<Seg>> = clear_passes
+    let clear_runs: Vec<Vec<Seg>> = clear_passes
         .iter()
         .map(|pass| fit_clear_pass(pass, clear_strategy, &center_clear, &mut proof))
         .collect();
-    if p.blend_turns {
+    let blend = if p.blend_turns {
         let legal = Legal { region: &center_clear, inside: true, air_left: None };
         let rho = corner_arc_radius(p.blend_radius, p.tool_diameter).map_err(GenError::Invalid)?;
-        let rounded = round_walks(&clear_passes, &clear_runs, &Blend { rho, legal }, &Bans::default());
-        rounded.notes().into_iter().for_each(|n| b.note(n));
-        clear_runs = rounded.runs;
-    }
+        Some(Blend { rho, legal })
+    } else {
+        None
+    };
     let fin_runs: Vec<Vec<Seg>> = fin_passes.iter().map(|pass| fit_finish_ring(pass, fin_climb, &mut proof)).collect();
     let n_clear = clear_passes.len();
     let mut all_passes = clear_passes.clone();
@@ -296,7 +310,12 @@ pub fn pocket_with_finish(
         ws.finish(b, &clear_motion);
         crate::fed_retract::lift_approach(b, p.clearance_z, ws.above(), clear_motion.hop_z, &clear_motion.links.approach);
     };
-    let mut path = post_crossing_free(b, &all_passes, all_runs, &mut proof, post);
+    let mut path = match blend {
+        Some(ref bl) => {
+            post_blended_prefix_crossing_free(b, &all_passes, all_runs, n_clear, bl, &Bans::default(), &mut proof, post)
+        }
+        None => post_crossing_free(b, &all_passes, all_runs, &mut proof, post),
+    };
     if let Some(n) = proof.note() {
         path.notes.push(n);
     }

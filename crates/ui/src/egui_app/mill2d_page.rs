@@ -324,7 +324,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
                     consequence(ui, note);
                 }
                 super::rest_pocket_page::rest_group(ui, u, cx.tool_diameter, *strategy, &links.approach, rest);
-                super::pocket_finish_rows::pocket_finish_rows(ui, u, finish);
+                super::pocket_finish_rows::pocket_finish_rows(ui, u, finish, rest.is_some());
             }
             if tab == SEC_FEEDS {
                 prop_row(ui, "Feed", |ui| num_feed(ui, u, feed));

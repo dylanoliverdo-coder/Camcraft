@@ -582,3 +582,177 @@ fn s4_avoid_with_finish_keeps_clear_of_protected_zone() {
     assert!(hits.is_empty(), "avoid hits: {hits:?}");
     assert!(camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty());
 }
+
+/// R1 MAJOR 1 regression: `blend_turns = true` with active `PocketFinish` uses
+/// `post_blended_prefix_crossing_free` (preserving `#2317` `arc_touch` exemptions
+/// on clearing corner blends), producing 0 crossings and 0 spurious arc proof notes.
+#[test]
+fn s4_r1_blend_turns_with_finish_preserves_blends_and_zero_crossings() {
+    let area = pocket_with_island();
+    let finish = PocketFinish {
+        finish_passes: 2,
+        finish_spacing: 0.1,
+        spring_passes: 0,
+        finish_direction: FinishDirection::Same,
+        finish_level: FinishLevel::Every,
+    };
+    for strat in [PocketStrategy::Zigzag, PocketStrategy::Waterline] {
+        let mut p = params(strat, true);
+        p.blend_turns = true;
+        let path = pocket_with_finish(&area, &p, &[], &CornerRelief::default(), &StartSide::default(), &finish)
+            .expect("blended pocket with finish");
+        assert!(
+            camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty(),
+            "{strat:?}: blended pocket + finish must have zero crossings"
+        );
+        let arc_moves = path
+            .moves
+            .iter()
+            .filter(|m| m.kind == MoveKind::Feed && m.arc.is_some() && (m.from.z + 5.0).abs() < 1e-6)
+            .count();
+        assert!(arc_moves > 0, "{strat:?}: blend_turns must retain corner arcs alongside finishing passes");
+        let spurious_proof = path.notes.iter().any(|n| n.contains("arc output:"));
+        assert!(!spurious_proof, "{strat:?}: unexpected arc proof refusal note: {:?}", path.notes);
+    }
+}
+
+/// R1 MAJOR 2 regression: `finish_spacing > tool_diameter` is refused by name
+/// in both `pocket_with_finish` and `pocket_avoid_with_finish` (naming both
+/// `finish_spacing` and `tool_diameter`).
+#[test]
+fn s4_r1_finish_spacing_exceeding_tool_diameter_is_refused() {
+    use camcraft_motion::geometry::{Point3, Triangle};
+    use camcraft_motion::tools::ToolGeom;
+    use camcraft_motion::verify::{AvoidItem, AvoidSpec, Cutter};
+
+    let area = rect(-30.0, -30.0, 30.0, 30.0);
+    let p = params(PocketStrategy::Waterline, true); // tool_diameter = 6.0
+    let too_wide = PocketFinish {
+        finish_passes: 1,
+        finish_spacing: 6.5,
+        spring_passes: 0,
+        finish_direction: FinishDirection::Same,
+        finish_level: FinishLevel::Every,
+    };
+
+    let err_plain = pocket_with_finish(&area, &p, &[], &CornerRelief::default(), &StartSide::default(), &too_wide)
+        .expect_err("plain pocket must refuse finish_spacing > tool_diameter");
+    let msg_plain = err_plain.to_string();
+    assert!(
+        msg_plain.contains("finish_spacing") && msg_plain.contains("tool_diameter"),
+        "refusal must name both finish_spacing and tool_diameter: {msg_plain}"
+    );
+
+    let v = |i: usize| {
+        Point3::new([-1.0, 1.0][i & 1], [-1.0, 1.0][(i >> 1) & 1], [-6.0, 4.0][(i >> 2) & 1])
+    };
+    let q = |a, b, c, d| [Triangle::new(v(a), v(b), v(c)), Triangle::new(v(a), v(c), v(d))];
+    let pin: Vec<Triangle> =
+        [q(4, 5, 7, 6), q(0, 2, 3, 1), q(0, 1, 5, 4), q(2, 6, 7, 3), q(1, 3, 7, 5), q(2, 0, 4, 6)]
+            .into_iter()
+            .flatten()
+            .collect();
+    let avoid = AvoidSpec {
+        items: vec![AvoidItem { label: "Pin".into(), tris: pin, edges: Vec::new() }],
+        clearance: 1.0,
+        cutter: Cutter::flat(&ToolGeom {
+            radius: 3.0,
+            nose_radius: 0.0,
+            flute_len: 15.0,
+            shank_radius: 3.0,
+            shank_len: 20.0,
+            holder_radius: 12.0,
+            holder_len: 20.0,
+        }),
+    };
+    let err_avoid = pocket_avoid_with_finish(
+        &area,
+        &p,
+        &[],
+        &avoid,
+        &CornerRelief::default(),
+        &StartSide::default(),
+        &too_wide,
+    )
+    .expect_err("avoid pocket must refuse finish_spacing > tool_diameter");
+    let msg_avoid = err_avoid.to_string();
+    assert!(
+        msg_avoid.contains("finish_spacing") && msg_avoid.contains("tool_diameter"),
+        "avoid refusal must name both finish_spacing and tool_diameter: {msg_avoid}"
+    );
+}
+
+/// R1 MINOR 1 regression: when `finish_level == Last` and the bottom level is
+/// completely blocked by an `avoid` obstacle, finishing runs at the lowest clear
+/// level and emits an explicit note (never silently dropped).
+#[test]
+fn s4_r1_avoid_blocked_bottom_level_runs_finishing_on_lowest_clear_level_with_note() {
+    use camcraft_motion::geometry::{Point3, Triangle};
+    use camcraft_motion::tools::ToolGeom;
+    use camcraft_motion::verify::{AVOID_VERIFY_TOL, AvoidItem, AvoidSpec, Cutter, avoid_hits};
+
+    let area = rect(-20.0, -15.0, 20.0, 15.0);
+    let mut p = params(PocketStrategy::Waterline, true);
+    p.top_z = 0.0;
+    p.bottom_z = -6.0;
+    p.stepdown = 2.0; // levels: -2.0, -4.0, -6.0
+    let finish = PocketFinish {
+        finish_passes: 1,
+        finish_spacing: 0.1,
+        spring_passes: 0,
+        finish_direction: FinishDirection::Same,
+        finish_level: FinishLevel::Last,
+    };
+
+    // Floor plate blocking ONLY the bottom level z = -6.0 (sits from z = -8.0 to z = -5.5).
+    let v = |i: usize| {
+        Point3::new([-25.0, 25.0][i & 1], [-20.0, 20.0][(i >> 1) & 1], [-8.0, -5.5][(i >> 2) & 1])
+    };
+    let q = |a, b, c, d| [Triangle::new(v(a), v(b), v(c)), Triangle::new(v(a), v(c), v(d))];
+    let slab: Vec<Triangle> =
+        [q(4, 5, 7, 6), q(0, 2, 3, 1), q(0, 1, 5, 4), q(2, 6, 7, 3), q(1, 3, 7, 5), q(2, 0, 4, 6)]
+            .into_iter()
+            .flatten()
+            .collect();
+    let avoid = AvoidSpec {
+        items: vec![AvoidItem { label: "Subplate".into(), tris: slab, edges: Vec::new() }],
+        clearance: 0.5,
+        cutter: Cutter::flat(&ToolGeom {
+            radius: 3.0,
+            nose_radius: 0.0,
+            flute_len: 15.0,
+            shank_radius: 3.0,
+            shank_len: 20.0,
+            holder_radius: 12.0,
+            holder_len: 20.0,
+        }),
+    };
+    let path = pocket_avoid_with_finish(
+        &area,
+        &p,
+        &[],
+        &avoid,
+        &CornerRelief::default(),
+        &StartSide::default(),
+        &finish,
+    )
+    .expect("avoid finish with blocked bottom");
+    assert!(avoid_hits(&path, &avoid, AVOID_VERIFY_TOL).expect("hits").is_empty());
+    assert!(camcraft_motion::verify::crossed_pairs(&path, ARC_FIT_TOL).is_empty());
+    // z = -6.0 is blocked; z = -4.0 is the lowest clear level and receives the finishing ring at 3.0 mm.
+    assert!(cut_runs_at(&path, -6.0).is_empty(), "bottom level -6.0 should be blocked");
+    let runs_m4 = cut_runs_at(&path, -4.0);
+    assert!(!runs_m4.is_empty(), "level -4.0 must cut");
+    let wall_d_m4 = runs_m4
+        .iter()
+        .flat_map(|r| r.iter())
+        .flat_map(|m| m.chords(0.001))
+        .map(|(a, _)| (20.0 - a.x.abs()).min(15.0 - a.y.abs()))
+        .fold(f64::INFINITY, f64::min);
+    assert!((wall_d_m4 - 3.0).abs() < 1e-3, "lowest clear level -4.0 must finish to 3.0 mm (got {wall_d_m4:.4})");
+    assert!(
+        path.notes.iter().any(|n| n.contains("last-level finishing ran at the lowest clear level")),
+        "expected explicit note naming lowest clear finishing level: {:?}",
+        path.notes
+    );
+}

@@ -252,7 +252,7 @@ pub(crate) use drill_prior::reads_prior;
 mod plunge_solid;
 mod predrilled_entry;
 pub mod rest_op;
-pub use rest_op::REST_PREDRILLED;
+pub use rest_op::{REST_POCKET_FINISH, REST_PREDRILLED};
 #[cfg(test)]
 mod rest_op_tests;
 #[cfg(test)]
