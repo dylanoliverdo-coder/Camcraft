@@ -16,3 +16,6 @@ frustum; this does not add a separate saw definition or operation.
 Turning paths in Envelope mode carry the insert's nose center and use the
 existing revolved verifier. The rapid sweep models the milling tool's tip
 and axial stack.
+
+Saved milling-envelope operations need a fresh verdict before posting. A scoped
+generation stamp makes those caches stale until the operations are regenerated.
