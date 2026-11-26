@@ -273,6 +273,7 @@ pub(super) fn pocket_avoid_over(
         if !reliefs.is_empty() {
             inject_relief_spurs(&mut passes, &mut runs, &level_center, reliefs);
         }
+        ws.next_level();
         walk_one_level(
             &mut b,
             z,

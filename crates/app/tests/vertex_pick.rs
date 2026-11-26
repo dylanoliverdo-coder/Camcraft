@@ -24,7 +24,7 @@ fn catalog_tool(name: &str) -> Tool {
 
 fn face_params() -> OpParams {
     OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(),
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(),
         tilt: None,
         blend_turns: false, blend_radius: None,
         stepover: 3.0,

@@ -180,7 +180,7 @@ pub(super) fn build_workholding_world() -> World {
     add_catalog_tools(&world, &mut h, &["EM-1000-4FL", "EM-0600-4FL"]);
     let top_clr = Height::of(HeightReference::TopOfStock, 12.0);
     create_and_gen(&world, &mut h, "Face1", "EM-1000-4FL", SrcRef::Stock, OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(), blend_turns: false, blend_radius: None, tilt: None, stepover: 6.0,
         clearance_z: top_clr, cut_z: Height::of(HeightReference::TopOfModel, 0.0),
@@ -260,7 +260,7 @@ pub(super) fn build_multiaxis_world() -> World {
     set_box_stock(&world, &mut h, [54.0, 40.0, 22.0], [100.0, 0.0, 0.0], "stock2");
     set_wcs(&world, &mut h, [100.0, 0.0, 20.0], "wcs2");
     create_and_gen(&world, &mut h, "Indexed Face1", "EM-0600-4FL", SrcRef::Stock, OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(), blend_turns: false, blend_radius: None,
         // Preserve the persisted legacy basis of this documented unsafe example.

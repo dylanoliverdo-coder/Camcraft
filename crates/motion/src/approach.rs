@@ -8,8 +8,9 @@
 //! pre-M11.3 behaviour, so a default `Approach` posts today's moves byte
 //! for byte.
 //!
-//! Provenance: standard entry/lead vocabulary of published CAM practice and
-//! Journeyman spec S3 (`retract_feed`); MRR engagement law over M2.1/M11.4.
+//! Provenance: standard entry/lead vocabulary of published CAM practice,
+//! Journeyman spec S3 (`retract_feed`), and Journeyman spec S8
+//! (`finish_levels`, `finish_stepdown`); MRR engagement law over M2.1/M11.4.
 //! Our own model; no vendor material consulted.
 
 use crate::machining2d::Lead;
@@ -128,6 +129,12 @@ pub struct Approach {
     /// the default, every earlier file - steps by the full stepdown and
     /// keeps the remainder in the last step.
     pub equal_steps: bool,
+    /// Finishing depth levels after the roughing ladder (Journeyman spec S8);
+    /// `0` (default) uses today's ladder unchanged.
+    pub finish_levels: u32,
+    /// Stepdown of each finishing level in mm (Journeyman spec S8); `0`
+    /// repeats the final level `finish_levels` additional times.
+    pub finish_stepdown: f64,
     // --- D: feeds and engagement at entry ---
     /// Feed of ramp, helix and arc descents (mm/min); `0` is the cutting
     /// feed.
@@ -251,6 +258,8 @@ impl Approach {
         approach_distance: DEFAULT_APPROACH_DISTANCE,
         stock_top: None,
         equal_steps: false,
+        finish_levels: 0,
+        finish_stepdown: 0.0,
         ramp_feed: 0.0,
         plunge_feed: 0.0,
         retract_feed: 0.0,
@@ -337,6 +346,9 @@ impl Approach {
             return Err("the entry feeds must be zero (the op's feed) or positive");
         }
         if let Some(why) = crate::fed_retract::retract_feed_refusal(self.retract_feed) {
+            return Err(why);
+        }
+        if let Some(why) = crate::machining2d::finish_stepdown_refusal(self.finish_stepdown) {
             return Err(why);
         }
         if !(self.lead_feed_pct.is_finite() && self.lead_feed_pct > 0.0 && self.lead_feed_pct <= 100.0) {

@@ -31,7 +31,7 @@ use camcraft_ui::state::{BoundaryPick, CommandKind, OpUi, State};
 
 fn face_params() -> OpParams {
     OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(),
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 3.0,

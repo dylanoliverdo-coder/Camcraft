@@ -10,7 +10,6 @@ use super::blend::{Turn, plan_reversals};
 use super::face_holes::{self, FaceHoles};
 use super::face_keep;
 pub use super::face_keep::FaceKeep;
-use super::levels::cut_levels_under;
 // The enum moved to its own module (#261 part 2); every
 // `super::face::GenError` path keeps working through this re-export.
 pub use super::gen_error::GenError;
@@ -64,6 +63,10 @@ pub struct FaceParams {
     pub holes: FaceHoles,
     /// Vertical fed retract rate (mm/min, Journeyman S3); `0` is rapid.
     pub retract_feed: f64,
+    /// Finishing depth levels (Journeyman S8); `0` is off.
+    pub finish_levels: u32,
+    /// Stepdown of each finishing level in mm (Journeyman S8); `0` repeats `cut_z`.
+    pub finish_stepdown: f64,
     /// The stock top in the facer's frame (#2004), read only when
     /// staging: stock over `top_z` keeps a level at `top_z`, so the first
     /// bite is never deeper than one stepdown. `None` is Top Z as the
@@ -112,6 +115,9 @@ impl FaceParams {
             return Err(GenError::Invalid("feeds must be positive".into()));
         }
         if let Some(why) = crate::fed_retract::retract_feed_refusal(self.retract_feed) {
+            return Err(GenError::Invalid(why.into()));
+        }
+        if let Some(why) = super::finish_levels::finish_stepdown_refusal(self.finish_stepdown) {
             return Err(GenError::Invalid(why.into()));
         }
         if self.blend_turns {
@@ -191,10 +197,14 @@ pub fn face_over_kept(
     let r = p.tool_diameter * 0.5;
     let ys = band(lo.y, hi.y, r, p.stepover)?;
     let (x_in, x_out) = (lo.x - r, hi.x + r);
-    let zs = match (p.top_z, p.stepdown) {
-        (Some(t), Some(s)) => cut_levels_under(t, p.stock_top, p.cut_z, s)?,
-        _ => vec![p.cut_z],
-    };
+    let zs = super::finish_levels::face_levels(
+        p.top_z,
+        p.stock_top,
+        p.cut_z,
+        p.stepdown,
+        p.finish_levels,
+        p.finish_stepdown,
+    )?;
 
     // Rows are the same at every level, so the reversal plan is too:
     // decided once, its refusals stated once.

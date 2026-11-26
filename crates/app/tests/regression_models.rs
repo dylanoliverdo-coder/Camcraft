@@ -75,7 +75,7 @@ fn pipeline(model_path: &Path, op_name: &str, stock: StockShape, cut_z: f64, ste
         .expect("catalog entry");
     history.execute(&world, AddTool::new(&world, "EM-0400-2FL", tool).expect("catalog tool"));
     let params = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
         tilt: None,
         stepover,
         clearance_z: Height::fixed(cut_z + 6.0),

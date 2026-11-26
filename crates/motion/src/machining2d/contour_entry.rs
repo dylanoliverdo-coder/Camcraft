@@ -40,14 +40,12 @@ pub(super) struct Engage<'a> {
 /// air by the generator's contract (nothing is engaged above `top_z`),
 /// held under the hop plane (clearance where the hop plane IS the top).
 pub(super) fn wall_arc_top(p: &ContourParams, zs: &[f64], zi: usize, hop_z: f64) -> f64 {
-    match zi.checked_sub(1).and_then(|i| zs.get(i)) {
-        Some(&above) => above,
-        None => {
-            let z = zs.first().copied().unwrap_or(p.top_z);
-            let cap = if hop_z > z { hop_z } else { p.clearance_z };
-            (z + p.stepdown).min(cap)
-        }
+    let z = zs.get(zi).copied().unwrap_or(p.top_z);
+    if let Some(&above) = zs.get(..zi).and_then(|prev| prev.iter().rev().find(|&&a| a > z + 1e-9)) {
+        return above;
     }
+    let cap = if hop_z > z { hop_z } else { p.clearance_z };
+    (z + p.stepdown).min(cap)
 }
 
 /// The wall-side arc entry (an outside wall, or the ring of a hole in

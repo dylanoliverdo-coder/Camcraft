@@ -112,6 +112,10 @@ pub enum OpParams {
         plunge_feed: f64,
         /// Vertical fed retract rate (mm/min, Journeyman S3); `0` is rapid.
         retract_feed: f64,
+        /// Finishing depth levels (Journeyman S8); `0` is off.
+        finish_levels: u32,
+        /// Stepdown of each finishing level in mm (Journeyman S8); `0` repeats `cut_z`.
+        finish_stepdown: f64,
         climb: bool,
         /// Turning-point blends (M11.1 A): row-end reversals ride one
         /// tangent G2/G3 semicircle where the law proves it legal

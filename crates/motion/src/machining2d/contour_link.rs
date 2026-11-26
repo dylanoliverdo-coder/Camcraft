@@ -167,6 +167,17 @@ pub(super) fn push_stay(
     }
 }
 
+/// One scheduled ring cut, carrying its distinct level slot and per-ring
+/// index so repeated final levels (`finish_stepdown == 0`, Journeyman spec S8)
+/// remain distinct from same-level ring transitions.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct SchedItem {
+    pub level: usize,
+    pub z: f64,
+    pub li: usize,
+    pub rzi: usize,
+}
+
 /// The cut order and its stay-down links. Level by level (every ring at
 /// a level, then the next level) unless the level link is Keep down;
 /// ring by ring then, each ring all the way down before the next, so a
@@ -179,17 +190,42 @@ pub(super) fn plan_links(
     lad: &Ladder,
     plan: &[Vec<Point2>],
     notes: &mut Vec<String>,
-) -> (Vec<(f64, usize)>, Vec<Option<Stay>>) {
+) -> (Vec<SchedItem>, Vec<Option<Stay>>) {
     let is_tabbed = |z: f64| p.tab_count > 0 && z < p.bottom_z + p.tab_height;
     let loops = lad.per_ring.len();
     let keep = p.links.level == Link::KeepDown;
-    let sched: Vec<(f64, usize)> = if keep {
-        (0..loops).flat_map(|li| lad.ring(li).iter().map(move |&z| (z, li))).collect()
+    let mut sched: Vec<SchedItem> = Vec::new();
+    if keep {
+        for li in 0..loops {
+            let rz = lad.ring(li);
+            for (rzi, &z) in rz.iter().enumerate() {
+                let occ = rz[..rzi].iter().filter(|q| q.to_bits() == z.to_bits()).count();
+                let level = lad
+                    .zs
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, q)| q.to_bits() == z.to_bits())
+                    .nth(occ)
+                    .map_or(rzi, |(idx, _)| idx);
+                sched.push(SchedItem { level, z, li, rzi });
+            }
+        }
     } else {
-        lad.zs.iter()
-            .flat_map(|&z| (0..loops).filter(move |&li| lad.walks(li, z)).map(move |li| (z, li)))
-            .collect()
-    };
+        for (level, &z) in lad.zs.iter().enumerate() {
+            let occ = lad.zs[..level].iter().filter(|q| q.to_bits() == z.to_bits()).count();
+            for li in 0..loops {
+                let rz = lad.ring(li);
+                if let Some((rzi, _)) = rz
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, q)| q.to_bits() == z.to_bits())
+                    .nth(occ)
+                {
+                    sched.push(SchedItem { level, z, li, rzi });
+                }
+            }
+        }
+    }
     let mut stay: Vec<Option<Stay>> = vec![None; sched.len()];
     if !keep {
         return (sched, stay);
@@ -202,7 +238,8 @@ pub(super) fn plan_links(
         Entry3D::Arc => "arc",
     };
     for i in 1..sched.len() {
-        let ((z, li), (zp, lp)) = (sched[i], sched[i - 1]);
+        let (cur, prev) = (sched[i], sched[i - 1]);
+        let ((z, li), (zp, lp)) = ((cur.z, cur.li), (prev.z, prev.li));
         if li != lp {
             continue;
         }
@@ -219,6 +256,11 @@ pub(super) fn plan_links(
         };
         if is_tabbed(z) || is_tabbed(zp) {
             refuse(notes, "a standing tab is material on the ring".into());
+            continue;
+        }
+        if zp <= z + 1e-9 {
+            // Journeyman spec S8 (`finish_stepdown == 0`): already at cut depth on the seam.
+            stay[i] = Some(Stay::Plunge);
             continue;
         }
         let len: f64 = plan[li].windows(2).map(|w| dist(w[0], w[1])).sum();

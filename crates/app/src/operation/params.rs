@@ -47,6 +47,8 @@ impl OpParams {
                 blend_turns, blend_radius,
                 holes,
                 retract_feed,
+                finish_levels,
+                finish_stepdown,
                 tilt, ..
             } => {
                 w(h, *stepover);
@@ -82,6 +84,11 @@ impl OpParams {
                 if *retract_feed != 0.0 {
                     h.write_u8(0xB6);
                     w(h, *retract_feed);
+                }
+                if *finish_levels > 0 || *finish_stepdown != 0.0 {
+                    h.write_u8(0xB7);
+                    h.write_u32(*finish_levels);
+                    w(h, *finish_stepdown);
                 }
             }
             OpParams::Contour {

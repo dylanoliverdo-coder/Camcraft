@@ -171,7 +171,7 @@ fn the_smoothing_reset_comes_before_the_program_end() {
 fn finish_ops_ask_their_tolerance_and_rough_ops_ask_from_their_stock() {
     // A contour that finishes asks its own tolerance; leaving stock, it roughs.
     let base = OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,

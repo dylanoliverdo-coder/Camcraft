@@ -140,13 +140,15 @@ pub(super) fn emit_band(
     let levels = lad.zs.clone();
     // The pass loops each base loop maps to, and which pass loops are
     // already cut (a merged pass loop is cut once, at the first base
-    // loop that maps to it - spec S1, review round 3).
-    let mut cut_pass_loops: std::collections::HashSet<(u64, usize, usize)> = std::collections::HashSet::new();
+    // loop that maps to it - spec S1, review round 3). Keyed by schedule
+    // level slot so repeated final levels (spec S8 `s == 0`) are not skipped.
+    let mut cut_pass_loops: std::collections::HashSet<(usize, usize, usize)> = std::collections::HashSet::new();
     // With the default passes (one roughing pass, no finishing, no
     // spring) the body runs exactly as it did before S1: no pass band
     // is built and no loop is mapped (spec S1, review round 4).
     let single = p.passes.is_default();
-    for (si, &(z, li)) in sched.iter().enumerate() {
+    for (si, item) in sched.iter().copied().enumerate() {
+      let (level_slot, z, li, rzi) = (item.level, item.z, item.li, item.rzi);
       let passes = if single {
             vec![super::contour_passes::WallPass { offset: band.offset, finishing: false }]
         } else {
@@ -176,7 +178,7 @@ pub(super) fn emit_band(
             };
             pli
         };
-        let key = (z.to_bits(), pi, pli);
+        let key = (level_slot, pi, pli);
         if !cut_pass_loops.insert(key) {
             // A pass loop that carries several base loops is cut once;
             // name the merge (spec S1, review round 3).
@@ -198,16 +200,15 @@ pub(super) fn emit_band(
         // rides the tab top when that is higher (a no-op on sane files
         // unless the tab truly stands above the plane).
         let hop_z = if tabbed { hop.max(p.bottom_z + p.tab_height) } else { hop };
-        // Another ring was the last cut, at this same level: link ring
+        // Another ring was the last cut, at this same level slot: link ring
         // to ring; anything else crosses in from above.
-        let same_level = si > 0 && sched[si - 1].0.to_bits() == z.to_bits();
+        let same_level = si > 0 && sched[si - 1].level == level_slot;
         // This item is reached by staying down / the next one leaves so.
         let stay_in = stay[si];
         let stay_out = stay.get(si + 1).copied().flatten().is_some();
         // This ring's own ladder: the level above it is the one IT was
         // last cut at, whatever another ring's floor added.
         let rz = lad.ring(li);
-        let rzi = rz.iter().position(|q| q.to_bits() == z.to_bits()).unwrap_or(0);
         // #1555: with the M3 spindle every 2D op posts, climb milling
         // keeps the material on the RIGHT of travel (down milling: the
         // tooth meets the stock at full chip and leaves it thin) - an

@@ -14,7 +14,7 @@ pub const TOOL: &str = "EM-0400-2FL";
 
 pub fn face() -> OpParams {
     OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: true, blend_radius: None,

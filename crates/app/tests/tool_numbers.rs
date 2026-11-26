@@ -84,7 +84,7 @@ fn tool_job(order: [&str; 2]) -> (World, History) {
         ("Face2", "EM-0600-4FL", 19.0),
     ] {
         let face = OpParams::Face {
-            retract_feed: 0.0,
+            retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
             floor_stock: 0.0,
             holes: Default::default(),
             blend_turns: false, blend_radius: None,

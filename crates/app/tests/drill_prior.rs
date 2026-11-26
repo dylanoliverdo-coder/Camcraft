@@ -165,7 +165,7 @@ fn pocket(bottom: f64) -> OpParams {
 
 fn face(cut: f64) -> OpParams {
     OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: FaceHoles::CutAir,
         blend_turns: false, blend_radius: None,

@@ -106,8 +106,11 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
         back.insert("floor_stock".into(), json!(stock));
     }
     // Journeyman S3: accept an explicit return to zero for `retract_feed` on Face and the 7 2D Links ops only.
-    if let OpParams::Face { retract_feed, .. } = &next {
+    if let OpParams::Face { retract_feed, finish_levels, finish_stepdown, .. } = &next {
         back.insert("retract_feed".into(), json!(retract_feed));
+        // Journeyman S8: accept an explicit return to default (0 / 0.0) on Face.
+        back.insert("finish_levels".into(), json!(finish_levels));
+        back.insert("finish_stepdown".into(), json!(finish_stepdown));
     }
     if next.supports_links_retract_feed()
         && let Some(links) = next.links()
@@ -129,6 +132,42 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
                 .as_object_mut();
             if let Some(ao) = app_obj {
                 ao.insert("retract_feed".into(), json!(links.approach.retract_feed));
+            }
+        }
+    }
+    // Journeyman S8: gate `finish_levels` / `finish_stepdown` to Contour and Pocket among Links ops,
+    // and accept an explicit return to default (0 / 0.0) on those two kinds.
+    if let Some(app_patch) = patch
+        .get("links")
+        .and_then(Value::as_object)
+        .and_then(|l| l.get("approach"))
+        .and_then(Value::as_object)
+    {
+        let has_fl = app_patch.contains_key("finish_levels");
+        let has_fs = app_patch.contains_key("finish_stepdown");
+        if has_fl || has_fs {
+            if !next.supports_links_finish_levels() {
+                return Err(
+                    "bad params patch: finish_levels and finish_stepdown are only supported on Contour, Pocket, and Face operations"
+                        .into(),
+                );
+            }
+            if let Some(links) = next.links()
+                && let Some(lo) = back
+                    .entry("links")
+                    .or_insert_with(|| Value::Object(Default::default()))
+                    .as_object_mut()
+                && let Some(ao) = lo
+                    .entry("approach")
+                    .or_insert_with(|| Value::Object(Default::default()))
+                    .as_object_mut()
+            {
+                if has_fl {
+                    ao.insert("finish_levels".into(), json!(links.approach.finish_levels));
+                }
+                if has_fs {
+                    ao.insert("finish_stepdown".into(), json!(links.approach.finish_stepdown));
+                }
             }
         }
     }

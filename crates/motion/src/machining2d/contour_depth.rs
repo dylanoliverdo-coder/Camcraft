@@ -340,10 +340,27 @@ fn ladder_in(
         per_ring.push(mine);
         unread.push(why);
     }
-    let mut all: Vec<f64> = per_ring.iter().flatten().copied().collect();
-    all.sort_by(|a, b| b.total_cmp(a));
-    all.dedup_by(|a, b| a.to_bits() == b.to_bits());
-    Ladder { zs: all, per_ring, unread }
+    Ladder { zs: merge_levels(&per_ring), per_ring, unread }
+}
+
+/// Multiset union of per-ring level lists, descending: preserves the
+/// multiplicity of repeated final levels (Journeyman spec S8 `s == 0`).
+pub(super) fn merge_levels(per_ring: &[Vec<f64>]) -> Vec<f64> {
+    let mut distinct: Vec<f64> = per_ring.iter().flatten().copied().collect();
+    distinct.sort_by(|a, b| b.total_cmp(a));
+    distinct.dedup_by(|a, b| a.to_bits() == b.to_bits());
+    let mut out = Vec::new();
+    for z in distinct {
+        let mult = per_ring
+            .iter()
+            .map(|v| v.iter().filter(|q| q.to_bits() == z.to_bits()).count())
+            .max()
+            .unwrap_or(0);
+        for _ in 0..mult {
+            out.push(z);
+        }
+    }
+    out
 }
 
 /// The highest part vertex near `ring`: the facets whose XY box comes

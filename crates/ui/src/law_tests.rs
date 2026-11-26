@@ -512,7 +512,7 @@ mod path_tests {
                 "EM-0400-2FL",
                 SrcRef::Stock,
                 OpParams::Face {
-                    retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+                    retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                     stepover: 3.0,
                     clearance_z: Height::fixed(25.0),
                     cut_z: Height::fixed(19.5),
@@ -857,7 +857,7 @@ mod preview_tests {
                 tool: "EM-0400-2FL".into(),
                 src: SrcRef::Stock,
                 params: OpParams::Face {
-                    retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+                    retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                     stepover: 3.0,
                     clearance_z: Height::fixed(25.0),
                     cut_z: Height::fixed(19.5),
@@ -896,7 +896,7 @@ mod preview_tests {
         state.pending.push_back(CommandKind::EditOperationParams {
             name: "Face1".into(),
             params: OpParams::Face {
-                retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+                retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(10.0),
@@ -1199,7 +1199,7 @@ mod feature_pick_tests {
                 "EM-0400-2FL",
                 SrcRef::Stock,
                 OpParams::Face {
-                    retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+                    retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                     stepover: 3.0,
                     clearance_z: Height::fixed(25.0),
                     cut_z: Height::fixed(4.5),
@@ -1567,7 +1567,7 @@ mod height_plane_tests {
         let staged = state_with(
             "F1",
             OpParams::Face {
-                retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+                retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(18.0),
@@ -1593,7 +1593,7 @@ mod height_plane_tests {
         let flat = state_with(
             "F2",
             OpParams::Face {
-                retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+                retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(18.0),
@@ -1737,7 +1737,7 @@ mod height_plane_tests {
         // and editing the draft walks it live, the same honesty rule the
         // depth kinds follow.
         let face_at = |top_z: Option<Height>| OpParams::Face {
-            retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+            retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
             stepover: 8.0,
             clearance_z: Height::fixed(15.0),
             cut_z: Height::fixed(2.0),

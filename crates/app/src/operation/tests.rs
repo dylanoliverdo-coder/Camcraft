@@ -32,7 +32,7 @@ fn params_sanity_gates() {
     // generate, by name.
     let world = crate::world::new_world();
     let ok = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -46,7 +46,7 @@ fn params_sanity_gates() {
     // Staged facing is sane when it descends: a top below the
     // finished height, or a zero stepdown, is not.
     let staged = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -58,7 +58,7 @@ fn params_sanity_gates() {
     };
     assert!(staged.is_sane() && depth_sane(&world, None, None, &staged));
     let low = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -74,7 +74,7 @@ fn params_sanity_gates() {
         "staged top below the finished height"
     );
     let no_step = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -133,7 +133,7 @@ fn stamp_follows_every_input() {
     // touching the world).
     let world = crate::world::new_world();
     let a = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -145,7 +145,7 @@ fn stamp_follows_every_input() {
     };
     // (No struct-update syntax on enum variants: write it out.)
     let b = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.6),
@@ -156,7 +156,7 @@ fn stamp_follows_every_input() {
         climb: true,
     };
     let c = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),
@@ -254,7 +254,7 @@ fn face_stamp_moves_with_stepdown() {
     // stacks must not claim each other's cache either.
     let world = crate::world::new_world();
     let face_with = |top_z: Option<Height>, stepdown: Option<f64>| OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 8.0,
         clearance_z: Height::fixed(5.0),
         cut_z: Height::fixed(-0.5),

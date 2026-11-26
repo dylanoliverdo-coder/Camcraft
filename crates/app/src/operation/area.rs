@@ -75,7 +75,7 @@ pub(super) fn pocket_ladder(
         return Ok(None);
     };
     let mt = stock_top(world, setup, &material.facets, material.top, None);
-    Ok(Some((material.facets, ladder_planes(t, mt, b, params.ladder_stepdown(t, b, stepdown)))))
+    Ok(Some((material.facets, params.ladder_planes(t, mt, b, stepdown))))
 }
 
 /// Below this (mm^2) the part material inside the enclosed area is
@@ -186,7 +186,7 @@ pub(super) fn whole_model_pocket(
         Some(f) => (f.local_facets(&part), f.local_facets(&stock)),
         None => (part, stock),
     };
-    Some(around_part(&part, &stock, &ladder_planes(t - oz, mt, b - oz, params.ladder_stepdown(t, b, stepdown)), crate::units::of(world)))
+    Some(around_part(&part, &stock, &params.ladder_planes(t - oz, mt, b - oz, stepdown), crate::units::of(world)))
 }
 
 /// The pocket family on the STOCK as its source (#1554): the stock is the
@@ -238,7 +238,7 @@ pub(super) fn stock_pocket(
             units::len(z, unit, 3)
         )
     };
-    let planes = ladder_planes(t - oz, mt, b - oz, params.ladder_stepdown(t, b, stepdown));
+    let planes = params.ladder_planes(t - oz, mt, b - oz, stepdown);
     let enclosed = match slice::project(&stock, FOOTPRINT_SAMPLES).map_err(from_slice) {
         Ok(r) if !r.is_empty() => r,
         Ok(_) => return None,
@@ -297,6 +297,7 @@ const SHADOW_AREA_MIN: f64 = 1e-6;
 /// the material top and never a plane). Degenerate spans and steps
 /// collapse to the one bottom plane; the generator refuses them by name
 /// later.
+#[cfg(test)]
 pub(super) fn ladder_planes(top: f64, stock_top: Option<f64>, bottom: f64, stepdown: f64) -> Vec<f64> {
     crate::machining2d::cut_levels_under(top, stock_top, bottom, stepdown).unwrap_or_else(|_| vec![bottom])
 }

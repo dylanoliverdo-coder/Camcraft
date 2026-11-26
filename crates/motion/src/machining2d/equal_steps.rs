@@ -1,9 +1,15 @@
-//! The equal-steps mode of the depth ladder (#2012): the same number of levels as the remainder ladder of `levels.rs`, each step the span divided by that count. Provenance: dividing a depth into equal passes at or under the maximum depth of cut is general machining practice (machine-tool handbooks); our own law, no vendor material consulted.
+//! The equal-steps mode of the depth ladder (#2012) and finishing depth
+//! levels (Journeyman spec S8): the same number of levels as the remainder
+//! ladder of `levels.rs`, each step the span divided by that count.
+//! Provenance: dividing a depth into equal passes at or under the maximum
+//! depth of cut is general machining practice (machine-tool handbooks);
+//! Journeyman spec S8 (`docs/journeyman/specs/S8-finish-levels.md`); our own
+//! law, no vendor material consulted.
 
 use crate::approach::Approach;
 
 use super::GenError;
-use super::levels::cut_levels_under;
+use super::finish_levels::cut_levels_with_finish;
 
 /// The stepdown that walks `top` down to `bottom` in equal steps: the
 /// span divided by the number of steps the remainder ladder takes with
@@ -36,9 +42,18 @@ pub fn ladder_stepdown(a: &Approach, top: f64, bottom: f64, stepdown: f64) -> f6
 }
 
 /// The cut levels of an operation whose approach is `a`: the one level
-/// law ([`cut_levels_under`], with the approach's stock top) walked at
-/// the stepdown of the approach's ladder mode. The default approach is
+/// law ([`super::levels::cut_levels_under`], with the approach's stock top)
+/// walked at the stepdown of the approach's ladder mode, plus any finishing
+/// depth levels (Journeyman spec S8). The default approach is
 /// `cut_levels_under` byte for byte.
 pub fn cut_levels_for(top: f64, a: &Approach, bottom: f64, stepdown: f64) -> Result<Vec<f64>, GenError> {
-    cut_levels_under(top, a.stock_top, bottom, ladder_stepdown(a, top, bottom, stepdown))
+    cut_levels_with_finish(
+        top,
+        a.stock_top,
+        bottom,
+        stepdown,
+        a.equal_steps,
+        a.finish_levels,
+        a.finish_stepdown,
+    )
 }

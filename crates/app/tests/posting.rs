@@ -239,7 +239,7 @@ fn an_unborn_toolpath_refuses_to_post() {
 
 fn face_params() -> OpParams {
     OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 3.0,
         clearance_z: Height::fixed(25.0),
@@ -576,7 +576,7 @@ fn a_non_g54_slot_is_what_the_script_writes() {
     );
     history.execute(&world, SetSetupWorkOffset::new(&world, "Setup1", Some(1)).expect("pick G55"));
     let params = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 3.0,
         clearance_z: Height::of(HeightReference::WorkOffset, 25.0),

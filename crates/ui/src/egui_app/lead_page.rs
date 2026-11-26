@@ -59,14 +59,19 @@ fn link_of(i: usize) -> Link {
     }
 }
 
-/// The whole tab for 2D `Links` operations (includes fed retract, S3).
+/// The whole tab for 2D `Links` operations (includes fed retract, S3; no finish levels).
 pub(super) fn leads_tab(ui: &mut Ui, u: Unit, tag: &str, first: Option<(&mut Entry3D, &mut f64)>, links: &mut Links) {
-    leads_tab_inner(ui, u, tag, first, links, true, true);
+    leads_tab_inner(ui, u, tag, first, links, true, true, false);
 }
 
-/// The whole tab for 3D / rotary / multi-axis operations (no 2D fed retract, S3).
+/// The whole tab for 2D Contour and Pocket (includes fed retract, S3, and finishing depth levels, S8).
+pub(super) fn leads_tab_with_finish(ui: &mut Ui, u: Unit, tag: &str, first: Option<(&mut Entry3D, &mut f64)>, links: &mut Links) {
+    leads_tab_inner(ui, u, tag, first, links, true, true, true);
+}
+
+/// The whole tab for 3D / rotary / multi-axis operations (no 2D fed retract, S3, no finish levels, S8).
 pub(super) fn leads_tab_3d(ui: &mut Ui, u: Unit, tag: &str, first: Option<(&mut Entry3D, &mut f64)>, links: &mut Links) {
-    leads_tab_inner(ui, u, tag, first, links, true, false);
+    leads_tab_inner(ui, u, tag, first, links, true, false, false);
 }
 
 /// Roughing links use clearance while Heights has no retract hop (#3318).
@@ -79,9 +84,21 @@ pub(super) fn leads_tab_with_retract(
     links: &mut Links,
     has_retract: bool,
 ) {
-    leads_tab_inner(ui, u, tag, first, links, has_retract, true);
+    leads_tab_inner(ui, u, tag, first, links, has_retract, true, false);
 }
 
+/// Shared finishing depth level rows (Journeyman spec S8: Contour, Pocket, Face).
+pub(super) fn finish_level_rows(ui: &mut Ui, u: Unit, finish_levels: &mut u32, finish_stepdown: &mut f64) {
+    let mut count = f64::from(*finish_levels);
+    prop_row(ui, "Finish depth levels", |ui| super::fields::num_plain(ui, &mut count));
+    *finish_levels = count.clamp(0.0, 99.0).round().max(0.0) as u32;
+    if *finish_levels > 0 || *finish_stepdown != 0.0 {
+        prop_row(ui, "Finish stepdown", |ui| num(ui, u, finish_stepdown));
+        hint(ui, "last depth levels at a smaller stepdown; 0 repeats the final level");
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn leads_tab_inner(
     ui: &mut Ui,
     u: Unit,
@@ -90,12 +107,13 @@ fn leads_tab_inner(
     links: &mut Links,
     has_retract: bool,
     show_retract_feed: bool,
+    show_finish_levels: bool,
 ) {
     let entry = first.as_ref().map(|(e, _)| **e);
     if let Some((entry, helix_radius)) = first {
         group(ui, "Entry", None, |ui| entry_group(ui, u, tag, entry, helix_radius, links));
     }
-    group(ui, "Linking", None, |ui| linking_group(ui, u, tag, entry, links, has_retract));
+    group(ui, "Linking", None, |ui| linking_group(ui, u, tag, entry, links, has_retract, show_finish_levels));
     plunge_group(ui, u, &mut links.approach);
     feeds_group(ui, u, &mut links.approach, show_retract_feed);
     engagement_group(ui, &mut links.approach);
@@ -116,7 +134,15 @@ fn entry_group(ui: &mut Ui, u: Unit, tag: &str, entry: &mut Entry3D, helix_radiu
     arm_fields(ui, u, *entry, &mut links.approach);
 }
 
-fn linking_group(ui: &mut Ui, u: Unit, tag: &str, entry: Option<Entry3D>, links: &mut Links, has_retract: bool) {
+fn linking_group(
+    ui: &mut Ui,
+    u: Unit,
+    tag: &str,
+    entry: Option<Entry3D>,
+    links: &mut Links,
+    has_retract: bool,
+    show_finish_levels: bool,
+) {
     let (retract_label, keep_down_hint) = if has_retract {
         (
             "Retract plane",
@@ -159,6 +185,9 @@ fn linking_group(ui: &mut Ui, u: Unit, tag: &str, entry: Option<Entry3D>, links:
     // #2012: the depth ladder's mode - off keeps the remainder last step.
     check_row(ui, "Equal depth steps", &mut links.approach.equal_steps);
     hint(ui, "the same number of levels, each step the same depth, none over the stepdown");
+    if show_finish_levels {
+        finish_level_rows(ui, u, &mut links.approach.finish_levels, &mut links.approach.finish_stepdown);
+    }
     let mut l_idx = link_idx(links.level);
     prop_row(ui, "Between levels", |ui| combo(ui, &format!("{tag}_level_link"), &mut l_idx, &link_names));
     links.level = link_of(l_idx);
@@ -170,5 +199,39 @@ fn linking_group(ui: &mut Ui, u: Unit, tag: &str, entry: Option<Entry3D>, links:
             num(ui, u, v);
         });
         hint(ui, keep_down_hint);
+    }
+}
+
+#[cfg(test)]
+mod s8_finish_levels_ui_tests {
+    use camcraft_app::operation::{OpType, seed_params};
+    use egui_kittest::kittest::Queryable;
+
+    use super::super::dialog_tests::{opened, page};
+    use super::super::op_tabs;
+
+    #[test]
+    fn finish_depth_levels_controls_show_only_on_contour_pocket_and_face() {
+        for (kind, tab, expect_visible) in [
+            (OpType::Face, op_tabs::SEC_HEIGHTS, true),
+            (OpType::Contour, op_tabs::SEC_LEADS, true),
+            (OpType::Pocket, op_tabs::SEC_LEADS, true),
+            (OpType::Adaptive2D, op_tabs::SEC_LEADS, false),
+            (OpType::Offset2D, op_tabs::SEC_LEADS, false),
+            (OpType::Slot, op_tabs::SEC_LEADS, false),
+            (OpType::Circular, op_tabs::SEC_LEADS, false),
+            (OpType::Bore, op_tabs::SEC_LEADS, false),
+            (OpType::Pocket3D, op_tabs::SEC_LEADS, false),
+        ] {
+            let mut state = opened(seed_params(kind.ordinal()));
+            state.op_tab = tab;
+            let mut harness = page(state);
+            harness.run();
+            let shown = harness.query_by_label("Finish depth levels").is_some();
+            assert_eq!(
+                shown, expect_visible,
+                "{kind:?}: expected Finish depth levels visible={expect_visible}, got {shown}"
+            );
+        }
     }
 }

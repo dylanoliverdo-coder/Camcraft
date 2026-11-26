@@ -99,11 +99,15 @@ pub(super) fn bore_entry(b: &mut PathBuilder, eng: &Engage, s: &BoreStep, lead: 
         let at_d = Lvl { mat_top: top_at(b, d), ..lvl };
         substituted_dive(b, &at_d, e2, z, m, why, tz)
     };
-    if !a.center_cutting && arm == Entry3D::Plunge {
+    if !a.center_cutting && arm == Entry3D::Plunge && (s.first || prev_z > z + 1e-9) {
         b.note_once(&format!("{NOT_CENTER_CUTTING} - the bore side's plunge entry"));
         return sub(b, "the plunge arm");
     }
-    match arm {
+    // Journeyman spec S8 (`finish_stepdown == 0`): repeating an already-cut
+    // level has zero axial drop; feed down cleanly instead of rapiding to the
+    // cut plane or emitting a spurious zero-drop substitution note.
+    let eff_arm = if !s.first && prev_z <= z + 1e-9 { Entry3D::Plunge } else { arm };
+    match eff_arm {
         Entry3D::Plunge => {
             // The pass start off the wall, else the floor's room (M8.2's
             // law the app's bore tests pin: the dive stands in the bounded

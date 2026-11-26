@@ -171,7 +171,7 @@ fn face_world() -> (World, History) {
     let tool = catalog().into_iter().find(|(n, _)| *n == "EM-0400-2FL").map(|(_, t)| t).expect("catalog");
     history.execute(&world, AddTool::new(&world, "EM-0400-2FL", tool).expect("tool"));
     let params = OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
@@ -253,7 +253,7 @@ fn housing(d: f64) -> Machine {
 
 fn face_params() -> OpParams {
     OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

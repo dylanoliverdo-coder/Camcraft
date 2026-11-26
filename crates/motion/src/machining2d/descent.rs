@@ -127,6 +127,15 @@ pub(super) fn plan(arm: Entry3D, zig: bool, l: &Lvl, leg: Point2, z: f64, prev_z
 
 /// [`plan`] onto the pass start itself, without the horizontal arc.
 pub(super) fn plan_core(arm: Entry3D, zig: bool, l: &Lvl, leg: Point2, z: f64, prev_z: f64, m: &Motion) -> Descent {
+    // Journeyman spec S8 (`finish_stepdown == 0`): repeating an already-cut
+    // level has zero axial drop; feed down cleanly instead of rapiding to the
+    // cut plane or emitting a spurious zero-drop substitution note.
+    if prev_z <= z + 1e-9
+        && arm != Entry3D::Plunge
+        && let Some(&e) = l.pass.first()
+    {
+        return Descent::Plunge(dive_point(l, e, m).unwrap_or(e));
+    }
     let d = plan_arm(arm, zig, l, leg, z, prev_z, m);
     if arm == Entry3D::Helix
         && let Descent::Sub(why) = d

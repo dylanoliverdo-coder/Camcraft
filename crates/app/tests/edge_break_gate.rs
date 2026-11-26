@@ -26,7 +26,7 @@ const CONE: &str = "CM-0600-90";
 /// The kind's own defaults, as a new operation seeds them.
 fn seeded(ty: OpType) -> OpParams {
     let base = OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

@@ -214,7 +214,7 @@ fn a_drill_through_an_undercut_lip_is_a_gouge_and_never_posts() {
 #[test]
 fn facing_under_an_overhanging_slab_is_a_gouge_and_never_posts() {
     let face = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(),
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 4.0,

@@ -23,7 +23,7 @@ use camcraft_app::world::new_world;
 
 fn face_params(holes: FaceHoles) -> OpParams {
     OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes,
         blend_turns: false, blend_radius: None,

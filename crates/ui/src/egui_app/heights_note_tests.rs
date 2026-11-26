@@ -123,7 +123,7 @@ fn clearance_stock_advice_follows_draft_height_and_prior_face_before_generate() 
     let builds = crate::height_memo::advice_builds();
     let state = harness.state_mut();
     let face = OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(), blend_turns: false, blend_radius: None, tilt: None,
         stepover: 4.0, clearance_z: Height::fixed(20.0), cut_z: Height::fixed(5.0),

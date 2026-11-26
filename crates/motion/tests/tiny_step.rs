@@ -15,7 +15,7 @@ fn square(s: f64) -> Region {
 
 fn fp(stepover: f64, stepdown: Option<f64>) -> FaceParams {
     FaceParams {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         holes: Default::default(),
         tool_diameter: 6.0,
         stepover,

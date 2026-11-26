@@ -54,6 +54,32 @@ impl OpParams {
         self.links().map_or(stepdown, |l| crate::machining2d::ladder_stepdown(&l.approach, top, bottom, stepdown))
     }
 
+    /// The distinct cut planes this op's depth ladder cuts between `top` and
+    /// `bottom` (including Journeyman spec S8 finishing levels), falling back
+    /// to `[bottom]` on degenerate/refused inputs so the generator owns the
+    /// named refusal.
+    #[must_use]
+    pub fn ladder_planes(&self, top: f64, stock_top: Option<f64>, bottom: f64, stepdown: f64) -> Vec<f64> {
+        let mut planes = match self.links() {
+            Some(l) => {
+                let mut a = l.approach;
+                a.stock_top = stock_top;
+                crate::machining2d::cut_levels_for(top, &a, bottom, stepdown).unwrap_or_else(|_| vec![bottom])
+            }
+            None => crate::machining2d::cut_levels_under(top, stock_top, bottom, stepdown).unwrap_or_else(|_| vec![bottom]),
+        };
+        planes.dedup_by(|a, b| a.to_bits() == b.to_bits());
+        planes
+    }
+
+    /// Whether this operation kind supports finishing depth levels
+    /// (`finish_levels`, `finish_stepdown`, Journeyman spec S8): Contour and
+    /// Pocket via `Links` (`Face` carries its own fields directly).
+    #[must_use]
+    pub fn supports_links_finish_levels(&self) -> bool {
+        matches!(self, OpParams::Contour { .. } | OpParams::Pocket { .. })
+    }
+
     /// Whether this operation kind supports fed vertical retract (`retract_feed`,
     /// Journeyman spec S3): the 7 2D level-ladder operations carrying `Links`
     /// (`Face` carries its own `retract_feed` field directly).

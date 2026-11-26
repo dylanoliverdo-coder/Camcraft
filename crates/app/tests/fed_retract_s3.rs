@@ -76,7 +76,7 @@ fn face_params(retract_feed: f64) -> OpParams {
         stepdown: None,
         feed: 800.0,
         plunge_feed: 200.0,
-        retract_feed,
+        retract_feed, finish_levels: 0, finish_stepdown: 0.0,
         climb: true,
         blend_turns: false,
         blend_radius: None,

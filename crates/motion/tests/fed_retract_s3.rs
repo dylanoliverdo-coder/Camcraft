@@ -166,13 +166,13 @@ fn s3_check_3_all_eight_2d_ops_final_lift() {
     // 5. Face (single-level and staged 2-level)
     let f_single = face(&r, &FaceParams {
         tool_diameter: 10.0, stepover: 7.0, clearance_z: 10.0, cut_z: -2.0,
-        top_z: None, stepdown: None, feed: 800.0, plunge_feed: 200.0, retract_feed: RF,
+        top_z: None, stepdown: None, feed: 800.0, plunge_feed: 200.0, retract_feed: RF, finish_levels: 0, finish_stepdown: 0.0,
         climb: true, blend_turns: false, blend_radius: None, holes: FaceHoles::Lift, stock_top: None,
     }).expect("face single");
     assert_final_lift_fed(&f_single, RF, 0.0, 10.0, "Face single");
     let f_staged = face(&r, &FaceParams {
         tool_diameter: 10.0, stepover: 7.0, clearance_z: 10.0, cut_z: -4.0,
-        top_z: Some(0.0), stepdown: Some(2.0), feed: 800.0, plunge_feed: 200.0, retract_feed: RF,
+        top_z: Some(0.0), stepdown: Some(2.0), feed: 800.0, plunge_feed: 200.0, retract_feed: RF, finish_levels: 0, finish_stepdown: 0.0,
         climb: true, blend_turns: false, blend_radius: None, holes: FaceHoles::Lift, stock_top: None,
     }).expect("face staged");
     assert_final_lift_fed(&f_staged, RF, 0.0, 10.0, "Face staged");
