@@ -12,7 +12,9 @@ use super::tools::req_str;
 use crate::commands::SetOperationGeometry;
 use crate::geometry::sketch_chains::ChainId;
 use crate::model;
-use crate::operation::{self, ChainOverride, ChainSide, FeatureSel, GeoSel, OpParams, SrcRef};
+use crate::operation::{
+    self, ChainOverride, ChainSide, FeatureSel, GeoSel, OpParams, OpenChainSide, SrcRef,
+};
 use crate::script::Env;
 
 use flecs_ecs::prelude::{Entity, World};
@@ -113,17 +115,32 @@ fn parse_chain_side(v: &Value) -> Result<Option<ChainSide>, String> {
     }
 }
 
+fn parse_open_side(v: &Value) -> Result<OpenChainSide, String> {
+    match v {
+        Value::Null => Ok(OpenChainSide::None),
+        Value::String(s) if s == "none" => Ok(OpenChainSide::None),
+        Value::String(s) if s == "left" => Ok(OpenChainSide::Left),
+        Value::String(s) if s == "right" => Ok(OpenChainSide::Right),
+        other => Err(format!("\"open_side\" must be \"none\", \"left\", \"right\", or null, got {other}")),
+    }
+}
+
 struct ContourPick {
     sel: GeoSel,
-    override_spec: Option<(Option<ChainSide>, bool)>,
+    override_spec: Option<(Option<ChainSide>, bool, OpenChainSide)>,
 }
 
 fn contour_pick_of(env: &Env, v: &Value) -> Result<ContourPick, String> {
     let Value::Object(m) = v else {
         return Err(format!("a pick is an object {{\"model\", \"id\"}}, got {v}"));
     };
-    if let Some(k) = m.keys().find(|k| !matches!(k.as_str(), "model" | "id" | "side" | "reverse")) {
-        return Err(format!("unexpected pick key \"{k}\" - allowed: model, id, side, reverse"));
+    if let Some(k) = m
+        .keys()
+        .find(|k| !matches!(k.as_str(), "model" | "id" | "side" | "reverse" | "open_side"))
+    {
+        return Err(format!(
+            "unexpected pick key \"{k}\" - allowed: model, id, side, reverse, open_side"
+        ));
     }
     let entity = req_str(m, "model")?;
     req_pick_target(env, entity)?;
@@ -139,14 +156,21 @@ fn contour_pick_of(env: &Env, v: &Value) -> Result<ContourPick, String> {
         Some(Value::Bool(b)) => *b,
         Some(other) => return Err(format!("\"reverse\" must be a boolean, got {other}")),
     };
-    let has_override = side.is_some() || reverse;
+    let open_side = match m.get("open_side") {
+        None => OpenChainSide::None,
+        Some(ov) => parse_open_side(ov)?,
+    };
+    let has_override = side.is_some() || reverse || open_side != OpenChainSide::None;
     if has_override && !matches!(pick.feature, FeatureSel::SketchChain(_)) {
         return Err(format!(
-            "per-chain \"side\" and \"reverse\" require a sketch_chain id, not '{}'",
+            "per-chain \"side\", \"reverse\" and \"open_side\" require a sketch_chain id, not '{}'",
             feature_id(&pick.feature)
         ));
     }
-    Ok(ContourPick { sel: pick, override_spec: has_override.then_some((side, reverse)) })
+    Ok(ContourPick {
+        sel: pick,
+        override_spec: has_override.then_some((side, reverse, open_side)),
+    })
 }
 
 /// A pick list: a non-empty array of `{model, id}`.
@@ -210,7 +234,7 @@ pub(super) fn set_operation_geometry(env: &mut Env, a: &Map<String, Value>) -> R
     let mut overrides = Vec::new();
     for entry in raw {
         let parsed = contour_pick_of(env, entry)?;
-        if let Some((side, reverse)) = parsed.override_spec
+        if let Some((side, reverse, open_side)) = parsed.override_spec
             && let FeatureSel::SketchChain(chain) = parsed.sel.feature
         {
             overrides.push(ChainOverride {
@@ -218,6 +242,7 @@ pub(super) fn set_operation_geometry(env: &mut Env, a: &Map<String, Value>) -> R
                 chain,
                 side,
                 reverse,
+                open_side,
             });
         }
         items.push(parsed.sel);
@@ -268,6 +293,11 @@ pub(super) fn geometry_view(env: &Env, key: &str) -> Result<Value, String> {
                     "chain": o.chain.to_string(),
                     "side": o.side.map(|s| match s { ChainSide::Inside => "inside", ChainSide::Outside => "outside" }),
                     "reverse": o.reverse,
+                    "open_side": match o.open_side {
+                        OpenChainSide::None => "none",
+                        OpenChainSide::Left => "left",
+                        OpenChainSide::Right => "right",
+                    },
                 })
             })
             .collect(),
@@ -330,14 +360,15 @@ pub(super) fn s_set_geometry() -> Value {
             "operation": { "type": "string", "description": "Operation name (key or label)." },
             "picks": {
                 "type": "array",
-                "description": "The features to machine, in order. For 2D Contour on DXF profiles, sketch_chain entries may also carry optional per-chain \"side\" (\"inside\"|\"outside\"|null) and \"reverse\" (boolean) overrides.",
+                "description": "The features to machine, in order. For 2D Contour on DXF profiles, sketch_chain entries may also carry optional per-chain \"side\" (\"inside\"|\"outside\"|null), \"open_side\" (\"none\"|\"left\"|\"right\"|null), and \"reverse\" (boolean) overrides.",
                 "items": {
                     "type": "object",
                     "properties": {
                         "model": { "type": "string", "description": "The model or DXF profile the feature is on." },
                         "id": { "type": "string", "description": "A feature id from list_features: face:0x…, chain:0x…, patch:0x…, vertex:0x…, sketch_chain:<hex>, or sketch_layer:<layer>." },
-                        "side": { "type": ["string", "null"], "enum": ["inside", "outside", null], "description": "Optional per-chain side override for sketch_chain picks on 2D Contour." },
-                        "reverse": { "type": "boolean", "description": "Optional direction flip relative to operation climb for sketch_chain picks on 2D Contour." }
+                        "side": { "type": ["string", "null"], "enum": ["inside", "outside", null], "description": "Optional per-chain side override for closed sketch_chain picks on 2D Contour." },
+                        "open_side": { "type": ["string", "null"], "enum": ["none", "left", "right", null], "description": "Optional per-chain cutter side for open sketch_chain picks on 2D Contour (\"none\" rides centerline; \"left\"/\"right\" offsets to that side of the chain direction)." },
+                        "reverse": { "type": "boolean", "description": "Optional direction flip for sketch_chain picks on 2D Contour." }
                     },
                     "required": ["model", "id"],
                     "additionalProperties": false

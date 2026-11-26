@@ -9,7 +9,8 @@
 use camcraft_app::commands::{DxfOptions, ImportDxf};
 use camcraft_app::model;
 use camcraft_app::operation::{
-    self, ChainOverride, ChainSide, FeatureSel, GeoSel, Height, HeightReference, OpParams, OpStatus, SrcRef,
+    self, ChainOverride, ChainSide, FeatureSel, GeoSel, Height, HeightReference, OpParams, OpStatus,
+    OpenChainSide, SrcRef,
 };
 use camcraft_app::sketch;
 use camcraft_app::stock::StockShape;
@@ -127,6 +128,7 @@ fn state_sketch_layer_pick_per_chain_override_and_generate_produces_ok_status() 
             chain: hole_id,
             side: Some(ChainSide::Inside),
             reverse: true,
+            open_side: OpenChainSide::None,
         });
     }
     state.pending.push_back(CommandKind::EditOperationParams { name: "Contour1".into(), params });

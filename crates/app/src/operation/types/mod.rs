@@ -34,7 +34,7 @@ mod wire_edm;
 
 pub use area::{
     AREA_DISTANCE_MAX, AreaControls, BoundaryMode, BoundaryShape, ChainSide, Containment, CornerStyle,
-    ExtraBoundary, OpenBoundary, area_applies, area_unsupported,
+    ExtraBoundary, OpenBoundary, OpenChainSide, area_applies, area_unsupported,
 };
 pub use crate::machining2d::{
     CornerRelief, CornerReliefChoice, CornerReliefKind, CornerReliefOverride, TBoneDirection,

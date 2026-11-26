@@ -69,6 +69,17 @@ pub enum ChainSide {
     Outside,
 }
 
+/// Which side of an open sketch chain's direction the cutter stands on
+/// (Journeyman spec S9; RS-274/NGC G41/G42 semantics; no vendor parameters,
+/// text or code). `None` keeps today's centerline cut.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum OpenChainSide {
+    #[default]
+    None,
+    Left,
+    Right,
+}
+
 /// A boundary the user draws instead of the selection's own: an open
 /// chain (closed off by the stock outline) or a closed ring.
 #[derive(Clone, Debug, PartialEq)]

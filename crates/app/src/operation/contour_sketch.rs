@@ -1,9 +1,12 @@
-//! #1864: 2D Contour resolution, open-chain safety checks, per-chain side/direction overrides,
-//! and XY-transformed toolpath generation for DXF sketch profiles.
+//! #1864 / Journeyman spec S9: 2D Contour resolution, open-chain safety checks, per-chain
+//! side/direction/open-side overrides, and XY-transformed toolpath generation for DXF sketch profiles.
 //!
-//! Provenance: clean-room 2D contouring over `geometry::sketch_chains`; closed loops honour per-chain
-//! `ChainSide` overrides or operation `Side` (`Auto` reads `ClosedChain::nesting` outer-vs-hole); open
-//! chains cut along centerline under `Side::Auto` and refuse any side/control compensation by name.
+//! Provenance: Journeyman spec S9 (docs/journeyman/specs/S9-open-sketch-chain-side.md);
+//! clean-room 2D contouring over `geometry::sketch_chains`; closed loops honour per-chain
+//! `ChainSide` overrides or operation `Side` (`Auto` reads `ClosedChain::nesting` outer-vs-hole);
+//! open chains ride centerline under `OpenChainSide::None` (and `Side::Auto`) or offset by
+//! `tool_radius + stock_to_leave` to `Left` / `Right` of the chain direction; no vendor
+//! parameters, text or code.
 
 use std::collections::HashSet;
 
@@ -16,7 +19,7 @@ use crate::machining2d::{self, ContourParams, GenError, Side};
 
 use super::contour_sketch_pick::collect_chains;
 use super::wcs_yaw::Rot2;
-use super::{AreaCtx, OpParams, SrcRef, apply_area_controls, stitch};
+use super::{AreaCtx, OpParams, OpenChainSide, SrcRef, apply_area_controls, stitch};
 
 #[derive(Clone, Debug)]
 pub(super) struct ResolvedSketchChain {
@@ -29,6 +32,8 @@ pub(super) struct ResolvedSketchChain {
     pub(super) parent: Option<ChainId>,
     pub(super) eff_side: Option<Side>,
     pub(super) eff_climb: bool,
+    pub(super) reversed: bool,
+    pub(super) open_side: OpenChainSide,
     pub(super) natural_auto: bool,
     pub(super) open_side_err: Option<String>,
     pub(super) auto_role_err: Option<String>,
@@ -99,6 +104,7 @@ pub(super) fn resolve_plan(
     let mut closed_outer = 0usize;
     let mut closed_inside = 0usize;
     let mut open_count = 0usize;
+    let mut open_sided = 0usize;
     for item in &items {
         if item.closed {
             region_loops.push(Loop::new(item.pts.clone())?);
@@ -106,15 +112,23 @@ pub(super) fn resolve_plan(
                 Some(Side::Inside) => closed_inside += 1,
                 _ => closed_outer += 1,
             }
-        } else {
+        } else if item.open_side == OpenChainSide::None {
             open_count += 1;
+        } else {
+            open_sided += 1;
         }
     }
     let mut notes = Vec::new();
-    if closed_outer + closed_inside > 0 || open_count > 0 {
-        notes.push(format!(
-            "DXF sketch contour: {closed_outer} outside, {closed_inside} inside, {open_count} open centerline"
-        ));
+    if closed_outer + closed_inside > 0 || open_count > 0 || open_sided > 0 {
+        if open_sided == 0 {
+            notes.push(format!(
+                "DXF sketch contour: {closed_outer} outside, {closed_inside} inside, {open_count} open centerline"
+            ));
+        } else {
+            notes.push(format!(
+                "DXF sketch contour: {closed_outer} outside, {closed_inside} inside, {open_count} open centerline, {open_sided} open sided"
+            ));
+        }
     }
     Ok(SketchContourPlan {
         items,
@@ -299,9 +313,30 @@ pub(super) fn generate_plan(
     for item in plan.items.iter().filter(|i| !i.closed) {
         let mut o_cp = *cp;
         o_cp.side = Side::Auto;
-        o_cp.climb = item.eff_climb;
-        let next = machining2d::contour_along_chain(&item.pts, &o_cp)
-            .map_err(|e| e.after_moves(&path.moves))?;
+        let next = match item.open_side {
+            OpenChainSide::None => {
+                o_cp.climb = item.eff_climb;
+                machining2d::contour_along_chain(&item.pts, &o_cp)
+            }
+            OpenChainSide::Left | OpenChainSide::Right => {
+                // Journeyman spec S9: `reverse` turns the chain's direction round before
+                // interpreting `open_side`, and `op_climb` picks climb vs conventional
+                // travel relative to the material side.
+                let dir_pts: Vec<Point2> = if item.reversed {
+                    item.pts.iter().copied().rev().collect()
+                } else {
+                    item.pts.clone()
+                };
+                o_cp.climb = op_climb;
+                machining2d::contour_open_side(&dir_pts, item.open_side == OpenChainSide::Left, &o_cp)
+                    .map_err(|e| match e {
+                        GenError::Invalid(msg) => GenError::Invalid(format!("{}: {msg}", item.label)),
+                        GenError::Empty(msg) => GenError::Empty(format!("{}: {msg}", item.label)),
+                        other => other,
+                    })
+            }
+        }
+        .map_err(|e| e.after_moves(&path.moves))?;
         let notes = next.notes.clone();
         path = if path.moves.is_empty() { next } else { stitch(path, next) };
         append_notes(&mut path.notes, notes);

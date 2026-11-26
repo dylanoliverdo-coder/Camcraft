@@ -131,7 +131,7 @@ fn cut_recipe_refuses_other_saved_coordinates_by_name() {
 #[test]
 fn cut_recipe_refuses_saved_picks_and_plane_origins() {
     use camcraft_app::geometry::sketch_chains::ChainId;
-    use camcraft_app::operation::{ChainOverride, FeatureSel, GeoSel, Tilt};
+    use camcraft_app::operation::{ChainOverride, FeatureSel, GeoSel, OpenChainSide, Tilt};
     let (world, _) = job();
     let mut contour = seed_params(OpType::Contour.ordinal());
     if let OpParams::Contour { chain_overrides, .. } = &mut contour {
@@ -140,6 +140,7 @@ fn cut_recipe_refuses_saved_picks_and_plane_origins() {
             chain: ChainId(1),
             side: None,
             reverse: true,
+            open_side: OpenChainSide::None,
         });
     }
     let mut deburr = seed_params(OpType::Deburr.ordinal());

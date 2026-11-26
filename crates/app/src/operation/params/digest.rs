@@ -99,6 +99,41 @@ pub(super) fn w(h: &mut std::hash::DefaultHasher, v: f64) {
     h.write(&v.to_bits().to_le_bytes());
 }
 
+/// Per-chain DXF sketch overrides (#1864 / Journeyman spec S9 & S10): written
+/// only when non-empty, and `open_side` only when non-`None`, so every earlier
+/// operation keeps its cached digest byte for byte.
+pub(super) fn write_chain_overrides(
+    chain_overrides: &[ChainOverride],
+    h: &mut std::hash::DefaultHasher,
+) {
+    if chain_overrides.is_empty() {
+        return;
+    }
+    h.write(b"chain-overrides");
+    let mut sorted: Vec<_> = chain_overrides.iter().collect();
+    sorted.sort_by(|a, b| a.entity.cmp(&b.entity).then(a.chain.cmp(&b.chain)));
+    h.write_usize(sorted.len());
+    for o in sorted {
+        h.write_usize(o.entity.len());
+        h.write(o.entity.as_bytes());
+        h.write(&o.chain.0.to_le_bytes());
+        h.write_u8(match o.side {
+            None => 0,
+            Some(ChainSide::Inside) => 1,
+            Some(ChainSide::Outside) => 2,
+        });
+        h.write_u8(u8::from(o.reverse));
+        if o.open_side != OpenChainSide::None {
+            h.write(b"open-side");
+            h.write_u8(match o.open_side {
+                OpenChainSide::None => 0,
+                OpenChainSide::Left => 1,
+                OpenChainSide::Right => 2,
+            });
+        }
+    }
+}
+
 /// The wall-pass fields of a Contour (Journeyman spec S1): written only
 /// when they differ from the single pass, so every earlier contour keeps
 /// its cached digest.

@@ -39,7 +39,9 @@ impl From<TiltDto> for Tilt {
     }
 }
 
-/// #1864: per-chain side and direction override row inside `ParamsDto::Contour`.
+/// #1864 / Journeyman spec S9: per-chain side and direction override row inside
+/// `ParamsDto::Contour` (and `ParamsDto::Chamfer2D` in S10). `open_side` is
+/// absent at its default `none` so earlier files load and save unchanged.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ChainOverrideDto {
     pub entity: String,
@@ -48,6 +50,8 @@ pub struct ChainOverrideDto {
     pub side: Option<ChainSideDto>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub reverse: bool,
+    #[serde(default, skip_serializing_if = "OpenChainSideDto::is_none")]
+    pub open_side: OpenChainSideDto,
 }
 
 /// Which point of a twist drill `break_through` is measured from (#2441).

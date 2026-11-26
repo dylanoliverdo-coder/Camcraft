@@ -259,7 +259,7 @@ pub fn selection_account_fresh(world: &World, setup: Option<&str>, items: &[GeoS
 mod tests {
     use super::*;
     use crate::commands::{Command, DxfOptions, ImportDxf, SetStock};
-    use crate::operation::{ChainOverride, ChainSide, OpType};
+    use crate::operation::{ChainOverride, ChainSide, OpType, OpenChainSide};
     use crate::schema::Location;
     use crate::stock::StockShape;
     use crate::world::new_world;
@@ -295,6 +295,7 @@ mod tests {
                 chain: cid,
                 side: Some(ChainSide::Inside),
                 reverse: false,
+                open_side: OpenChainSide::None,
             });
         }
         let b1 = selection_walks();

@@ -9,7 +9,7 @@
 use super::*;
 use crate::operation::{
     AreaControls, BoundaryMode, BoundaryShape, ChainSide, Containment, CornerStyle, DoNotTouch,
-    ExtraBoundary, OpenBoundary,
+    ExtraBoundary, OpenBoundary, OpenChainSide,
 };
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -60,6 +60,24 @@ pub struct ExtraBoundaryDto {
 pub enum ChainSideDto {
     Inside,
     Outside,
+}
+
+/// File mirror of `operation::OpenChainSide` (Journeyman spec S9): `none` is
+/// the default and omitted from JSON so older files load and save unchanged.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenChainSideDto {
+    #[default]
+    None,
+    Left,
+    Right,
+}
+
+impl OpenChainSideDto {
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    pub(super) fn is_none(&self) -> bool {
+        *self == OpenChainSideDto::None
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -149,6 +167,22 @@ pub(super) fn chain_side_of(s: ChainSideDto) -> ChainSide {
     match s {
         ChainSideDto::Inside => ChainSide::Inside,
         ChainSideDto::Outside => ChainSide::Outside,
+    }
+}
+
+pub(super) fn open_chain_side_dto(s: OpenChainSide) -> OpenChainSideDto {
+    match s {
+        OpenChainSide::None => OpenChainSideDto::None,
+        OpenChainSide::Left => OpenChainSideDto::Left,
+        OpenChainSide::Right => OpenChainSideDto::Right,
+    }
+}
+
+pub(super) fn open_chain_side_of(s: OpenChainSideDto) -> OpenChainSide {
+    match s {
+        OpenChainSideDto::None => OpenChainSide::None,
+        OpenChainSideDto::Left => OpenChainSide::Left,
+        OpenChainSideDto::Right => OpenChainSide::Right,
     }
 }
 

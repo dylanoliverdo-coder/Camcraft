@@ -94,6 +94,9 @@ impl SetOperationGeometry {
             match &mut params {
                 OpParams::Contour { chain_overrides, .. } => {
                     *chain_overrides = ovs;
+                    if let Some(why) = crate::operation::chain_overrides_refusal(world, &params) {
+                        return Err(CommandError::Invalid(why));
+                    }
                     if !params.is_sane() {
                         return Err(CommandError::Invalid(
                             "duplicate or invalid per-chain override in selection".into(),

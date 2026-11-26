@@ -64,16 +64,18 @@ pub enum FeatureSel {
     SketchLayer(String),
 }
 
-/// #1864: additive per-chain side and direction override on a contour
-/// operation. When `side` is `None`, the operation's `Side` applies (`Auto`
-/// resolves outer vs hole from sketch nesting); `reverse` flips direction
-/// relative to the operation's `climb` flag.
+/// #1864 / Journeyman spec S9: additive per-chain side and direction override
+/// on a DXF sketch operation (`side` for closed chains, `open_side` for open
+/// chains, `reverse` for direction).
+/// Provenance: Journeyman spec S9 (docs/journeyman/specs/S9-open-sketch-chain-side.md);
+/// no vendor parameters, text or code.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ChainOverride {
     pub entity: String,
     pub chain: crate::geometry::sketch_chains::ChainId,
     pub side: Option<super::area::ChainSide>,
     pub reverse: bool,
+    pub open_side: super::area::OpenChainSide,
 }
 
 impl FeatureSel {

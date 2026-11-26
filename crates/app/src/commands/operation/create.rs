@@ -143,6 +143,9 @@ impl CreateOperation {
             return Err(CommandError::Invalid(why));
         }
         sinker_gate(world, setup.as_deref(), &params)?;
+        if let Some(why) = crate::operation::chain_overrides_refusal(world, &params) {
+            return Err(CommandError::Invalid(why));
+        }
         if !params.is_sane() {
             return Err(CommandError::Invalid(format!(
                 "operation parameters are not usable for a {} operation",

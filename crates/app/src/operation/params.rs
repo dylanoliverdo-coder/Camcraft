@@ -160,23 +160,7 @@ impl OpParams {
                 // M11.1 B: written only when ON (A's word), so every
                 // legacy sharp contour keeps its cached digest.
                 write_blend(h, *blend_turns, *blend_radius);
-                if !chain_overrides.is_empty() {
-                    h.write(b"chain-overrides");
-                    let mut sorted: Vec<_> = chain_overrides.iter().collect();
-                    sorted.sort_by(|a, b| a.entity.cmp(&b.entity).then(a.chain.cmp(&b.chain)));
-                    h.write_usize(sorted.len());
-                    for o in sorted {
-                        h.write_usize(o.entity.len());
-                        h.write(o.entity.as_bytes());
-                        h.write(&o.chain.0.to_le_bytes());
-                        h.write_u8(match o.side {
-                            None => 0,
-                            Some(ChainSide::Inside) => 1,
-                            Some(ChainSide::Outside) => 2,
-                        });
-                        h.write_u8(u8::from(o.reverse));
-                    }
-                }
+                digest::write_chain_overrides(chain_overrides, h);
                 // Journeyman spec S1: the wall-pass counts and spacings
                 // change the moves only away from the single pass, and are
                 // written only then - every legacy contour keeps its cached

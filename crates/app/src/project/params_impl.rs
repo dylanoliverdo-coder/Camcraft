@@ -219,6 +219,7 @@ impl ParamsDto {
                         chain: ChainIdDto(o.chain),
                         side: o.side.map(chain_side_dto),
                         reverse: o.reverse,
+                        open_side: open_chain_side_dto(o.open_side),
                     })
                     .collect(),
                 passes: (*passes).into(),
@@ -1577,6 +1578,7 @@ impl ParamsDto {
                         chain: o.chain.0,
                         side: o.side.map(chain_side_of),
                         reverse: o.reverse,
+                        open_side: open_chain_side_of(o.open_side),
                     })
                     .collect(),
                 passes: (*passes).into(),
