@@ -23,6 +23,7 @@ const CONE: &str = "CM-0600-90";
 
 fn seeded(ty: OpType) -> OpParams {
     let base = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

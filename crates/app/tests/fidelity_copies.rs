@@ -40,6 +40,7 @@ fn brick() -> Mesh {
 
 fn face() -> OpParams {
     OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

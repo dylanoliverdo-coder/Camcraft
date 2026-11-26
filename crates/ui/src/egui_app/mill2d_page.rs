@@ -1,11 +1,8 @@
-//! The operation page: the 2D milling kinds' fields: Face, Contour, Pocket and the roughing twins - one module per kind family, split out
-//! of `pages.rs` (the 400-line law) when the property grid landed (user
-//! review 2026-11-06). Each arm draws its kind's fields for the open tab
-//! through the `layout` form helpers; every value edits the page draft,
-//! and Apply rides the command history.
+//! Operation page 2D milling fields (Face, Contour, Pocket, roughing twins);
+//! draws into the page draft, and Apply rides the command history.
 //!
-//! Provenance: our own UI over the operation parameter model (each
-//! kind's own module names its sources); no vendor material or text.
+//! Provenance: our own UI over the operation parameter model (Journeyman S3
+//! `retract_feed`); no vendor material or text.
 
 use super::fields::*;
 
@@ -23,6 +20,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             stepdown,
             feed,
             plunge_feed,
+            retract_feed,
             climb,
             blend_turns, blend_radius,
             holes,
@@ -98,6 +96,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             if tab == SEC_FEEDS {
                 prop_row(ui, "Feed", |ui| num_feed(ui, u, feed));
                 prop_row(ui, "Plunge feed", |ui| num_feed(ui, u, plunge_feed));
+                super::approach_page::retract_feed_row(ui, u, retract_feed);
                 check_row(ui, "Climb milling", climb);
             }
         }

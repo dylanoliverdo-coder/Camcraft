@@ -10,7 +10,7 @@
 
 use camcraft_sim::verify::AvoidSpec;
 
-use crate::cl::{MoveKind, PathBuilder, Toolpath};
+use crate::cl::{PathBuilder, Toolpath};
 use crate::geo2d::{Point2, Region};
 use crate::geometry::Point3;
 use crate::machining2d::adaptive::finish_rings::plan_finish_rings;
@@ -350,8 +350,7 @@ fn adaptive_finish_inside(
             }
         }
         ws.finish(b, &clear_motion);
-        let cur = b.at();
-        b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
+        crate::fed_retract::lift_approach(b, p.clearance_z, ws.above(), clear_motion.hop_z, &clear_motion.links.approach);
     };
     let mut path = post_crossing_free(b, &all_passes, all_runs, &mut proof, post);
     if let Some(n) = proof.note() {

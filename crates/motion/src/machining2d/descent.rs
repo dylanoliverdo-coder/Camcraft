@@ -372,7 +372,7 @@ pub(super) fn push(b: &mut PathBuilder, d: &Descent, l: &Lvl, z: f64, tz: f64, m
             let cur = b.at();
             if cur.x != start.x || cur.y != start.y {
                 let hop = if tz < m.hop_z - 1e-9 {
-                    b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, m.hop_z), None);
+                    crate::fed_retract::lift_approach(b, m.hop_z, l.mat_top, m.hop_z, &m.links.approach);
                     m.hop_z
                 } else {
                     tz

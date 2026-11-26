@@ -33,7 +33,7 @@
 
 use std::f64::consts::PI;
 
-use crate::cl::{MoveKind, PathBuilder, Toolpath};
+use crate::cl::{PathBuilder, Toolpath};
 use crate::entry::Entry3D;
 use crate::geo2d::{Loop, Point2, Region};
 use crate::geometry::Point3;
@@ -284,6 +284,7 @@ pub fn circular(_region: &Region, p: &CircularParams) -> Result<Toolpath, GenErr
     // an extra candidate at the axis; the positivity test discards it.
     super::face::pass_budget("stepover", rc, p.stepover)?;
     let last = (rc / p.stepover).floor() as usize;
+    let mut last_above = motion.top_z;
     for index in 0..=last {
         let k = if p.pass_start == PassStart::Inside { last - index } else { index };
         let rho = rc - p.stepover * k as f64;
@@ -332,20 +333,18 @@ pub fn circular(_region: &Region, p: &CircularParams) -> Result<Toolpath, GenErr
         }
         // #2898: climb straight up off the last ring's floor; this ring's
         // entry traverses at clearance, over the core still to be cut.
-        let at = b.at();
-        if at.z < p.clearance_z {
-            b.push(MoveKind::Rapid, Point3::new(at.x, at.y, p.clearance_z), None);
+        if b.at().z < p.clearance_z {
+            crate::fed_retract::lift_approach(&mut b, p.clearance_z, last_above, motion.hop_z, &motion.links.approach);
         }
         let before = b.moves_len();
-        run_level_walks(&mut b, &pass, &zs, &motion, Some(&runs), cert.as_ref(), cert.as_ref());
+        last_above = run_level_walks(&mut b, &pass, &zs, &motion, Some(&runs), cert.as_ref(), cert.as_ref());
         if helix
             && let Err(why) = flown.add(descents(b.moves().get(before..).unwrap_or(&[])))
         {
             return Err(GenError::Invalid(why).with_ghost_moves(b.moves()));
         }
     }
-    let cur = b.at();
-    b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
+    crate::fed_retract::lift_approach(&mut b, p.clearance_z, last_above, motion.hop_z, &motion.links.approach);
 
     let path = b.finish();
     if let Some(why) = crate::approach::refusal(&path) {

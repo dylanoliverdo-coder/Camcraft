@@ -8,13 +8,9 @@
 //! pre-M11.3 behaviour, so a default `Approach` posts today's moves byte
 //! for byte.
 //!
-//! Provenance: the standard entry/lead parameter vocabulary of published
-//! CAM practice and machining handbooks (ramp angle and length, helical
-//! entry radius and pitch, tangent-arc and linear leads with extensions,
-//! closed-contour overlap, reduced entry feeds); the feed-vs-engagement
-//! law is the material-removal-rate reading of radial engagement (MRR
-//! ~ ae * vf, held at the limit's value) on top of the M2.1 / M11.4
-//! engagement geometry. Our own model; no vendor material consulted.
+//! Provenance: standard entry/lead vocabulary of published CAM practice and
+//! Journeyman spec S3 (`retract_feed`); MRR engagement law over M2.1/M11.4.
+//! Our own model; no vendor material consulted.
 
 use crate::machining2d::Lead;
 
@@ -138,6 +134,8 @@ pub struct Approach {
     pub ramp_feed: f64,
     /// Feed of the entry's plunges (mm/min); `0` is the op's plunge feed.
     pub plunge_feed: f64,
+    /// Vertical fed retract rate (mm/min, Journeyman S3); `0` is rapid.
+    pub retract_feed: f64,
     /// Lead-in feed as a percentage of the cutting feed (the contour's
     /// lead-in, a ladder's dive link onto the first cut); `100` is today.
     pub lead_feed_pct: f64,
@@ -213,10 +211,8 @@ pub fn refusal(path: &crate::cl::Toolpath) -> Option<String> {
 /// The default axis-alignment tolerance, degrees.
 pub const DEFAULT_AXIS_TOL: f64 = 1.0;
 
-/// The default plunge height (M11.3, the user's hand-test: "why does the
-/// path first plunge straight into the material?"): a plunge rapids to
-/// 2 mm over the material under it - or the retract plane, if lower - and
-/// feeds only that last stretch, never tens of millimetres of air.
+/// The default plunge height (M11.3): rapid to 2 mm over the material under it
+/// (or the retract plane, if lower) and feed only that last stretch.
 pub const DEFAULT_PLUNGE_HEIGHT: f64 = 2.0;
 
 /// The default approach distance (#3745, the maintainer: "starting outside
@@ -257,6 +253,7 @@ impl Approach {
         equal_steps: false,
         ramp_feed: 0.0,
         plunge_feed: 0.0,
+        retract_feed: 0.0,
         lead_feed_pct: 100.0,
         max_engagement: 0.0,
         lead_out: None,
@@ -338,6 +335,9 @@ impl Approach {
         }
         if !feed(self.ramp_feed) || !feed(self.plunge_feed) {
             return Err("the entry feeds must be zero (the op's feed) or positive");
+        }
+        if let Some(why) = crate::fed_retract::retract_feed_refusal(self.retract_feed) {
+            return Err(why);
         }
         if !(self.lead_feed_pct.is_finite() && self.lead_feed_pct > 0.0 && self.lead_feed_pct <= 100.0) {
             return Err("the lead-in feed must be above 0 and at most 100 percent");

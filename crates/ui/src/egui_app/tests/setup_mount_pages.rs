@@ -83,6 +83,7 @@ fn the_setup_machine_page_picks_its_own_machine_from_the_library() {
 /// through the block is a true gouge on the stock-source keep law).
 fn face() -> OpParams {
     OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,

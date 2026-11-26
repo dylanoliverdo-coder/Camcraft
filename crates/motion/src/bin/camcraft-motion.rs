@@ -89,6 +89,7 @@ fn main() -> ExitCode {
         Err(e) => return die(format!("bad rectangle: {e}")),
     };
     let p = FaceParams {
+        retract_feed: 0.0,
         tool_diameter: d,
         stepover,
         clearance_z,

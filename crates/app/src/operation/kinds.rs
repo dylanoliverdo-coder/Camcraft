@@ -726,6 +726,7 @@ fn seed_face(c: &Carried) -> OpParams {
         stepdown: None,
         feed: c.feed,
         plunge_feed: c.plunge,
+        retract_feed: 0.0,
         climb: c.climb,
         // Turning-point blends are opt-in (M11.1 A): a fresh face is
         // the sharp serpentine every golden and every saved file knows.

@@ -75,7 +75,7 @@ pub(super) fn link_at_depth(
              is not proved clear at depth",
             e.x, e.y, d.x, d.y
         ));
-        b.push(MoveKind::Rapid, Point3::new(d.x, d.y, m.hop_z), None);
+        crate::fed_retract::lift_approach(b, m.hop_z, mat_top, m.hop_z, &m.links.approach);
         b.push(MoveKind::Rapid, Point3::new(e.x, e.y, m.hop_z), None);
         feed_down(b, e, z, mat_top, m, m.plunge_feed);
     }
@@ -165,8 +165,7 @@ pub(super) fn find_clear_helix_raw(
 
 pub(super) fn helix_cross_fallback(b: &mut PathBuilder, l: &Lvl, e: Point2, z: f64, from: f64, tz: f64, m: &Motion) -> Cuts {
     let safe_tz = if tz < m.hop_z - 1e-9 {
-        let cur = b.at();
-        b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, m.hop_z), None);
+        crate::fed_retract::lift_approach(b, m.hop_z, l.mat_top, m.hop_z, &m.links.approach);
         m.hop_z
     } else {
         tz

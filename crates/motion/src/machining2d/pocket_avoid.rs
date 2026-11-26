@@ -4,7 +4,7 @@
 
 use camcraft_sim::verify::{AVOID_PAD, AvoidSpec};
 
-use crate::cl::{MoveKind, PathBuilder, Toolpath};
+use crate::cl::{PathBuilder, Toolpath};
 use crate::geo2d::Region;
 use crate::geometry::Point3;
 
@@ -309,8 +309,7 @@ pub(super) fn pocket_avoid_over(
         .with_top(p.links.approach.entry_top(p.top_z))
         .with_holes(holes);
     ws.finish(&mut b, &end_motion);
-    let cur = b.at();
-    b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
+    crate::fed_retract::lift_approach(&mut b, p.clearance_z, ws.above(), end_motion.hop_z, &end_motion.links.approach);
     if !blocked_levels.is_empty() {
         b.note(format!(
             "Do not touch ({}) blocked {} cut level(s); remaining levels stayed clear",

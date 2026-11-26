@@ -22,6 +22,7 @@ fn sq(c: (f64, f64), hx: f64, hy: f64) -> Region {
 
 fn p(blend: bool, staged: bool) -> FaceParams {
     FaceParams {
+        retract_feed: 0.0,
         tool_diameter: 6.0,
         stepover: 3.0,
         clearance_z: 5.0,

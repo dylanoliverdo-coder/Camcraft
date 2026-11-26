@@ -56,6 +56,7 @@ fn mach4_posts_full_app_setup_cleanly() {
     history.execute(&world, AddTool::new(&world, tool_name, tool).expect("add tool"));
 
     let params = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,

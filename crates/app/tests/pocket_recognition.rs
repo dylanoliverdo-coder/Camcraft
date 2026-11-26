@@ -188,6 +188,7 @@ fn an_inside_out_mesh_is_refused_never_read_as_a_pocket() {
 
 fn machine(world: &World, h: &mut History, p: &Pocket, tool: &str, name: &str) -> OpParams {
     let base = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

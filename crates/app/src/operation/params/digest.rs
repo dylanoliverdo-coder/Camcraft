@@ -349,6 +349,11 @@ impl OpParams {
                 if a.equal_steps {
                     h.write_u8(0xC9);
                 }
+                // Journeyman spec S3: fed retract rate, written only when positive.
+                if a.retract_feed != 0.0 {
+                    h.write_u8(0xCB);
+                    w(h, a.retract_feed);
+                }
                 match a.lead_out {
                     None => h.write_u8(0xFF),
                     Some(Lead::None) => h.write_u8(0),

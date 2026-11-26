@@ -6,9 +6,8 @@
 //! (`post_crossing_free`), and approach refusal checks. Clean-room, no vendor
 //! material consulted.
 
-use crate::cl::{MoveKind, PathBuilder, Toolpath};
+use crate::cl::{PathBuilder, Toolpath};
 use crate::geo2d::{Point2, Region};
-use crate::geometry::Point3;
 
 use super::adaptive::Return;
 use super::arc_cross::post_crossing_free;
@@ -120,7 +119,7 @@ pub(super) fn emit_pocket_passes(
         None => Cert::Region(center),
     };
     let post = |b: &mut PathBuilder, runs: Option<&[Vec<Seg>]>| {
-        if corner_reliefs.is_empty() {
+        let last_above = if corner_reliefs.is_empty() {
             run_level_walks(
                 b,
                 &passes,
@@ -129,7 +128,7 @@ pub(super) fn emit_pocket_passes(
                 runs,
                 Some(&cert),
                 Some(&Cert::Region(links_center)),
-            );
+            )
         } else {
             let mut passes_r = passes.clone();
             let mut runs_r = runs.map(<[Vec<Seg>]>::to_vec);
@@ -142,10 +141,9 @@ pub(super) fn emit_pocket_passes(
                 runs_r.as_deref(),
                 Some(&cert),
                 Some(&Cert::Region(links_center)),
-            );
-        }
-        let cur = b.at();
-        b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
+            )
+        };
+        crate::fed_retract::lift_approach(b, p.clearance_z, last_above, motion.hop_z, &motion.links.approach);
     };
     // #2240: enforce the crossing law on every arc-fitted pocket pass,
     // including Offset rings (used directly or as Adaptive's fallback) and
@@ -253,7 +251,7 @@ mod tests {
             blend_radius: None,
             links: Links::PLANAR,
         };
-        let b = PathBuilder::approached(Point3::new(0.0, 0.0, pp.clearance_z));
+        let b = PathBuilder::approached(crate::geometry::Point3::new(0.0, 0.0, pp.clearance_z));
         let Ok(path) = emit_pocket_passes(
             b,
             &pp,

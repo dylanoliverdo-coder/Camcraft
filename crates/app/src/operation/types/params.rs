@@ -110,6 +110,8 @@ pub enum OpParams {
         stepdown: Option<f64>,
         feed: f64,
         plunge_feed: f64,
+        /// Vertical fed retract rate (mm/min, Journeyman S3); `0` is rapid.
+        retract_feed: f64,
         climb: bool,
         /// Turning-point blends (M11.1 A): row-end reversals ride one
         /// tangent G2/G3 semicircle where the law proves it legal

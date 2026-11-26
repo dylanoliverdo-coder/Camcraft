@@ -85,6 +85,15 @@ impl OpParams {
         if let Some(why) = self.links().and_then(|l| l.approach.approach_distance_refusal()) {
             return Some(why.into());
         }
+        // Journeyman spec S3: retract_feed refusal by name across all 8 2D ops.
+        if let Some(why) = self.links().and_then(|l| camcraft_motion::fed_retract::retract_feed_refusal(l.approach.retract_feed)) {
+            return Some(why.into());
+        }
+        if let OpParams::Face { retract_feed, .. } = self
+            && let Some(why) = camcraft_motion::fed_retract::retract_feed_refusal(*retract_feed)
+        {
+            return Some(why.into());
+        }
         match self {
             OpParams::Drill { chamfer_width, .. } => {
                 crate::drilling::chamfer_width_refusal(*chamfer_width).map(str::to_owned)
@@ -224,6 +233,7 @@ impl OpParams {
                 stepdown,
                 feed,
                 plunge_feed,
+                retract_feed,
                 ..
             } => {
                 pos(*stepover)
@@ -231,6 +241,7 @@ impl OpParams {
                     && cut_z.is_sane()
                     && pos(*feed)
                     && pos(*plunge_feed)
+                    && camcraft_motion::fed_retract::retract_feed_refusal(*retract_feed).is_none()
                     && top_z.is_none_or(|t| t.is_sane())
                     && stepdown.is_none_or(|s| s.is_finite() && s > 0.0)
             }

@@ -18,14 +18,10 @@
 //!   every cutter-centre point lies inside the area by construction;
 //! - the finished path is then CHECKED against the area, move by move
 //!   ([`confined`]) - construction is the plan, the check is the law;
-//! - what the lane cannot reach (corners, wider parts) is said in the
-//!   notes with its size; past [`REST_MAX`] of the region the method is
-//!   refused by name (the region is no single channel).
 //!
-//! Prime Directive: a region narrower than the tool, one too narrow to
-//! loop in, a ring round an island, a region with no single medial
-//! line, a lane that would leave most of the region standing and any
-//! loop outside the region are each refused by name. No vendor material.
+//! Prime Directive: degenerate/narrow/uncontained channels are refused by name.
+//! Provenance: Otkur & Lazoglu (2007), Rauch et al. (2009), Blum (1967), Held (1991),
+//! Journeyman spec S3 (`retract_feed`); no vendor parameters, text or code.
 
 use crate::cl::{MoveKind, PathBuilder, Toolpath, lattice};
 use crate::geo2d::{Point2, Region};
@@ -210,18 +206,21 @@ pub(super) fn trochoidal_inside_finish(
     // #1559: over stock carried above the top of the cut, the first
     // level's entry starts at its plunge height and feeds down.
     let mut above = p.links.approach.entry_top(p.top_z);
+    let mut last_from = (above + crate::approach::DEFAULT_PLUNGE_HEIGHT).min(hop).max(above);
+    let rf = p.links.approach.retract_feed;
     for (zi, &z) in zs.iter().enumerate() {
         for (li, lay) in planned.layouts.iter().enumerate() {
             if zi > 0 || li > 0 {
                 let at = bld.at();
                 if (at.z - hop).abs() > 1e-6 {
-                    bld.push(MoveKind::Rapid, Point3::new(at.x, at.y, hop), None);
+                    crate::fed_retract::lift_up(&mut bld, hop, last_from, rf);
                 }
                 bld.push(MoveKind::Rapid, p3(lay.entry, hop), None);
             }
             let from = (above + crate::approach::DEFAULT_PLUNGE_HEIGHT).min(hop).max(above);
+            last_from = from;
             bld.push(MoveKind::Rapid, p3(lay.entry, from), None);
-            emit_level(&mut bld, &lay.lay, &lay.tp, z, from, true, lay.open).map_err(|e| renamed(e).with_ghost_moves(bld.moves()))?;
+            emit_level(&mut bld, &lay.lay, &lay.tp, z, from, true, lay.open, rf).map_err(|e| renamed(e).with_ghost_moves(bld.moves()))?;
         }
         emit_cleanup(&mut bld, &clean, p, z, above, hop);
         if let Some(f) = finish
@@ -234,13 +233,13 @@ pub(super) fn trochoidal_inside_finish(
             } else {
                 above
             };
+            last_from = crate::fed_retract::switch_z(fin_above, p_orig.links.approach.plunge_height, hop);
             let fin_passes = super::adaptive::plan_finish_rings(region, p_orig, f, keepout, Point2::new(at.x, at.y))?;
             super::adaptive::emit_troch_finish_level(&mut bld, &fin_passes, &center_final, p_orig, z, fin_above);
         }
         above = z;
     }
-    let at = bld.at();
-    bld.push(MoveKind::Rapid, Point3::new(at.x, at.y, p.clearance_z), None);
+    crate::fed_retract::lift_up(&mut bld, p.clearance_z, last_from, rf);
 
     let mut total_loops = 0usize;
     let mut max_deg = 0.0_f64;

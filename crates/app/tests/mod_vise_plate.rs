@@ -58,6 +58,7 @@ fn rig(cut: Option<f64>, tall: Option<f64>) -> (World, History, String, [String;
         let tool = catalog().into_iter().find(|(n, _)| *n == "EM-0400-2FL").map(|(_, t)| t).expect("catalog");
         history.execute(&world, AddTool::new(&world, "EM-0400-2FL", tool).expect("tool"));
         let params = OpParams::Face {
+            retract_feed: 0.0,
             floor_stock: 0.0,
             holes: Default::default(),
             tilt: None,

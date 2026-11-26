@@ -71,6 +71,7 @@ fn faced_doc() -> (World, History) {
         ImportModel::from_mesh("part", cube(Point3::new(-30.0, -30.0, 0.0), Point3::new(30.0, 30.0, 18.0))),
     );
     let params = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

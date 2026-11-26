@@ -105,6 +105,32 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
     if let Some(stock) = next.floor_stock() {
         back.insert("floor_stock".into(), json!(stock));
     }
+    // Journeyman S3: accept an explicit return to zero for `retract_feed` on Face and Links ops.
+    if let OpParams::Face { retract_feed, .. } = &next {
+        back.insert("retract_feed".into(), json!(retract_feed));
+    }
+    if let Some(links) = next.links()
+        && patch
+            .get("links")
+            .and_then(Value::as_object)
+            .and_then(|l| l.get("approach"))
+            .and_then(Value::as_object)
+            .is_some_and(|a| a.contains_key("retract_feed"))
+    {
+        let links_obj = back
+            .entry("links")
+            .or_insert_with(|| Value::Object(Default::default()))
+            .as_object_mut();
+        if let Some(lo) = links_obj {
+            let app_obj = lo
+                .entry("approach")
+                .or_insert_with(|| Value::Object(Default::default()))
+                .as_object_mut();
+            if let Some(ao) = app_obj {
+                ao.insert("retract_feed".into(), json!(links.approach.retract_feed));
+            }
+        }
+    }
     // Drill's zero width is deliberately omitted from saved projects.
     if let OpParams::Drill { chamfer_width, .. } = &next {
         back.insert("chamfer_width".into(), json!(chamfer_width));

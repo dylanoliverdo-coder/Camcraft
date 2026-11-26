@@ -162,7 +162,8 @@ fn contour_tangential_lead_matches_golden() {
 fn face_square_40x40_matches_golden() {
     // The same plain 40x40 square the row-count tests use, at the
     // default parameters: five rows, rapids only at the ends.
-    let p = FaceParams { holes: Default::default(),
+    let p = FaceParams {
+        retract_feed: 0.0, holes: Default::default(),
         tool_diameter: 10.0,
         stepover: 8.0,
         clearance_z: 5.0,
@@ -187,7 +188,8 @@ fn face_square_40x40_blended_matches_golden() {
     // same endpoints (stride/2 radius, bulging into the overrun) and the
     // header steps to v2. The sharp golden above stays byte-identical:
     // blends are opt-in.
-    let p = FaceParams { holes: Default::default(),
+    let p = FaceParams {
+        retract_feed: 0.0, holes: Default::default(),
         tool_diameter: 10.0,
         stepover: 8.0,
         clearance_z: 5.0,
@@ -212,7 +214,8 @@ fn face_square_40x40_stepped_matches_golden() {
     // the first level is one step under Top Z): the row
     // band is identical at every level, and each level change lifts to
     // clearance and re-enters above the first row's start.
-    let p = FaceParams { holes: Default::default(),
+    let p = FaceParams {
+        retract_feed: 0.0, holes: Default::default(),
         tool_diameter: 10.0,
         stepover: 8.0,
         clearance_z: 5.0,

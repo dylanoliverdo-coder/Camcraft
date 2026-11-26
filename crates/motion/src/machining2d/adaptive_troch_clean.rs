@@ -111,10 +111,11 @@ pub(super) fn plan_cleanup(
 pub(super) fn emit_cleanup(bld: &mut PathBuilder, chains: &[CleanChain], p: &PocketParams, z: f64, above: f64, hop: f64) {
     let p3 = |q: Point2, zz: f64| Point3::new(lattice(q.x), lattice(q.y), lattice(zz));
     let near = (above + crate::approach::DEFAULT_PLUNGE_HEIGHT).min(hop).max(above);
+    let rf = p.links.approach.retract_feed;
     for ch in chains {
         let cur = bld.at();
         if (cur.z - hop).abs() > 1e-6 {
-            bld.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, hop), None);
+            crate::fed_retract::lift_up(bld, hop, near, rf);
         }
         bld.push(MoveKind::Rapid, p3(ch.pts[0], hop), None);
         bld.push(MoveKind::Rapid, p3(ch.pts[0], near), None);
@@ -122,8 +123,7 @@ pub(super) fn emit_cleanup(bld: &mut PathBuilder, chains: &[CleanChain], p: &Poc
         for &pt in ch.pts.iter().skip(1) {
             bld.push(MoveKind::Feed, p3(pt, z), Some(p.feed));
         }
-        let end = bld.at();
-        bld.push(MoveKind::Rapid, Point3::new(end.x, end.y, hop), None);
+        crate::fed_retract::lift_up(bld, hop, near, rf);
     }
 }
 

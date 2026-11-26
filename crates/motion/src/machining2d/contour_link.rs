@@ -279,6 +279,7 @@ pub(super) fn ring_link(
     e2: Point2,
     z: f64,
     hop_z: f64,
+    lift_mat_top: f64,
     tabbed: bool,
     lifted: &mut crate::links::LinkTally,
 ) {
@@ -294,14 +295,26 @@ pub(super) fn ring_link(
             Err(why) => lifted.lift(why, at, z),
         }
     }
-    if cur.z < hop_z {
-        b.push(MoveKind::Feed, Point3::new(cur.x, cur.y, hop_z), Some(p.feed));
+    if p.links.approach.retract_feed > 0.0 {
+        // Journeyman spec S3: feed straight up to switch height, rapid to travel plane, never downward/diagonal.
+        let travel = if p.links.pass == Link::Clearance { p.clearance_z } else { hop_z };
+        if cur.z < travel {
+            crate::fed_retract::lift_approach(b, travel, lift_mat_top, hop_z, &p.links.approach);
+        }
+        b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, travel), None);
+        if travel > hop_z {
+            b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, hop_z), None);
+        }
+    } else {
+        if cur.z < hop_z {
+            b.push(MoveKind::Feed, Point3::new(cur.x, cur.y, hop_z), Some(p.feed));
+        }
+        if p.links.pass == Link::Clearance {
+            b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
+            b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, p.clearance_z), None);
+        }
+        b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, hop_z), None);
     }
-    if p.links.pass == Link::Clearance {
-        b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
-        b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, p.clearance_z), None);
-    }
-    b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, hop_z), None);
     guard(b, p, e2, z, p.entry_top(), "the ring-to-ring dive at the lead-in");
     b.push(MoveKind::Plunge, Point3::new(e2.x, e2.y, z), Some(p.plunge_feed));
 }

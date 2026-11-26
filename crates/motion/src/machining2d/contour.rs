@@ -116,6 +116,7 @@ pub(super) fn emit_band(
     let prog = &band.prog;
     let hop = p.retract_z.min(p.clearance_z);
     let mut first_entry = true;
+    let mut last_mat_top = p.entry_top();
     let mut lifted = LinkTally::default();
     // The dive links cut on one plane (the bore side's descents): planar
     // feeds a keep-down ring link at that plane must not cross.
@@ -289,6 +290,7 @@ pub(super) fn emit_band(
                 // Stayed down: the tool stands on the seam at the level
                 // above (its lead-out skipped); descend on the ring.
                 push_stay(b, s, &poly, &walk, zp, z, p, &legal, lead_notes);
+                last_mat_top = zp;
                 first_entry = false;
                 push_segs(b, &walk, z, p.feed);
                 if !stay_out {
@@ -312,9 +314,7 @@ pub(super) fn emit_band(
                 && k == 0
                 && !(ring_to_ring && p.links.pass == Link::KeepDown);
             if wall_arc_on && ring_to_ring && p.links.pass == Link::Clearance {
-                let cur = b.at();
-                b.push(MoveKind::Feed, Point3::new(cur.x, cur.y, hop_z), Some(p.feed));
-                b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
+                super::contour_step::lift_over(b, p, p.clearance_z, last_mat_top, hop_z);
             }
             let mut arced = false;
             // #3132: a None lead-in adds no XY travel at the seam - the
@@ -323,7 +323,7 @@ pub(super) fn emit_band(
             if wall_arc_on && !tabbed && !no_lead_in {
                 let z_top = wall_arc_top(p, rz, rzi, hop_z);
                 let first = lead.first().or(walk.first());
-                match wall_arc(b, &eng, e2, z, z_top, hop_z, first) {
+                match wall_arc(b, &eng, e2, z, z_top, hop_z, last_mat_top, first) {
                     Ok(()) => arced = true,
                     Err(why) => say(
                         lead_notes,
@@ -350,7 +350,7 @@ pub(super) fn emit_band(
                 // Ring to ring within one level: the pass link, proved
                 // against the rings and this level's dive links.
                 let cut = if dives.0.to_bits() == z.to_bits() { dives.1.as_slice() } else { &[] };
-                ring_link(b, p, &legal, &[&band.plan, cut, &link_leads], e2, z, hop_z, tabbed, &mut lifted);
+                ring_link(b, p, &legal, &[&band.plan, cut, &link_leads], e2, z, hop_z, last_mat_top, tabbed, &mut lifted);
             } else if k == 0 {
                 // The level's first engagement: a crossing, or the path's
                 // first entry (prev_z falls back to clearance there).
@@ -358,7 +358,7 @@ pub(super) fn emit_band(
                 // #2004: the column of this descent is open down to prev_z
                 // when the descent one level up was the same arm.
                 let opened = rzi >= 2 || (rzi == 1 && arm == p.entry);
-                let step = Step { arm, e2, z, prev_z, first: first_entry, opened, inside, tabbed, lead_top };
+                let step = Step { arm, e2, z, prev_z, first: first_entry, opened, inside, tabbed, lead_top, lift_mat_top: last_mat_top };
                 if let Some(d) = engage_level(b, &eng, &step, &lead, &walk, said) {
                     if dives.0.to_bits() != z.to_bits() {
                         dives = (z, Vec::new());
@@ -367,12 +367,12 @@ pub(super) fn emit_band(
                 }
             } else {
                 // Tab window to tab window: up over the tab, across, down.
-                let cur = b.at();
-                b.push(MoveKind::Feed, Point3::new(cur.x, cur.y, hop_z), Some(p.feed));
+                super::contour_step::lift_over(b, p, hop_z, last_mat_top, hop_z);
                 b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, hop_z), None);
                 super::contour_link::guard(b, p, e2, lead_top, p.entry_top(), "the dive past a tab");
                 b.push(MoveKind::Plunge, Point3::new(e2.x, e2.y, lead_top), Some(p.plunge_feed));
             }
+            last_mat_top = super::contour_step::level_mat_top(p, inside, tabbed, rzi, rz, first_entry, arm, hop_z);
             first_entry = false;
             let at = b.at();
             let lead_at = b.moves_len();
@@ -412,8 +412,7 @@ pub(super) fn emit_band(
     }
     }
     lifted.say(b, "ring-to-ring");
-    let cur = b.at();
-    b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
+    crate::fed_retract::lift_approach(b, p.clearance_z, last_mat_top, hop, &p.links.approach);
     Ok(())
 }
 

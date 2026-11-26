@@ -28,6 +28,7 @@ pub(super) fn post(p: &PocketParams, levels: &[(f64, usize)], plans: &[(Region, 
         stock.floors().len()
     ));
     let mut said: Vec<usize> = Vec::new();
+    let mut last_above = p.top_z;
     for &(z, at) in levels {
         let Some((_, plan)) = plans.get(at) else { continue };
         if !said.contains(&at) && !plan.chains.is_empty() {
@@ -55,9 +56,10 @@ pub(super) fn post(p: &PocketParams, levels: &[(f64, usize)], plans: &[(Region, 
             // the same depth over the retract plane.
             let cur = b.at();
             let travel = cur.z.max(if ci == 0 { clearance } else { hop });
-            b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, travel), None);
+            crate::fed_retract::lift_up(&mut b, travel, last_above, p.links.approach.retract_feed);
             b.push(MoveKind::Rapid, Point3::new(e.x, e.y, travel), None);
             let above = (p.top_z + p.links.approach.plunge_height.max(0.0)).min(travel).max(z);
+            last_above = above;
             b.push(MoveKind::Rapid, Point3::new(e.x, e.y, above), None);
             b.push(MoveKind::Plunge, Point3::new(e.x, e.y, z), Some(p.plunge_feed));
             for q in rest {
@@ -65,7 +67,6 @@ pub(super) fn post(p: &PocketParams, levels: &[(f64, usize)], plans: &[(Region, 
             }
         }
     }
-    let cur = b.at();
-    b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, clearance), None);
+    crate::fed_retract::lift_up(&mut b, clearance, last_above, p.links.approach.retract_feed);
     b.finish()
 }

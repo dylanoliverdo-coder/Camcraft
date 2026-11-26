@@ -31,6 +31,7 @@ fn plate(holes: &[(f64, f64)]) -> Region {
 
 fn p(holes: FaceHoles) -> FaceParams {
     FaceParams {
+        retract_feed: 0.0,
         tool_diameter: 6.0,
         stepover: 3.0,
         clearance_z: 5.0,

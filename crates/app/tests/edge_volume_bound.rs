@@ -8,6 +8,7 @@ use camcraft_app::stock_sim::breaks;
 
 fn params(ty: OpType) -> OpParams {
     let base = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(), tilt: None, stepover: 3.0,
         clearance_z: Height::of(HeightReference::TopOfStock, 25.0),

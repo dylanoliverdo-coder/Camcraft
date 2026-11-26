@@ -16,7 +16,8 @@ use super::trochoid_slot::{TrochoidParams, TrochoidReturn};
 /// loop's wall lead and cut, the returns between them. `levels` says
 /// whether a retract return may hop (the planner's single level lifts
 /// in place instead, which reads the same stock).
-pub(super) fn emit_level(b: &mut PathBuilder, lay: &Layout, p: &TrochoidParams, z: f64, from: f64, levels: bool, open: bool) -> Result<(), GenError> {
+#[allow(clippy::too_many_arguments)]
+pub(super) fn emit_level(b: &mut PathBuilder, lay: &Layout, p: &TrochoidParams, z: f64, from: f64, levels: bool, open: bool, retract_feed: f64) -> Result<(), GenError> {
     let p3 = |q: Point2, zz: f64| Point3::new(lattice(q.x), lattice(q.y), lattice(zz));
     bore(b, lay, p, z, from, open)?;
     let n = lay.pieces.len();
@@ -43,7 +44,7 @@ pub(super) fn emit_level(b: &mut PathBuilder, lay: &Layout, p: &TrochoidParams, 
             TrochoidReturn::Retract => {
                 let hop = if levels { p.retract_z.unwrap_or(p.clearance_z) } else { z + 0.5 };
                 let near = (z + crate::approach::DEFAULT_PLUNGE_HEIGHT).min(hop);
-                b.push(MoveKind::Rapid, p3(e, hop), None);
+                crate::fed_retract::lift_up(b, hop, near, retract_feed);
                 b.push(MoveKind::Rapid, p3(pc.start, hop), None);
                 b.push(MoveKind::Rapid, p3(pc.start, near), None);
                 b.push(MoveKind::Feed, p3(pc.start, z), Some(p.plunge_feed));

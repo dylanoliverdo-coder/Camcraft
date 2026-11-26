@@ -39,7 +39,8 @@ fn catalog_tool(name: &str) -> camcraft_app::tools::Tool {
 }
 
 fn face_params(cut_z: f64) -> OpParams {
-    OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+    OpParams::Face {
+        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
         stepover: 3.0,
         clearance_z: Height::fixed(25.0),
         cut_z: Height::fixed(cut_z),

@@ -44,6 +44,7 @@ fn face_world() -> (World, History) {
     );
     history.execute(&world, AddTool::new(&world, TOOL, catalog_tool()).expect("tool"));
     let face = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

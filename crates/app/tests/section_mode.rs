@@ -95,6 +95,7 @@ fn make_face_world() -> World {
     history.execute(&world, stock_cmd);
     add_tool(&world, &mut history, "EM-0400-2FL");
     let params = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: FaceHoles::default(),
         blend_turns: false, blend_radius: None,

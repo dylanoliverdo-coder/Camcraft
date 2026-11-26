@@ -295,28 +295,13 @@ pub(super) fn run_levels(
     fit: Option<f64>,
     center: Option<&Cert<'_>>,
     links_cert: Option<&Cert<'_>>,
-) {
+) -> f64 {
     let runs: Option<Vec<Vec<Seg>>> =
         fit.map(|tol| passes.iter().map(|p| fit_arcs(p, tol)).collect());
-    run_level_walks(b, passes, zs, m, runs.as_deref(), center, links_cert);
+    run_level_walks(b, passes, zs, m, runs.as_deref(), center, links_cert)
 }
 
-/// [`run_levels`] with the walks already built: `runs[i]` is pass `i`
-/// past its first point as [`Seg`]s (fitted arcs, M11.1's corner
-/// fillets); `None` walks the points.
-///
-/// The ladder's three moments: the path's first entry (the `entry`
-/// family from clearance - M8.1's level-0 law); a level change (the
-/// transition - `links.transition`, else the entry - reached by the
-/// level link: from clearance, from the retract plane, or staying at
-/// the level above and feeding to the descent's start where that link
-/// is proved); and a pass change within a level (the pass link: the
-/// retract-plane hop every planar ladder has posted, the clearance
-/// climb, or a keep-down feed where proved). The z the tool last
-/// ENGAGED decides which moment is which: a level whose earlier passes
-/// came out degenerate still crosses in over new material.
-/// Mutable ladder cursor shared between `run_level_walks` and
-/// per-level keep-out walks (#2055).
+/// [`run_levels`] with prebuilt [`Seg`] walks (Journeyman spec S3 returns final `mat_top`).
 #[derive(Clone)]
 pub(super) struct WalkState {
     first: bool,
@@ -328,6 +313,10 @@ pub(super) struct WalkState {
 impl WalkState {
     pub(super) fn new(top_z: f64) -> Self {
         Self { first: true, last_cut_z: None, above: top_z, st: LinkState::default() }
+    }
+
+    pub(super) fn above(&self) -> f64 {
+        self.above
     }
 
     /// Resume a walk already at cut plane `z` with material top `above`
@@ -375,12 +364,13 @@ pub(super) fn run_level_walks(
     runs: Option<&[Vec<Seg>]>,
     center: Option<&Cert<'_>>,
     links_cert: Option<&Cert<'_>>,
-) {
+) -> f64 {
     let mut ws = WalkState::new(m.top_z);
     for &z in zs {
         walk_one_level(b, z, passes, runs, m, center, links_cert, None, &mut ws);
     }
     ws.finish(b, m);
+    ws.above
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -404,17 +394,18 @@ pub(super) fn walk_one_level(
         }
         let walk = runs.and_then(|r| r.get(pi)).map(Vec::as_slice);
         let prev_z = ws.last_cut_z.unwrap_or(m.clearance_z);
+        let lift_mat_top = ws.above;
         if ws.last_cut_z != Some(z) {
             ws.above = ws.last_cut_z.unwrap_or(m.top_z);
         }
         let mat_top = ws.above;
-        let lv = LevelWalk { passes, pass, walk, z, prev_z, mat_top, prev_center };
+        let lv = LevelWalk { passes, pass, walk, z, prev_z, mat_top, lift_mat_top, prev_center };
         if ws.first {
             let dove = descend(b, m.entry, false, center, &lv, m.clearance_z, m);
             ws.st.begin_level(dove);
         } else if ws.last_cut_z == Some(z) {
             if let Some(Some(ret)) = m.micro.get(pi) {
-                super::microlift::link(b, ret, z, m);
+                super::microlift::link(b, ret, z, lift_mat_top, m);
             } else {
                 pass_link(b, &lv, m, links_cert, &mut ws.st);
             }

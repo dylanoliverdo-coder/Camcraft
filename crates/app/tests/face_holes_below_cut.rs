@@ -52,6 +52,7 @@ fn flange() -> Mesh {
 
 fn face_at(cut_z: Height) -> OpParams {
     OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: FaceHoles::Lift,
         blend_turns: false, blend_radius: None,

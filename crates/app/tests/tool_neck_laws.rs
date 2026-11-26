@@ -53,6 +53,7 @@ fn world() -> (World, History) {
     history.execute(&world, SetStock::new(&world, StockShape::Box { dx: 60.0, dy: 60.0, dz: 20.0 }, Location::default()).expect("stock"));
     history.execute(&world, AddTool::new(&world, TOOL, stored()).expect("tool"));
     let face = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

@@ -301,6 +301,7 @@ fn face_on(machine: &str, pick: HolderPick, off: f64, above: f64) -> (World, His
     );
     add(&world, &mut history, pick);
     let params = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
