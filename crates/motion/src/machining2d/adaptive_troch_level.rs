@@ -155,7 +155,8 @@ impl TrochLevel {
                 None => near(stock_top.max(z)),
             };
             b.push(MoveKind::Rapid, p3(lay.entry, from), None);
-            emit_level(b, &lay.lay, &lay.tp, z, from, true, lay.open, 0.0).map_err(|e| GenError::Invalid(refusal_text(&e)))?;
+            emit_level(b, &lay.lay, &lay.tp, z, from, true, lay.open, 0.0, from, crate::feed_from::FeedFrom::Auto)
+                .map_err(|e| GenError::Invalid(refusal_text(&e)))?;
         }
         for ch in &self.clean {
             let Some(&q) = ch.pts.first() else { continue };

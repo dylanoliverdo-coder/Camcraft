@@ -9,11 +9,13 @@
 //!
 //! Provenance: our own UI over the standard entry/lead parameter
 //! vocabulary of published CAM practice (the motion crate's
-//! `approach.rs` names the sources); no vendor material or text.
+//! `approach.rs` names the sources), Journeyman spec S7 (`feed_from`,
+//! docs/journeyman/specs/S7-descent-feed-height.md; Smid 2007, RS-274/ISO 6983);
+//! no vendor material or text.
 
 use egui::Ui;
 
-use camcraft_app::links::{Approach, Compensation};
+use camcraft_app::links::{Approach, Compensation, FeedFrom};
 use camcraft_app::machining2d::{Lead, PassStart};
 use camcraft_app::machining3d::Entry3D;
 use camcraft_app::units::Unit;
@@ -70,18 +72,70 @@ pub(super) fn pocket_arc_group(ui: &mut Ui, u: Unit, entry: Entry3D, a: &mut App
     });
 }
 
+const FEED_FROM_MODES: [&str; 3] = ["Auto", "Above material", "Absolute Z"];
+
 /// Rapid down to a height over the material, feed only the rest - an
 /// optional feature, switched in the group header (off writes 0).
-pub(super) fn plunge_group(ui: &mut Ui, u: Unit, a: &mut Approach) {
-    let mut on = a.plunge_height > 0.0;
-    let g = group(ui, "Plunge", Some(&mut on), |ui| {
-        prop_row_hint(ui, "Height above material", "rapid down to this height over the material, feed only the rest", |ui| {
-            num(ui, u, &mut a.plunge_height)
+/// For 2D `Links` operations (`show_feed_from`), exposes Journeyman spec S7's
+/// `Feed from` mode (`Auto`, `Above material`, `Absolute Z`).
+pub(super) fn plunge_group(ui: &mut Ui, u: Unit, tag: &str, a: &mut Approach, show_feed_from: bool) {
+    if !show_feed_from {
+        let mut on = a.plunge_height > 0.0;
+        let g = group(ui, "Plunge", Some(&mut on), |ui| {
+            prop_row_hint(ui, "Height above material", "rapid down to this height over the material, feed only the rest", |ui| {
+                num(ui, u, &mut a.plunge_height)
+            });
         });
-    });
-    if g.toggled {
-        a.plunge_height = if on { 2.0 } else { 0.0 };
+        if g.toggled {
+            a.plunge_height = if on { 2.0 } else { 0.0 };
+        }
+        return;
     }
+    group(ui, "Plunge", None, |ui| {
+        let mut mode = match a.feed_from {
+            FeedFrom::Auto => 0,
+            FeedFrom::Material { .. } => 1,
+            FeedFrom::Absolute { .. } => 2,
+        };
+        let before = mode;
+        prop_row_hint(
+            ui,
+            "Feed from",
+            "where plunge descents switch from rapid (G0) to plunge feed (G1)",
+            |ui| combo(ui, &format!("{tag}_feed_from"), &mut mode, &FEED_FROM_MODES),
+        );
+        if mode != before {
+            a.feed_from = match mode {
+                1 => FeedFrom::Material { gap: a.plunge_height.max(0.0) },
+                2 => FeedFrom::Absolute { z: 0.0 },
+                _ => FeedFrom::Auto,
+            };
+        }
+        match &mut a.feed_from {
+            FeedFrom::Auto => {
+                auto_value(ui, "Height above material", "From traverse", &mut a.plunge_height, "from traverse (0)", 2.0, |ui, v| {
+                    num(ui, u, v);
+                });
+                hint(ui, "closed ladders rapid to this height over the material; open runs feed from traverse");
+            }
+            FeedFrom::Material { gap } => {
+                prop_row_hint(
+                    ui,
+                    "Gap above material",
+                    "every plunge (including open runs) rapids to material top + gap, then feeds (0 switches at material top)",
+                    |ui| num(ui, u, gap),
+                );
+            }
+            FeedFrom::Absolute { z } => {
+                prop_row_hint(
+                    ui,
+                    "Absolute Z",
+                    "every plunge rapids to this Z in the operation frame, then feeds",
+                    |ui| num(ui, u, z),
+                );
+            }
+        }
+    });
 }
 
 /// The row's label (#3745).

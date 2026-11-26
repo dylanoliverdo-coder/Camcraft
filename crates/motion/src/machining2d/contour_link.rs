@@ -71,6 +71,16 @@ pub(super) fn guard(b: &mut PathBuilder, p: &ContourParams, xy: Point2, z: f64, 
     crate::plunge_law::guard(b, cc, p.tool_diameter * 0.5, xy, z, mat_top, site);
 }
 
+/// Plunge onto `(xy, z)` honoring `Approach::feed_from` (Journeyman spec S7).
+fn plunge_at(b: &mut PathBuilder, p: &ContourParams, xy: Point2, z: f64, mat_top: f64) {
+    if p.links.approach.feed_from.is_auto() {
+        b.push(MoveKind::Plunge, Point3::new(xy.x, xy.y, z), Some(p.plunge_feed));
+    } else {
+        crate::feed_from::push_stated_rapid(b, xy, z, mat_top, p.links.approach.feed_from, false);
+        b.push(MoveKind::Plunge, Point3::new(xy.x, xy.y, z), Some(p.links.approach.plunge(p.plunge_feed)));
+    }
+}
+
 /// Push the ramp: from the ring's seam `poly[0]` at `z_from`, `laps`
 /// times around the closed polyline `poly`, descending linearly in arc
 /// length to `z_to` exactly at the seam. Every feed point lies on the
@@ -119,7 +129,7 @@ pub(super) fn push_stay(
         Stay::Laps(laps) => push_ramp(b, poly, laps, zp, z, p.feed),
         Stay::Plunge => {
             guard(b, p, seam, z, zp, "the stay-down plunge at the seam");
-            b.push(MoveKind::Plunge, Point3::new(seam.x, seam.y, z), Some(p.plunge_feed));
+            plunge_at(b, p, seam, z, zp);
         }
         Stay::Arc => {
             let tol = slack(p);
@@ -160,7 +170,7 @@ pub(super) fn push_stay(
                             seam.x, seam.y
                         ),
                     );
-                    b.push(MoveKind::Plunge, Point3::new(seam.x, seam.y, z), Some(p.plunge_feed));
+                    plunge_at(b, p, seam, z, zp);
                 }
             }
         }
@@ -337,14 +347,14 @@ pub(super) fn ring_link(
             Err(why) => lifted.lift(why, at, z),
         }
     }
+    let auto_feed = p.links.approach.feed_from.is_auto();
     if p.links.approach.retract_feed > 0.0 {
-        // Journeyman spec S3: feed straight up to switch height, rapid to travel plane, never downward/diagonal.
         let travel = if p.links.pass == Link::Clearance { p.clearance_z } else { hop_z };
         if cur.z < travel {
             crate::fed_retract::lift_approach(b, travel, lift_mat_top, hop_z, &p.links.approach);
         }
         b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, travel), None);
-        if travel > hop_z {
+        if auto_feed && travel > hop_z {
             b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, hop_z), None);
         }
     } else {
@@ -354,11 +364,13 @@ pub(super) fn ring_link(
         if p.links.pass == Link::Clearance {
             b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
             b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, p.clearance_z), None);
+            if auto_feed { b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, hop_z), None); }
+        } else {
+            b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, hop_z), None);
         }
-        b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, hop_z), None);
     }
     guard(b, p, e2, z, p.entry_top(), "the ring-to-ring dive at the lead-in");
-    b.push(MoveKind::Plunge, Point3::new(e2.x, e2.y, z), Some(p.plunge_feed));
+    plunge_at(b, p, e2, z, p.entry_top());
 }
 
 /// The contour's keep-down law: the cutter center on the legal side of

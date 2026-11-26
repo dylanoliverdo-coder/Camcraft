@@ -66,6 +66,20 @@ impl OpParams {
         }
     }
 
+    /// Journeyman spec S7: refuse invalid `feed_from` by name on the 7 2D
+    /// `Links` operations, and refuse any non-`Auto` `feed_from` on non-2D
+    /// `Links` operations (`Pocket3D`, `RotaryOffset`, `MultiAxisRough`).
+    fn feed_from_refusal(&self) -> Option<&'static str> {
+        let l = self.links()?;
+        if self.supports_links_feed_from() {
+            l.approach.feed_from.refusal()
+        } else if !l.approach.feed_from.is_auto() {
+            Some("feed_from is only supported on 2D milling operations (not 3D, rotary, or multi-axis operations)")
+        } else {
+            None
+        }
+    }
+
     /// Journeyman spec S8: refuse invalid `finish_stepdown` by name on
     /// Contour, Pocket, and Face, and refuse any non-default `finish_levels`
     /// or `finish_stepdown` on every other `Links` operation.
@@ -124,6 +138,10 @@ impl OpParams {
         }
         // Journeyman spec S3: retract_feed refusal by name (2D bounds + non-2D exclusion).
         if let Some(why) = self.retract_feed_refusal() {
+            return Some(why.into());
+        }
+        // Journeyman spec S7: feed_from refusal by name (2D bounds + non-2D exclusion).
+        if let Some(why) = self.feed_from_refusal() {
             return Some(why.into());
         }
         // Journeyman spec S8: finish_levels / finish_stepdown refusal by name (Contour/Pocket/Face only).
@@ -214,6 +232,8 @@ impl OpParams {
         let links_ok = links_ok && crate::operation::rest_op::rest_refusal(self).is_none();
         // Journeyman spec S3: retract_feed bounds (2D) and non-2D exclusion.
         let links_ok = links_ok && self.retract_feed_refusal().is_none();
+        // Journeyman spec S7: feed_from bounds (2D) and non-2D exclusion.
+        let links_ok = links_ok && self.feed_from_refusal().is_none();
         // Journeyman spec S8: finish_levels / finish_stepdown bounds and gating.
         let links_ok = links_ok && self.finish_levels_refusal().is_none();
         let floor_ok = self.floor_stock_refusal().is_none();

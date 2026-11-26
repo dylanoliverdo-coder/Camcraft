@@ -127,6 +127,9 @@ fn guarded(region: &Region, p: &PocketParams, stock: &RestStock, guards: Guards)
         ));
     }
     let path = post::post(p, &levels, &plans, stock);
+    if let Some(why) = crate::approach::refusal(&path) {
+        return Err(GenError::Invalid(why).with_ghost(&path));
+    }
     if !path.all_finite() {
         return Err(GenError::Invalid("path left the finite horizon".into()));
     }

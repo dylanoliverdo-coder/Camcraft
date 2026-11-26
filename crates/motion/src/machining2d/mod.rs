@@ -171,7 +171,6 @@ pub use contour_whole::{contour_whole_bodies, contour_whole_bodies_with};
 pub use contour_auto::{auto_side, AutoSide, AUTO_BAND, AUTO_PROBE_DZ};
 pub use contour_chain::contour_along_chain;
 pub use contour_open_side::{contour_open_side, open_side_offset};
-pub(crate) use contour_chain::contour_along_chain_zs;
 pub use contour_run_side::{contour_open_run, offset_run_side, SectionAt};
 pub use contour_run_stock::contour_open_run_sided;
 pub use contour_link::DEFAULT_LEVEL_RAMP_ANGLE;

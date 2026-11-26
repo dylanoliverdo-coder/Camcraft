@@ -118,8 +118,14 @@ pub(super) fn emit_cleanup(bld: &mut PathBuilder, chains: &[CleanChain], p: &Poc
             crate::fed_retract::lift_up(bld, hop, near, rf);
         }
         bld.push(MoveKind::Rapid, p3(ch.pts[0], hop), None);
-        bld.push(MoveKind::Rapid, p3(ch.pts[0], near), None);
-        bld.push(MoveKind::Feed, p3(ch.pts[0], z), Some(p.plunge_feed));
+        if p.links.approach.feed_from.is_auto() {
+            bld.push(MoveKind::Rapid, p3(ch.pts[0], near), None);
+            bld.push(MoveKind::Feed, p3(ch.pts[0], z), Some(p.plunge_feed));
+        } else {
+            let xy = Point2::new(lattice(ch.pts[0].x), lattice(ch.pts[0].y));
+            crate::feed_from::push_stated_rapid(bld, xy, lattice(z), above, p.links.approach.feed_from, false);
+            bld.push(MoveKind::Feed, p3(ch.pts[0], z), Some(p.links.approach.plunge(p.plunge_feed)));
+        }
         for &pt in ch.pts.iter().skip(1) {
             bld.push(MoveKind::Feed, p3(pt, z), Some(p.feed));
         }

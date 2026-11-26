@@ -9,10 +9,12 @@
 //! for byte.
 //!
 //! Provenance: standard entry/lead vocabulary of published CAM practice,
-//! Journeyman spec S3 (`retract_feed`), and Journeyman spec S8
-//! (`finish_levels`, `finish_stepdown`); MRR engagement law over M2.1/M11.4.
-//! Our own model; no vendor material consulted.
+//! Journeyman spec S3 (`retract_feed`), Journeyman spec S7 (`feed_from`,
+//! docs/journeyman/specs/S7-descent-feed-height.md; Smid 2007, RS-274/ISO 6983),
+//! and Journeyman spec S8 (`finish_levels`, `finish_stepdown`); MRR engagement
+//! law over M2.1/M11.4. Our own model; no vendor material consulted.
 
+pub use crate::feed_from::{FEED_FROM_REFUSAL, FeedFrom};
 use crate::machining2d::Lead;
 
 /// Where the cutter radius is taken off the contour (M13.11). In the
@@ -110,6 +112,9 @@ pub struct Approach {
     /// traverse plane, as every pre-M11.3 path did; the default is
     /// [`DEFAULT_PLUNGE_HEIGHT`].
     pub plunge_height: f64,
+    /// Where a 2D plunge descent switches from rapid to plunge feed
+    /// (Journeyman spec S7); [`FeedFrom::Auto`] keeps existing laws unchanged.
+    pub feed_from: FeedFrom,
     /// Approach distance (mm, #3745): how far outside the stock boundary
     /// the entry of a pass that starts Inside or Outside descends, in air,
     /// before it moves in the cut plane onto the first ring. The entry
@@ -209,10 +214,17 @@ pub const CENTER_CUT_REFUSAL: &str = "entry refused: the tool is not centre-cutt
 /// A low return crossed an earlier feed and has no proved rapid landing.
 pub const MICROLIFT_REFUSAL: &str = "entry refused: a crossing microlift has no proved rapid landing; use another entry or pocket strategy";
 
-/// The refusal a ladder raises for an unsafe entry or return.
+/// The refusal a ladder raises for an unsafe entry, descent or return.
 #[must_use]
 pub fn refusal(path: &crate::cl::Toolpath) -> Option<String> {
-    path.notes.iter().find(|n| n.starts_with(CENTER_CUT_REFUSAL) || n.starts_with(MICROLIFT_REFUSAL)).cloned()
+    path.notes
+        .iter()
+        .find(|n| {
+            n.starts_with(CENTER_CUT_REFUSAL)
+                || n.starts_with(MICROLIFT_REFUSAL)
+                || n.starts_with(FEED_FROM_REFUSAL)
+        })
+        .cloned()
 }
 
 /// The default axis-alignment tolerance, degrees.
@@ -255,6 +267,7 @@ impl Approach {
         arc_xy: false,
         predrilled: false,
         plunge_height: DEFAULT_PLUNGE_HEIGHT,
+        feed_from: FeedFrom::Auto,
         approach_distance: DEFAULT_APPROACH_DISTANCE,
         stock_top: None,
         equal_steps: false,
@@ -335,6 +348,9 @@ impl Approach {
         }
         if !len(self.plunge_height) || !len(self.lead_height) || !len(self.overlap) {
             return Err("the plunge height, vertical lead-in height and overlap must be zero or positive");
+        }
+        if let Some(why) = self.feed_from.refusal() {
+            return Err(why);
         }
         if let Some(why) = self.approach_distance_refusal() {
             return Err(why);

@@ -8,8 +8,18 @@
 
 use super::*;
 
-use crate::links::{Approach, Compensation};
+use crate::links::{Approach, Compensation, FeedFrom};
 use crate::machining2d::Lead;
+
+/// File mirror of [`FeedFrom`] (Journeyman spec S7; Smid 2007, RS-274/ISO 6983;
+/// no vendor parameters, text or code). Omitted when `Auto`.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum FeedFromDto {
+    Auto,
+    Material { gap: f64 },
+    Absolute { z: f64 },
+}
 
 /// The changed fields of an op's [`Approach`]; every field absent is
 /// the default.
@@ -35,6 +45,10 @@ pub struct ApproachDto {
     pub arc_sweep: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plunge_height: Option<f64>,
+    /// Stated rapid-to-feed switch height for 2D plunge descents (Journeyman
+    /// spec S7); absent is `Auto`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feed_from: Option<FeedFromDto>,
     /// The approach distance outside the stock (#3745), mm: written only
     /// when it differs from the default; absent is the default, every
     /// earlier file.
@@ -136,6 +150,11 @@ pub fn approach_to_dto(a: &Approach) -> Option<ApproachDto> {
         arc_radius: num(a.arc_radius, d.arc_radius),
         arc_sweep: num(a.arc_sweep, d.arc_sweep),
         plunge_height: num(a.plunge_height, d.plunge_height),
+        feed_from: match a.feed_from {
+            FeedFrom::Auto => None,
+            FeedFrom::Material { gap } => Some(FeedFromDto::Material { gap }),
+            FeedFrom::Absolute { z } => Some(FeedFromDto::Absolute { z }),
+        },
         approach_distance: num(a.approach_distance, d.approach_distance),
         ramp_feed: num(a.ramp_feed, d.ramp_feed),
         plunge_feed: num(a.plunge_feed, d.plunge_feed),
@@ -181,6 +200,11 @@ pub fn approach_from_dto(d: Option<&ApproachDto>) -> Approach {
         arc_radius: d.arc_radius.unwrap_or(a.arc_radius),
         arc_sweep: d.arc_sweep.unwrap_or(a.arc_sweep),
         plunge_height: d.plunge_height.unwrap_or(a.plunge_height),
+        feed_from: match d.feed_from {
+            None | Some(FeedFromDto::Auto) => FeedFrom::Auto,
+            Some(FeedFromDto::Material { gap }) => FeedFrom::Material { gap },
+            Some(FeedFromDto::Absolute { z }) => FeedFrom::Absolute { z },
+        },
         approach_distance: d.approach_distance.unwrap_or(a.approach_distance),
         ramp_feed: d.ramp_feed.unwrap_or(a.ramp_feed),
         plunge_feed: d.plunge_feed.unwrap_or(a.plunge_feed),

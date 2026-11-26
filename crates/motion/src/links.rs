@@ -12,7 +12,7 @@
 //! laws (what proves a keep-down link, what is named when it lifts) are
 //! ours; no vendor material consulted (Clean-Room Protocol).
 
-pub use crate::approach::{Approach, Compensation};
+pub use crate::approach::{Approach, Compensation, FeedFrom};
 use crate::cl::{MoveKind, PathBuilder};
 use crate::entry::Entry3D;
 use crate::geo2d::Point2;
