@@ -271,6 +271,7 @@ pub fn fold_warnings_located(warnings: &[Warning]) -> Vec<(String, Option<usize>
             Warning::StockChamferGouge { .. } | Warning::StockDeburrGouge { .. } => (1, true),
             Warning::ShankHit { part, .. } => (2, *part),
             Warning::RapidInStock { .. } => (3, false),
+            Warning::RapidInPart { .. } => (3, true),
             // #2901: the first traverse under a top - its own fix (raise
             // the clearance height), clear of the avoid range (216..=220).
             Warning::FirstTraverseLow { .. } => (221, false),
@@ -323,6 +324,7 @@ pub fn fold_warnings_located(warnings: &[Warning]) -> Vec<(String, Option<usize>
             | Warning::HolderHit { at, .. }
             | Warning::SweepHit { at, .. }
             | Warning::RapidInStock { at }
+            | Warning::RapidInPart { at }
             | Warning::UndercutLift { at }
             | Warning::FirstTraverseLow { at, .. }
             | Warning::FirstTraverseUnderTable { at, .. }

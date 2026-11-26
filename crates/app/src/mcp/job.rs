@@ -315,6 +315,7 @@ pub(super) fn finding(op: &str, w: &Warning) -> Value {
         Warning::HolderHit { at, .. } => ("holder_hit", *at),
         Warning::SweepHit { at, .. } => ("sweep_hit", *at),
         Warning::RapidInStock { at } => ("rapid_in_stock", *at),
+        Warning::RapidInPart { at } => ("rapid_in_part", *at),
         Warning::FirstTraverseLow { at, .. } => ("first_traverse_low", *at),
         Warning::FirstTraverseUnderTable { at, .. } => ("first_traverse_under_table", *at),
         Warning::FixtureHit { at, .. } => ("fixture_hit", *at),
