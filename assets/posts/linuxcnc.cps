@@ -341,6 +341,7 @@ function headTitle(nm) {
 // three become spaces; printable ASCII only, capped at 40 characters.
 var setupName = "", setupSaid = "", opName = "", opKind = "";
 var toolName = "", toolKind = "", toolDia = 0, toolCr = 0;
+var toolTipDia = 0, toolTipAngle = 0;
 function clean(s) {
   var t = String(s === null || s === undefined ? "" : s);
   t = t.replace(/[()%;]/g, " ").replace(/[^\x20-\x7E]/g, "?").replace(/\s+/g, " ").trim();
@@ -364,9 +365,14 @@ function commentParam(name, value) {
   if (name === "SetupName") setupName = clean(value);
   else if (name === "OperationName") opName = clean(value);
   else if (name === "OperationKind") opKind = clean(value).toUpperCase();
-  else if (name === "ToolKind") { toolKind = clean(value).toUpperCase(); kindProbe = toolKind === "TOUCH PROBE"; }
+  else if (name === "ToolKind") {
+    toolKind = clean(value).toUpperCase(); kindProbe = toolKind === "TOUCH PROBE";
+    toolTipDia = 0; toolTipAngle = 0;
+  }
   else if (name === "ToolDiameter" && has(value)) toolDia = Number(value);
   else if (name === "ToolCornerRadius" && has(value)) toolCr = Number(value);
+  else if (name === "ToolTipDiameter" && has(value)) toolTipDia = Number(value);
+  else if (name === "ToolTipAngle" && has(value)) toolTipAngle = Number(value);
 }
 function opNotes() {  // at the section's preamble: the setup once, the op each time
   secOp = opName;
@@ -379,8 +385,10 @@ function toolNote() {  // just before the tool change it describes
   if (toolKind) desc.push(toolKind);
   if (toolDia > 0) desc.push("D" + fu(toolDia));
   if (toolCr > 0) desc.push("R" + fu(toolCr));
+  if (toolTipDia > 0) desc.push("FLAT TIP D" + fu(toolTipDia) + " ANGLE " + toolTipAngle + " DEG");
   note(joinDash(["T" + ni(tNo) + (toolName ? " " + toolName : ""), desc.join(" ")]));
   toolKind = ""; toolCr = 0;
+  toolTipDia = 0; toolTipAngle = 0;
 }
 
 // -------------------------------------------------------------- header

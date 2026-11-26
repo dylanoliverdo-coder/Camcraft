@@ -30,7 +30,7 @@ fn slot(f: SdfField, z: f64, r: f64, cone: Option<f64>) -> SdfField {
         Move::new(MoveKind::Rapid, p(-4.0, 6.0, 5.0), p(-4.0, 6.0, z), None),
         Move::new(MoveKind::Feed, p(-4.0, 6.0, z), p(24.0, 6.0, z), Some(500.0)),
     ];
-    if let Err(e) = s.simulate(&[SimOp { moves: &moves, radius: r, ball: false, cone, corner: None }]) {
+    if let Err(e) = s.simulate(&[SimOp { moves: &moves, radius: r, ball: false, cone: cone.map(camcraft_sim::stock_sim::Cone::sharp), corner: None }]) {
         panic!("cut: {e:?}");
     }
     s.field().expect("a field").clone()

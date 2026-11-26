@@ -170,7 +170,7 @@ mod part_message {
 
     fn cutter() -> Cutter {
         Cutter {
-            radius: 3.0, corner_r: 0.0, tip_angle: 0.0, flute_len: 20.0,
+            radius: 3.0, corner_r: 0.0, tip_angle: 0.0, taper_tip_radius: 0.0, flute_len: 20.0,
             shank_radius: 2.0, shank_len: 30.0, holder_radius: 15.0, holder_len: 40.0,
             body: None, neck: None, undercut: None,
         }

@@ -13,9 +13,8 @@
 //! (the default) is the cone's point: it states no tip diameter, and its
 //! `corner_r` stays inert, as before this module.
 //!
-//! No generator, simulation or collision law reads a flat or ball tip
-//! yet: the operation doors refuse such a tool by name
-//! ([`is_unread_tip`]), so no toolpath reads it as a sharp cone.
+//! Operation doors require explicit support before using a flat or ball
+//! tip. These forms must never be read as a sharp cone.
 
 use serde::{Deserialize, Serialize};
 
@@ -97,11 +96,21 @@ impl Tip {
     }
 }
 
-/// Is this a tapered mill whose tip no generator reads yet (a flat or
-/// ball tip)? The operation doors refuse it by name.
+/// Does the taper need a tip-aware operation (a flat or ball tip)?
 #[must_use]
 pub fn is_unread_tip(t: &Tool) -> bool {
     t.kind == ToolKind::Taper && !t.tip_form.is_sharp()
+}
+
+/// Physical tip radius for a straight taper with an unrounded flat.
+/// Its flank must reach the stated diameter within the flutes.
+#[must_use]
+pub fn square_tip_radius(t: &Tool) -> Option<f64> {
+    let g = tip(t)?;
+    let height = g.cone_z(t.diameter * 0.5);
+    (t.tip_form == TaperTip::Flat && g.corner_r == 0.0 && g.r_flat > 0.0
+        && height.is_finite() && height > 0.0 && height <= t.flute_len)
+        .then_some(g.r_flat)
 }
 
 /// The tip of a flat or ball taper, from its numbers. `None` for a sharp

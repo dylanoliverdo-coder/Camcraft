@@ -5,6 +5,47 @@ use super::dexel::Dexel;
 
 use crate::cl::{Move, MoveKind};
 use crate::geometry::Triangle;
+
+/// A taper whose axis path is measured from the physical tip. The slope
+/// is the cotangent of its half angle. A point cone has zero tip radius.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Cone {
+    pub cot: f64,
+    pub tip_radius: f64,
+}
+
+impl Cone {
+    pub const fn sharp(cot: f64) -> Self {
+        Self { cot, tip_radius: 0.0 }
+    }
+
+    /// Cone geometry from the tool definition, including any supported tip form.
+    pub fn of(tool: &crate::tools::Tool) -> Option<Self> {
+        use crate::tools::ToolKind::{Drill, Taper};
+        let angle = tool.tip_angle;
+        if !matches!(tool.kind, Drill | Taper) || !(0.0 < angle && angle < 180.0) {
+            return None;
+        }
+        let cut = (angle.to_radians() * 0.5).tan();
+        let tip_radius = if camcraft_tools::taper::is_unread_tip(tool) {
+            camcraft_tools::taper::square_tip_radius(tool)?
+        } else {
+            0.0
+        };
+        let cone = Self { cot: 1.0 / cut, tip_radius };
+        cone.valid(tool.diameter * 0.5).then_some(cone)
+    }
+
+    pub fn lift(self, radial: f64) -> f64 {
+        self.cot * (radial - self.tip_radius).max(0.0)
+    }
+
+    pub(crate) fn valid(self, radius: f64) -> bool {
+        self.cot.is_finite() && self.cot > 0.0 && self.tip_radius.is_finite()
+            && self.tip_radius >= 0.0 && self.tip_radius < radius && self.lift(radius).is_finite()
+    }
+}
+
 /// One operation's claim on the stock: its cached moves and the tool
 /// that cut them. `ball` picks the exact sphere atom for a ball nose
 /// and leaves the flat-disc atom for everything whose final hole or
@@ -14,8 +55,8 @@ use crate::geometry::Triangle;
 /// bull nose swept the flat disc, over-reporting removal beside every
 /// fillet wall; now the corner leaves what the real tool leaves.
 /// `cone` picks the exact cone atom for a chamfer mill (M2.4 B): the
-/// cotangent of the cone's half-angle from the axis, moves read as the
-/// path of the virtual sharp on the axis. `ball`, `cone` and `corner`
+/// profile of the cone or frustum, with moves defined at its physical
+/// tip. `ball`, `cone` and `corner`
 /// are the kind's exclusive choice upstream, and `simulate` refuses
 /// any contradictory pair rather than silently preferring one atom.
 #[derive(Clone, Copy, Debug)]
@@ -23,7 +64,7 @@ pub struct SimOp<'a> {
     pub moves: &'a [Move],
     pub radius: f64,
     pub ball: bool,
-    pub cone: Option<f64>,
+    pub cone: Option<Cone>,
     pub corner: Option<f64>,
 }
 
@@ -180,7 +221,7 @@ pub fn simulate(dex: &mut Dexel, ops: &[SimOp]) -> Result<(), StockError> {
     for op in ops {
         for m in op.moves {
             match (op.cone, op.corner) {
-                (Some(cot), _) => dex.subtract_cone(m, op.radius, cot, chord_tol),
+                (Some(cone), _) => dex.subtract_taper(m, op.radius, cone, chord_tol),
                 (None, Some(c)) => dex.subtract_bull(m, op.radius, c, chord_tol),
                 (None, None) if op.ball => dex.subtract_ball(m, op.radius, chord_tol),
                 (None, None) => dex.subtract(m, op.radius, chord_tol),
@@ -247,10 +288,9 @@ pub(crate) fn check_ops(ops: &[SimOp]) -> Result<(), StockError> {
                 )));
             }
         }
-        if op.cone.is_some_and(|c| !(c.is_finite() && c > 0.0)) {
+        if op.cone.is_some_and(|c| !c.valid(op.radius)) {
             return Err(StockError::Invalid(format!(
-                "op {i} cone slope {:?} is not finite-positive",
-                op.cone
+                "op {i} cone needs a finite positive slope and a tip radius within the tool radius: {:?}", op.cone
             )));
         }
     }

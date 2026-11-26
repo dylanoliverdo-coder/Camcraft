@@ -68,7 +68,7 @@ fn a_floor_a_bounded_tool_reached_refuses_the_carry_by_name() {
         Move::new(MoveKind::Rapid, p(-4.0, 6.0, 5.0), p(-4.0, 6.0, -7.0), None),
         Move::new(MoveKind::Feed, p(-4.0, 6.0, -7.0), p(24.0, 6.0, -7.0), Some(500.0)),
     ];
-    s.simulate(&[SimOp { moves: &moves, radius: 2.0, ball: false, cone: Some(1.0), corner: None }]).expect("cut");
+    s.simulate(&[SimOp { moves: &moves, radius: 2.0, ball: false, cone: Some(camcraft_sim::stock_sim::Cone::sharp(1.0)), corner: None }]).expect("cut");
     let f = s.field().expect("a field").clone();
     let e = CarriedField::new(f, id()).column_body(lattice(), false).expect_err("refused");
     assert!(e.contains("cut reached the floor"), "{e}");

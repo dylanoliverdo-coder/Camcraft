@@ -62,7 +62,7 @@ fn op(moves: &[Move], r: f64, t: Tool) -> SimOp<'_> {
     let (ball, cone, corner) = match t {
         Tool::Flat => (false, None, None),
         Tool::Ball => (true, None, None),
-        Tool::Cone(cot) => (false, Some(cot), None),
+        Tool::Cone(cot) => (false, Some(camcraft_sim::stock_sim::Cone::sharp(cot)), None),
         Tool::Bull(c) => (false, None, Some(c)),
     };
     SimOp { moves, radius: r, ball, cone, corner }

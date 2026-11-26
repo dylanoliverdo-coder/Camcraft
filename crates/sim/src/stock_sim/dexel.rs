@@ -147,12 +147,17 @@ impl Dexel {
     /// self-limiting: a column beyond the surface's reach simply
     /// keeps its stock, which is why no footprint cap is needed here.
     pub fn cut_cone(&mut self, a: Point3, b: Point3, r: f64, cot: f64) {
+        self.cut_taper(a, b, r, super::Cone::sharp(cot));
+    }
+
+    pub(super) fn cut_taper(&mut self, a: Point3, b: Point3, r: f64, cone: super::Cone) {
         if !(a.is_finite() && b.is_finite()) || !(r.is_finite() && r >= 0.0) {
             return; // the cut_chord gate: validation lives upstream
         }
         let (dx, dy) = (b.x - a.x, b.y - a.y);
         let dd = dx * dx + dy * dy;
         let k = b.z - a.z;
+        let cot = cone.cot;
         let fx = |v: f64| ((v - self.x0) / self.cell).floor();
         let fy = |v: f64| ((v - self.y0) / self.cell).floor();
         let lo_x = fx(a.x.min(b.x) - r).max(0.0) as usize;
@@ -172,7 +177,7 @@ impl Dexel {
                 let f = |t: f64| {
                     let ex = wx - dx * t;
                     let ey = wy - dy * t;
-                    a.z + k * t + cot * (ex * ex + ey * ey).sqrt()
+                    a.z + k * t + cone.lift((ex * ex + ey * ey).sqrt())
                 };
                 let t_c = if dd > f64::EPSILON {
                     (wx * dx + wy * dy) / dd
@@ -180,6 +185,12 @@ impl Dexel {
                     0.0
                 };
                 let mut cut = f(t0).min(f(t1)).min(f(t_c.clamp(t0, t1)));
+                if cone.tip_radius > 0.0 {
+                    // The flat changes the slope at both ends of its reach.
+                    if let Some((lo, hi)) = reach(wx, wy, dx, dy, cone.tip_radius) {
+                        cut = cut.min(f(lo)).min(f(hi));
+                    }
+                }
                 if dd > f64::EPSILON {
                     // (t*dd - wd)^2 = (k*tan a)^2 * rho(t)^2, tan a = 1/cot.
                     let wd = wx * dx + wy * dy;
@@ -224,19 +235,24 @@ impl Dexel {
     /// a cone's apex is its tip). XY arcs sweep the true arc under the
     /// same helix law as `subtract` (`dexel_arc`).
     pub fn subtract_cone(&mut self, m: &Move, r: f64, cot: f64, chord_tol: f64) {
+        self.subtract_taper(m, r, super::Cone::sharp(cot), chord_tol);
+    }
+
+    /// Sweep a taper measured from its physical tip, including the flat.
+    pub fn subtract_taper(&mut self, m: &Move, r: f64, cone: super::Cone, chord_tol: f64) {
         if m.kind == MoveKind::Rapid || !m.is_finite() {
             return;
         }
         match m.arc {
-            None => self.cut_cone(m.from, m.to, r, cot),
+            None => self.cut_taper(m.from, m.to, r, cone),
             // XZ / YZ arcs (M11.2 A): their own 3-D chords.
             Some(arc) if !arc.plane.is_xy() => {
                 for (a, b) in m.segments3(chord_tol) {
-                    self.cut_cone(a, b, r, cot);
+                    self.cut_taper(a, b, r, cone);
                 }
             }
             // XY arcs sweep the true arc (#402), not chords.
-            Some(arc) => self.cut_xy_arc(m, arc, r, Atom::Cone(cot)),
+            Some(arc) => self.cut_xy_arc(m, arc, r, Atom::Cone(cone)),
         }
     }
 

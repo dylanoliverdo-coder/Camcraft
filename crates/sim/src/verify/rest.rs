@@ -9,9 +9,10 @@ use super::types::VerifyContext;
 use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use crate::cl::{MoveKind, Toolpath};
+use crate::cl::{Move, MoveKind, Toolpath};
 use crate::geo2d::{Point2, Region};
 use crate::geometry::Triangle;
+use crate::stock_sim::{Cone, Dexel};
 
 /// A cutting chord: its XY ends, the plane it cuts at, its move index.
 pub(super) type Cut = (Point2, Point2, f64, usize);
@@ -83,6 +84,8 @@ pub(super) struct Rest<'c, 'a> {
     /// judged only against the chords cut BEFORE it, never against
     /// stock a later move removes.
     cut: Vec<Cut>,
+    /// An Engrave taper's feed history must leave the actual groove shoulders.
+    taper: Option<(Cone, &'c [Move])>,
     /// The chords' grid broad phase (M13.7 cut order): with order a
     /// query can no longer stop at the first in-reach chord, so it walks
     /// only the chords that can reach its column.
@@ -99,7 +102,7 @@ pub(super) struct Rest<'c, 'a> {
 
 impl<'c, 'a> Rest<'c, 'a> {
     pub(super) fn new(
-        path: &Toolpath,
+        path: &'c Toolpath,
         cx: &'c VerifyContext<'a>,
         chord_tol: f64,
         bodies: &'c [std::ops::Range<usize>],
@@ -119,6 +122,16 @@ impl<'c, 'a> Rest<'c, 'a> {
             .collect();
         cut.sort_by(|a, b| a.2.total_cmp(&b.2));
         let index = CutIndex::new(&cut, cx.tool.radius + 1e-9);
+        let taper = cx.cutter
+            .filter(|c| cx.mode == super::types::Mode::Engrave && c.taper_tip_radius > 0.0)
+            .and_then(|c| {
+                let cutter = super::Cutter::judged(cx.tool, Some(c));
+                let cone = Cone { cot: 1.0 / (cutter.tip_angle.to_radians() * 0.5).tan(), tip_radius: cutter.taper_tip_radius };
+                let upright = path.moves.iter().all(|m| m.axis.is_none_or(|a| a == [0.0, 0.0, 1.0]));
+                // A tilted cutter has no upright column credit.
+                (cone.tip_radius > 0.0 && cone.valid(cx.tool.radius))
+                    .then_some((cone, if upright { path.moves.as_slice() } else { &[] }))
+            });
         let flat = path
             .moves
             .iter()
@@ -134,6 +147,7 @@ impl<'c, 'a> Rest<'c, 'a> {
             flat,
             sliced: Cell::new(0),
             cut,
+            taper,
             index,
             hidden_cache: RefCell::new(HashMap::new()),
             overhead_cache: RefCell::new(HashMap::new()),
@@ -276,6 +290,20 @@ impl<'c, 'a> Rest<'c, 'a> {
     /// cached slice, run only for chords that are already within reach.
     pub(super) fn surface_before(&self, q: Point2, upto: usize) -> f64 {
         let lo = self.island_threshold(q);
+        if let Some((cone, moves)) = self.taper {
+            let mut column = Dexel::probe_column(q.x, q.y, self.cx.stock_top_z);
+            let mut last = None;
+            for c in self.near(q, lo).filter(|c| c.3 < upto && self.clears(c, q)) {
+                if last == Some(c.3) {
+                    continue;
+                }
+                last = Some(c.3);
+                if let Some(m) = moves.get(c.3).filter(|m| m.arc.is_none_or(|a| a.plane.is_xy())) {
+                    column.subtract_taper(m, self.cx.tool.radius, cone, 0.01);
+                }
+            }
+            return column.top_at(0);
+        }
         // The upward test keeps the island clause: above the threshold
         // it never fires (that is the threshold's meaning), so this is
         // the old predicate restated, not an approximation of it. The

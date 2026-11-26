@@ -127,7 +127,7 @@ mod tests {
         let mut col = Stock::from_facets(Backend::Column, &c.facets, 0.5).unwrap();
         let cot = 1.0 / 59.0_f64.to_radians().tan();
         let mv = vec![feed(Point3::new(10.25, 10.25, 12.0), Point3::new(10.25, 10.25, 2.0))];
-        let ops = [SimOp { moves: &mv, radius: 3.0, ball: false, cone: Some(cot), corner: None }];
+        let ops = [SimOp { moves: &mv, radius: 3.0, ball: false, cone: Some(super::super::Cone::sharp(cot)), corner: None }];
         field.simulate_drill(&ops).unwrap();
         pic.simulate_drill_display(&ops).unwrap();
         col.simulate_drill(&ops).unwrap();

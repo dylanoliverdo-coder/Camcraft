@@ -54,6 +54,6 @@ pub fn drills_ahead(world: &World, name: &str, setup: Option<&str>) -> Vec<Drill
     ahead_of(world, name, setup, true)
         .into_iter()
         .filter(|a| a.cut && a.kind == crate::operation::OpType::Drill && a.radius > 0.0)
-        .map(|a| DrillAhead { radius: a.radius, cone: a.cone.or(Some(STANDARD_POINT_COT)), moves: a.moves })
+        .map(|a| DrillAhead { radius: a.radius, cone: a.cone.map(|c| c.cot).or(Some(STANDARD_POINT_COT)), moves: a.moves })
         .collect()
 }

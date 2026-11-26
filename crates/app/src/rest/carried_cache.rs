@@ -116,11 +116,15 @@ fn key(world: &World, chain: &Chain, min_r: f64, through_consumer: bool) -> Opti
             h.write_u8(0xb1);
             f(&mut h, a.radius);
             h.write_u8(u8::from(a.ball));
-            for v in [a.cone, a.corner] {
+            for v in [a.cone.map(|c| c.cot), a.corner] {
                 match v {
                     Some(c) => f(&mut h, c),
                     None => h.write_u8(0),
                 }
+            }
+            if let Some(c) = a.cone.filter(|c| c.tip_radius > 0.0) {
+                h.write_u8(0xb2);
+                f(&mut h, c.tip_radius);
             }
             h.write_usize(a.moves.len());
             a.moves.iter().for_each(|m| write_move(&mut h, m));

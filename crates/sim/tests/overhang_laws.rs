@@ -340,6 +340,7 @@ fn judge_ball(p: &Toolpath, facets: &[Triangle]) -> Vec<Warning> {
         radius: 6.0,
         corner_r: 6.0,
         tip_angle: 0.0,
+        taper_tip_radius: 0.0,
         flute_len: tool.flute_len,
         shank_radius: tool.shank_radius,
         shank_len: tool.shank_len,

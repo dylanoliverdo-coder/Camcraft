@@ -184,6 +184,7 @@ pub fn stylus_cutter(tool: &Tool, stack: Option<&HolderStack>) -> Cutter {
         radius: r,
         corner_r: r,
         tip_angle: 0.0,
+        taper_tip_radius: 0.0,
         flute_len: r,
         shank_radius: r,
         shank_len: (g.flute_len - r).max(0.0),

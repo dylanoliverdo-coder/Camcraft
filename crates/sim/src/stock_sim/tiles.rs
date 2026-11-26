@@ -233,6 +233,10 @@ impl Dexel {
     /// collapse to that number, and one equal to `stock_z` collapses
     /// to nothing. Model stock is mostly this - air and full height,
     /// in runs the old Vec paid for cell by cell.
+    pub(crate) fn probe_column(x: f64, y: f64, top: f64) -> Self {
+        Self::from_grid(x - 0.5, y - 0.5, 1.0, 1, 1, top, vec![top])
+    }
+
     pub(super) fn from_grid(
         x0: f64,
         y0: f64,

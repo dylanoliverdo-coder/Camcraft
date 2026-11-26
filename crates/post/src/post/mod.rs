@@ -115,6 +115,8 @@ pub struct Dump<'a> {
     pub setup_name: &'a str,
     pub tool_kind: &'a str,
     pub tool_corner_r: f64,
+    /// A flat taper's physical tip diameter in mm and included angle in degrees.
+    pub tool_flat_tip: Option<(f64, f64)>,
     /// Commentary too (#630): the lathe tool orientation the section's
     /// moves were converted for ([`nose_tip`]) - the code the operator
     /// touches the tool off by. None writes no PARAM.
@@ -233,6 +235,7 @@ impl<'a> Default for Dump<'a> {
             setup_name: "",
             tool_kind: "",
             tool_corner_r: 0.0,
+            tool_flat_tip: None,
             tool_orientation: None,
             rpm: 0.0,
             clearance_z: 0.0,
@@ -638,6 +641,11 @@ fn comment_params(d: &Dump, out: &mut Vec<Record>) {
     }
     if d.tool_corner_r.is_finite() && d.tool_corner_r > 0.0 {
         out.push(Record::Param { name: "ToolCornerRadius".into(), value: json!(d.tool_corner_r) });
+    }
+    if let Some((diameter, angle)) = d.tool_flat_tip {
+        out.push(Record::Param { name: "ToolTipForm".into(), value: json!("flat") });
+        out.push(Record::Param { name: "ToolTipDiameter".into(), value: json!(diameter) });
+        out.push(Record::Param { name: "ToolTipAngle".into(), value: json!(angle) });
     }
     if let Some(q) = d.tool_orientation {
         out.push(Record::Param { name: "ToolOrientation".into(), value: json!(q) });

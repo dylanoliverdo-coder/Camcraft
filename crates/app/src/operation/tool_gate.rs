@@ -52,25 +52,20 @@ fn setup_words(world: &World) -> String {
     }
 }
 
-/// The tool library, name-sorted, with each tool's kind. #3368: a flat
-/// or ball taper tip fits no operation yet, so it is not offered; nor
-/// is a form mill (#3369).
-fn library(world: &World) -> Vec<(String, ToolKind)> {
-    model::named_entities(world)
-        .into_iter()
-        .filter_map(|(name, e)| model::tool_of(world, &e).map(|t| (name, t)))
-        .filter(|(_, t)| !camcraft_tools::taper::is_unread_tip(t) && t.kind != ToolKind::FormMill)
-        .map(|(name, t)| (name, t.kind))
-        .collect()
+fn tip_is_supported(tool: &Tool, info: &KindInfo) -> bool {
+    !camcraft_tools::taper::is_unread_tip(tool)
+        || (info.ty == super::OpType::Engrave && tool.center_cutting && camcraft_tools::taper::square_tip_radius(tool).is_some())
 }
 
 /// The tools (by name, sorted) the kind's family accepts.
 #[must_use]
 pub fn fitting_tools(world: &World, info: &KindInfo) -> Vec<String> {
-    library(world)
+    model::named_entities(world)
         .into_iter()
-        .filter(|(_, k)| info.accepts(*k))
-        .map(|(n, _)| n)
+        .filter_map(|(name, e)| {
+            let tool = model::tool_of(world, &e)?;
+            (info.accepts(tool.kind) && tool.kind != ToolKind::FormMill && tip_is_supported(&tool, info)).then_some(name)
+        })
         .collect()
 }
 
@@ -79,7 +74,7 @@ pub fn fitting_tools(world: &World, info: &KindInfo) -> Vec<String> {
 #[must_use]
 pub fn create_refusal(world: &World, info: &KindInfo) -> Option<String> {
     // #532: a kind that mounts no library tool needs none to exist.
-    if !info.mounts_tool() || library(world).iter().any(|(_, k)| info.accepts(*k)) {
+    if !info.mounts_tool() || !fitting_tools(world, info).is_empty() {
         return None;
     }
     let hint = catalog_suggestion(&crate::tools::catalog(), info.tool_kinds)
@@ -183,7 +178,10 @@ fn unread_tip_refusal(def: &Tool, tool: &str, info: &KindInfo) -> Option<String>
             info.label
         ));
     }
-    camcraft_tools::taper::is_unread_tip(def).then(|| {
+    if info.ty == super::OpType::Engrave && !def.center_cutting && camcraft_tools::taper::square_tip_radius(def).is_some() {
+        return Some(format!("'{tool}' must cut at the centre for the Engrave plunge"));
+    }
+    (!tip_is_supported(def, info)).then(|| {
         format!(
             "'{tool}' has a {} tip: the tip form is not read by a {} operation yet - use a chamfer mill with a sharp tip",
             def.tip_form, info.label
