@@ -338,7 +338,7 @@ fn bull_refusals_say_the_same_words_either_way() {
     let m = [mv(p(6.0, 6.0, 4.0), p(6.0, 6.0, 4.0), None)];
     let refuse = |b: Backend, ball: bool, cone: Option<f64>, corner: Option<f64>| {
         let mut s = block(b);
-        let ops = [SimOp { moves: &m, radius: 2.0, ball, cone, corner }];
+        let ops = [SimOp { moves: &m, radius: 2.0, ball, cone: cone.map(camcraft_sim::stock_sim::Cone::sharp), corner }];
         s.simulate(&ops).err().map(|e| e.to_string()).expect("must refuse")
     };
     for (ball, cone, corner, what) in [

@@ -63,6 +63,7 @@ fn twin_tool(tool: &SdfTool) -> Result<TwinTool, StockError> {
         SdfTool::Ball { .. } | SdfTool::Flat { .. } => None,
         SdfTool::Shanked { .. } => Some("shanked ball"),
         SdfTool::Taper { .. } => Some("taper"),
+        SdfTool::FlatTaper { .. } => Some("flat-tip taper"),
         SdfTool::Drill { .. } => Some("drill"),
         SdfTool::BullNose { .. } => Some("bull nose"),
         SdfTool::Dovetail { .. } => Some("dovetail"),

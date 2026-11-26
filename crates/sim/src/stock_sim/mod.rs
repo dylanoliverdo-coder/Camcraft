@@ -148,7 +148,7 @@ pub use carried_boundary_scan::{boundary_box_penetration, boundary_mesh_penetrat
 pub use carry_side::{CarryTurn, SideTurn, FIELD_SIDE_CARRY_REFUSAL};
 pub use columns::Columns;
 pub use partial::{clamp_frac, partial_move, PartialCut};
-pub use cut::{auto_cell, first_posed, simulate, SimOp, POSED_REFUSAL};
+pub use cut::{auto_cell, first_posed, simulate, Cone, SimOp, POSED_REFUSAL};
 pub use deviate::{color_classes, deviate, Deviation, DEV_TOL, ProgramSim, SimSurface};
 pub use dexel::{reach, Dexel};
 pub use dexel_box::{simulate_box, BOX_ARC_REFUSAL};

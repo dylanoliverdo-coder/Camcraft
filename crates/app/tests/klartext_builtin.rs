@@ -15,6 +15,26 @@ use camcraft_app::{posting, project, tools, world::new_world};
 const POST: &str = "Heidenhain Klartext";
 const MILL: &str = "Fehlmann Picomax 55 (iTNC 530)";
 
+#[test]
+fn klartext_posts_an_engrave_with_flat_tip_metadata() {
+    let world = generated_contour_and_face();
+    let mut history = History::default();
+    let (_, sharp) = tools::catalog().into_iter().find(|(name, _)| *name == "CM-0600-90").expect("taper");
+    let flat = tools::Tool {
+        tip_form: tools::TaperTip::Flat, tip_diameter: 1.0, center_cutting: true, rpm: 3500.0, ..sharp
+    };
+    history.execute(&world, AddTool::new(&world, "FLAT", flat).expect("flat-tip tool"));
+    let params = OpParams::Engrave {
+        clearance_z: Height::fixed(30.0), retract_z: None, top_z: Height::fixed(19.5), bottom_z: Height::fixed(19.2),
+        stepdown: 1.0, feed: 500.0, plunge_feed: 200.0, climb: true, tilt: None, picks: Default::default(),
+    };
+    let mark = CreateOperation::new(&world, "Mark", "FLAT", SrcRef::Entity("Block".into()), params).expect("mark");
+    history.execute(&world, mark);
+    history.execute(&world, GenerateOperation::new(&world, "Mark").expect("generate"));
+    let posted = posting::post_setup_unwritten(&world).expect("Klartext accepts the canonical taper kind");
+    assert!(posted.program.contains("TOOL CALL"));
+}
+
 fn generated_contour_and_face() -> flecs_ecs::prelude::World {
     let world = new_world();
     let mut history = History::default();

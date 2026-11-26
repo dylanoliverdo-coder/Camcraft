@@ -11,7 +11,7 @@ use crate::geometry::Point3;
 pub(super) struct Profile {
     pub(super) motion: Move,
     pub(super) radius: f64,
-    pub(super) cone: Option<f64>,
+    pub(super) cone: Option<super::Cone>,
     pub(super) ball: bool,
     corner: Option<f64>,
     pub(super) chord_tol: f64,
@@ -77,9 +77,9 @@ impl Profile {
             }
             Some(_) => {}
         }
-        let mut d = Dexel::from_grid(x - 0.5, y - 0.5, 1.0, 1, 1, f64::INFINITY, vec![f64::INFINITY]);
+        let mut d = Dexel::probe_column(x, y, f64::INFINITY);
         match (self.cone, self.corner) {
-            (Some(cot), _) => d.subtract_cone(&self.motion, self.radius, cot, self.chord_tol),
+            (Some(cone), _) => d.subtract_taper(&self.motion, self.radius, cone, self.chord_tol),
             (None, Some(c)) => d.subtract_bull(&self.motion, self.radius, c, self.chord_tol),
             _ if self.ball => d.subtract_ball(&self.motion, self.radius, self.chord_tol),
             _ => d.subtract(&self.motion, self.radius, self.chord_tol),
@@ -89,11 +89,14 @@ impl Profile {
 
     /// A 1-Lipschitz implicit cone with an unlimited cylindrical shank.
     /// No internal cap exists where the cone reaches its full radius.
-    pub(super) fn cone_distance(&self, p: Point3, cot: f64) -> (f64, f64) {
+    pub(super) fn cone_distance(&self, p: Point3, cone: super::Cone) -> (f64, f64) {
+        let cot = cone.cot;
         let pose = |a: Point3| {
             let rho = (p.x - a.x).hypot(p.y - a.y);
             let norm = cot.hypot(1.0);
-            (rho - self.radius).max(rho * (cot / norm) - (p.z - a.z) / norm)
+            let z = p.z - a.z;
+            let side = (rho - self.radius).max((rho - cone.tip_radius) * (cot / norm) - z / norm);
+            if cone.tip_radius > 0.0 { side.max(-z) } else { side }
         };
         let m = &self.motion;
         if let Some(sw) = m.arc.filter(|a| a.plane.is_xy()).and_then(|a| ArcSweep::of(m, a)) {

@@ -142,6 +142,48 @@ fn the_real_ball_still_convicts_a_true_gouge() {
 }
 
 #[test]
+fn a_flat_taper_hits_steel_that_a_sharp_tip_clears() {
+    use camcraft_sim::cl::Move;
+    use camcraft_sim::geometry::cube;
+    use camcraft_sim::verify::{solid_hits, SolidLaw};
+    use camcraft_tools::{taper::TaperTip, tools::{Tool, catalog}};
+
+    let (_, sharp) = catalog().into_iter().find(|(name, _)| *name == "CM-0600-90").expect("taper");
+    let flat = Tool { tip_form: TaperTip::Flat, tip_diameter: 1.0, ..sharp.clone() };
+    let path = Toolpath::new(vec![Move::new(MoveKind::Feed, p(-2.0, 0.0, 0.0), p(2.0, 0.0, 0.0), Some(200.0))]);
+    let law = SolidLaw { step: 0.02, allow: 0.001, hole_walls: false };
+    let near = cube(p(-0.1, 0.35, 0.025), p(0.1, 0.40, 0.08));
+    let clear = cube(p(-0.1, 0.65, 0.025), p(0.1, 0.70, 0.08));
+    assert!(solid_hits(&path, &near.facets, &Cutter::of(&sharp), &law).is_empty());
+    assert_eq!(gouges(&solid_hits(&path, &near.facets, &Cutter::of(&flat), &law)), [0]);
+    assert!(solid_hits(&path, &clear.facets, &Cutter::of(&flat), &law).is_empty());
+}
+
+#[test]
+fn a_flat_taper_rapid_sees_the_uncut_groove_shoulder() {
+    use camcraft_sim::cl::Move;
+    use camcraft_tools::{taper::TaperTip, tools::{Tool, catalog}};
+
+    let (_, sharp) = catalog().into_iter().find(|(name, _)| *name == "CM-0600-90").expect("taper");
+    let tool = Tool { tip_form: TaperTip::Flat, tip_diameter: 1.0, ..sharp };
+    let geometry = tool.geom();
+    let stock = Region::new(vec![Loop::new(vec![
+        Point2::new(-8.0, -8.0), Point2::new(8.0, -8.0), Point2::new(8.0, 8.0), Point2::new(-8.0, 8.0),
+    ]).expect("stock loop")]).expect("stock");
+    let empty = Region::empty();
+    let cx = VerifyContext {
+        region: &empty, stock: Some(&stock), tool: &geometry, cutter: Some(Cutter::of(&tool)), mode: Mode::Engrave,
+        stock_top_z: 0.8, clearance_z: 0.2, gouge_tol: 0.01, z_tol: 1e-6, ..Default::default()
+    };
+    let feed = Move::new(MoveKind::Feed, p(-2.0, 0.0, 0.0), p(0.0, 0.0, 0.0), Some(200.0));
+    let rapid = |from: Point3, to: Point3| Move::new(MoveKind::Rapid, from, to, None);
+    let across = Toolpath::new(vec![feed, rapid(feed.to, p(0.0, 0.0, 0.2)), rapid(p(0.0, 0.0, 0.2), p(0.0, 0.5, 0.2))]);
+    assert!(verify(&across, &cx).contains(&Warning::RapidInStock { at: 2 }));
+    let reenter = Toolpath::new(vec![feed, rapid(feed.to, p(0.0, 0.0, 1.0)), rapid(p(0.0, 0.0, 1.0), p(0.0, 0.0, 0.5))]);
+    assert!(!verify(&reenter, &cx).contains(&Warning::RapidInStock { at: 2 }));
+}
+
+#[test]
 fn a_tip_that_disagrees_with_the_tool_is_never_trusted_to_clear() {
     let g = geom();
     // A smaller ball than the tool the other laws read: the square stack

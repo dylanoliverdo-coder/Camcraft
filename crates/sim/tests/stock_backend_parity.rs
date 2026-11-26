@@ -23,7 +23,7 @@ use camcraft_sim::cl::{Move, MoveKind};
 use camcraft_sim::geometry::{cube, Point3, Triangle};
 use camcraft_sim::stock::{StockShape, CYLINDER_SEGMENTS};
 use camcraft_sim::stock_sim::{
-    color_classes, Backend, Deviation, SimOp, Stock, StockError, DEV_TOL, FIELD_BAND,
+    color_classes, Backend, Cone, Deviation, SimOp, Stock, StockError, DEV_TOL, FIELD_BAND,
 };
 
 fn p(x: f64, y: f64, z: f64) -> Point3 {
@@ -50,11 +50,33 @@ fn block(b: Backend) -> Stock {
 }
 
 fn sim(moves: &[Move], r: f64, ball: bool, cone: Option<f64>) -> (Stock, Stock) {
+    sim_profile(moves, r, ball, cone.map(Cone::sharp))
+}
+
+fn sim_profile(moves: &[Move], r: f64, ball: bool, cone: Option<Cone>) -> (Stock, Stock) {
     let (mut c, mut f) = (block(Backend::Column), block(Backend::Field { band: FIELD_BAND }));
     let ops = [SimOp { moves, radius: r, ball, cone, corner: None }];
     c.simulate(&ops).expect("column program must run");
     f.simulate(&ops).expect("field program must run");
     (c, f)
+}
+
+#[test]
+fn a_flat_taper_limits_a_ramp_at_the_tip_face_in_both_backends() {
+    // At (4.5, 5.5) the tip face first meets the column after 0.5 mm
+    // of travel. The tip then stands at Z1.5 and the flank cannot go lower.
+    let moves = [feed(p(3.5, 5.5, 1.0), p(5.5, 5.5, 3.0))];
+    let cone = Cone { cot: 2.0, tip_radius: 0.5 };
+    let (column, field) = sim_profile(&moves, 2.2, false, Some(cone));
+    let model = plate(0.0);
+    let dc = column.deviate(&model, DEV_TOL).expect("column");
+    let df = field.deviate(&model, DEV_TOL).expect("field");
+    for d in [dc, df] {
+        assert!((d.dev[54] - 1.5).abs() < 1e-4, "flat tip on ramp: {}", d.dev[54]);
+    }
+    let (sharp, _) = sim(&moves, 2.2, false, Some(2.0));
+    let ds = sharp.deviate(&model, DEV_TOL).expect("sharp cone");
+    assert!((ds.dev[54] - 2.0).abs() < 1e-6, "sharp tip on ramp: {}", ds.dev[54]);
 }
 
 /// A finished part whose top is a plane at `z` over the whole block.
@@ -85,6 +107,22 @@ fn dev_parity(a: &Deviation, b: &Deviation, h: f64) {
         if x.is_finite() {
             assert!((x - y).abs() <= h, "column {k}: dev {x} vs {y}");
         }
+    }
+}
+
+#[test]
+fn a_flat_taper_sweeps_the_tip_and_flank_along_an_arc() {
+    use camcraft_sim::geo2d::Point2;
+
+    let moves = [feed(p(8.5, 5.5, 1.0), p(2.5, 5.5, 1.0)).with_arc(Point2::new(5.5, 5.5), true)];
+    let cone = Cone { cot: 2.0, tip_radius: 0.5 };
+    let (column, field) = sim_profile(&moves, 2.2, false, Some(cone));
+    let model = plate(0.0);
+    for s in [column, field] {
+        let d = s.deviate(&model, DEV_TOL).expect("arc stock");
+        assert!((d.dev[85] - 1.0).abs() < 1e-4, "tip face {}", d.dev[85]);
+        assert!((d.dev[75] - 2.0).abs() < 1e-4, "flank {}", d.dev[75]);
+        assert!((d.dev[15] - TOP).abs() < 1e-6, "other side of the arc was clear");
     }
 }
 
@@ -316,7 +354,7 @@ fn cylinder_stock_agrees_where_both_own_the_column() {
 fn refusals_say_the_same_words_either_way() {
     fn sim_err(b: Backend, moves: &[Move], r: f64, ball: bool, cone: Option<f64>) -> String {
         let mut s = block(b);
-        let ops = [SimOp { moves, radius: r, ball, cone, corner: None }];
+        let ops = [SimOp { moves, radius: r, ball, cone: cone.map(Cone::sharp), corner: None }];
         s.simulate(&ops).err().map(|e| e.to_string()).expect("must refuse")
     }
     let m = [feed(p(5.0, 5.0, 2.0), p(5.0, 5.0, 2.0))];

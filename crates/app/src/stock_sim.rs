@@ -143,7 +143,7 @@ pub(crate) struct Planned {
     pub moves: Vec<crate::cl::Move>,
     pub radius: f64,
     pub ball: bool,
-    pub cone: Option<f64>,
+    pub cone: Option<Cone>,
     /// The bull nose's corner radius (M13.1), `bull_corner`'s law.
     pub corner: Option<f64>,
     pub setup: Option<String>,
@@ -298,12 +298,11 @@ fn plan_ops(world: &flecs_ecs::prelude::World, ops: &[(String, flecs_ecs::prelud
         // the congruence door in `generate` see the same steel (#2441).
         let (cone, drill) = match tool.kind {
             crate::tools::ToolKind::Taper => {
-                let tan_half = (tool.tip_angle.to_radians() * 0.5).tan();
-                if tan_half.is_finite() && tan_half > 0.0 && tool.tip_angle > 0.0 && tool.tip_angle < 180.0 {
-                    (Some(1.0 / tan_half), false)
+                if let Some(cone) = Cone::of(&tool) {
+                    (Some(cone), false)
                 } else {
                     return Err(format!(
-                        "{name}: chamfer mill {} carries no sane cone (tip angle {})",
+                        "{name}: chamfer mill {} carries no supported cone (tip angle {})",
                         op.tool, tool.tip_angle
                     ));
                 }
@@ -312,9 +311,8 @@ fn plan_ops(world: &flecs_ecs::prelude::World, ops: &[(String, flecs_ecs::prelud
                 if (tool.tip_angle - 180.0).abs() <= 1e-9 {
                     (None, false)
                 } else {
-                    let tan_half = (tool.tip_angle.to_radians() * 0.5).tan();
-                    if tan_half.is_finite() && tan_half > 0.0 && tool.tip_angle > 0.0 && tool.tip_angle < 180.0 {
-                        (Some(1.0 / tan_half), true)
+                    if let Some(cone) = Cone::of(&tool) {
+                        (Some(cone), true)
                     } else {
                         return Err(format!(
                             "{name}: drill {} carries no sane point cone (tip angle {})",

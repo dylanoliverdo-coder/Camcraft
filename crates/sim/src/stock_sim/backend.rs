@@ -256,11 +256,13 @@ pub(crate) fn op_sdf_tool(op: &SimOp, flank: f64, shanked_ball: bool, drill: boo
         } else {
             SdfTool::Ball { r: op.radius }
         }
-    } else if let Some(cot) = op.cone {
-        if drill {
-            SdfTool::Drill { r: op.radius, cot, flank: flank.max(op.radius * cot) }
+    } else if let Some(cone) = op.cone {
+        if cone.tip_radius > 0.0 {
+            SdfTool::FlatTaper { r: op.radius, cone, flank }
+        } else if drill {
+            SdfTool::Drill { r: op.radius, cot: cone.cot, flank: flank.max(cone.lift(op.radius)) }
         } else {
-            SdfTool::Taper { r: op.radius, cot }
+            SdfTool::Taper { r: op.radius, cot: cone.cot }
         }
     } else if let Some(corner) = op.corner {
         SdfTool::BullNose { r: op.radius, corner, flank: flank.max(corner) }

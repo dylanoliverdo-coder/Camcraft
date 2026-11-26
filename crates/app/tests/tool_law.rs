@@ -176,20 +176,19 @@ fn undercut_cutters_mount_only_the_slot_undercut() {
     assert!(!OpType::SlotUndercut.info().accepts(ToolKind::EndMill));
 }
 
-/// #3368: until a generator reads a taper's tip, every operation that
-/// mounts a chamfer mill refuses a flat or ball tip by name - the tool
-/// door at creation, edit and re-tool. A sharp tip passes the same door,
-/// and the catalog hint never offers a flat or ball tip.
+/// Engrave supports the straight flank of a flat tip. The other tool
+/// and operation combinations remain subject to the tip-form gate.
 #[test]
-fn every_operation_refuses_a_non_sharp_taper_by_name() {
+fn engraving_accepts_the_flat_tip_and_other_operations_refuse_it() {
     let world = camcraft_app::world::new_world();
     let mut h = History::default();
     let Some((_, sharp)) = catalog().into_iter().find(|(n, _)| *n == "CM-0600-90") else {
         panic!("the catalog has CM-0600-90");
     };
-    let flat = Tool { tip_form: TaperTip::Flat, tip_diameter: 1.0, ..sharp.clone() };
+    let flat = Tool { tip_form: TaperTip::Flat, tip_diameter: 1.0, center_cutting: true, ..sharp.clone() };
+    let blunt = Tool { center_cutting: false, ..flat.clone() };
     let ball = Tool { tip_form: TaperTip::Ball, corner_r: 0.5, ..sharp.clone() };
-    for (name, t) in [("SHARP", sharp), ("FLAT", flat), ("BALL", ball)] {
+    for (name, t) in [("SHARP", sharp), ("FLAT", flat), ("BALL", ball), ("BLUNT", blunt)] {
         let cmd = AddTool::new(&world, name, t).unwrap_or_else(|e| panic!("{name}: {e}"));
         h.execute(&world, cmd);
     }
@@ -198,14 +197,24 @@ fn every_operation_refuses_a_non_sharp_taper_by_name() {
     for row in rows {
         assert_eq!(tool_gate::tool_refusal(&world, row, "SHARP"), None, "{:?} takes a sharp tip", row.ty);
         for (name, form) in [("FLAT", "flat"), ("BALL", "ball")] {
-            let why = tool_gate::tool_refusal(&world, row, name).unwrap_or_else(|| panic!("{:?} took {name}", row.ty));
+            let refusal = tool_gate::tool_refusal(&world, row, name);
+            if name == "FLAT" && row.ty == OpType::Engrave {
+                assert!(refusal.is_none(), "{refusal:?}");
+                continue;
+            }
+            let why = refusal.unwrap_or_else(|| panic!("{:?} took {name}", row.ty));
             assert!(why.contains(&format!("'{name}' has a {form} tip")), "{:?}: {why}", row.ty);
             assert!(why.contains(row.label), "{:?} names itself: {why}", row.ty);
         }
-        assert!(!tool_gate::fitting_tools(&world, row).iter().any(|n| n != "SHARP"), "{:?} offers only the sharp tip", row.ty);
+        let fitting = tool_gate::fitting_tools(&world, row);
+        assert_eq!(fitting.iter().any(|n| n == "FLAT"), row.ty == OpType::Engrave);
+        assert!(!fitting.iter().any(|n| n == "BALL"));
+        assert!(!fitting.iter().any(|n| n == "BLUNT"));
         let hint = tool_gate::catalog_suggestion(&catalog(), &[ToolKind::Taper]).unwrap_or_default();
         assert!(!hint.contains("-F10") && !hint.contains("-R05"), "{hint}");
     }
+    let blunt = tool_gate::tool_refusal(&world, OpType::Engrave.info(), "BLUNT").expect("no centre cutting");
+    assert!(blunt.contains("must cut at the centre"), "{blunt}");
 }
 
 /// #3369: until a generator reads a form mill's outline, every operation

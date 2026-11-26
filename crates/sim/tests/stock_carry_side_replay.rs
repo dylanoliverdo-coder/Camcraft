@@ -5,9 +5,9 @@
 use camcraft_sim::cl::{Move, MoveKind};
 use camcraft_sim::geo2d::Point2;
 use camcraft_sim::geometry::Point3;
-use camcraft_sim::stock_sim::{Body, CarriedStock, CarryTurn, DEV_TOL, Dexel, SimOp};
+use camcraft_sim::stock_sim::{Body, CarriedStock, CarryTurn, Cone, DEV_TOL, Dexel, SimOp};
 
-fn replay(ball: bool, cone: Option<f64>, corner: Option<f64>, arc: bool, rise: f64) {
+fn replay(ball: bool, cone: Option<Cone>, corner: Option<f64>, arc: bool, rise: f64) {
     let mut stock = CarriedStock::Column(Body::on_floor(
         Dexel::block(0.0, 0.0, 12.0, 10.0, 6.0, 1.0).expect("block"),
         0.0,
@@ -85,7 +85,14 @@ fn a_straight_bull_cut_survives_side_on_replay() {
 
 #[test]
 fn a_straight_cone_cut_survives_side_on_replay() {
-    replay(false, Some(1.0), None, false, 0.0);
+    replay(false, Some(Cone::sharp(1.0)), None, false, 0.0);
+}
+
+#[test]
+fn a_flat_taper_cut_survives_side_on_replay() {
+    let cone = Cone { cot: 1.0, tip_radius: 0.6 };
+    replay(false, Some(cone), None, false, 0.0);
+    replay(false, Some(cone), None, true, 1.0);
 }
 
 #[test]
@@ -105,12 +112,12 @@ fn an_xy_arc_bull_cut_survives_side_on_replay() {
 
 #[test]
 fn an_xy_arc_cone_cut_survives_side_on_replay() {
-    replay(false, Some(1.0), None, true, 0.0);
+    replay(false, Some(Cone::sharp(1.0)), None, true, 0.0);
 }
 
 #[test]
 fn a_helical_cone_cut_survives_side_on_replay() {
-    replay(false, Some(1.0), None, true, 1.0);
+    replay(false, Some(Cone::sharp(1.0)), None, true, 1.0);
 }
 
 #[test]
@@ -132,7 +139,7 @@ fn a_turned_cone_cut_has_no_material_skin_where_its_shank_starts() {
             moves: &moves,
             radius: 2.0,
             ball: false,
-            cone: Some(1.0),
+            cone: Some(camcraft_sim::stock_sim::Cone::sharp(1.0)),
             corner: None,
         }])
         .expect("cone cut");

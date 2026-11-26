@@ -22,6 +22,8 @@ pub struct Cutter {
     pub corner_r: f64,
     /// Included point angle in degrees (drill, taper); 0 for none.
     pub tip_angle: f64,
+    /// Radius of a taper's flat physical tip. Zero is a point.
+    pub taper_tip_radius: f64,
     pub flute_len: f64,
     pub shank_radius: f64,
     pub shank_len: f64,
@@ -51,6 +53,7 @@ impl Cutter {
             radius: g.radius,
             corner_r: 0.0,
             tip_angle: 0.0,
+            taper_tip_radius: 0.0,
             flute_len: g.flute_len,
             shank_radius: g.shank_radius,
             shank_len: g.shank_len,
@@ -103,6 +106,7 @@ impl Cutter {
             ToolKind::Drill | ToolKind::Taper => c.tip_angle = t.tip_angle,
             _ => {}
         }
+        c.taper_tip_radius = camcraft_tools::taper::square_tip_radius(t).unwrap_or_default();
         c.undercut = Undercut::of(t);
         c
     }
@@ -119,7 +123,7 @@ impl Cutter {
     pub fn judged(g: &ToolGeom, real: Option<Self>) -> Self {
         let flat = Self::flat(g);
         match real {
-            Some(c) if Self { corner_r: 0.0, tip_angle: 0.0, body: None, neck: None, undercut: None, ..c } == flat => {
+            Some(c) if Self { corner_r: 0.0, tip_angle: 0.0, taper_tip_radius: 0.0, body: None, neck: None, undercut: None, ..c } == flat => {
                 // #1444: a head rides only while it is this geometry's.
                 let fits = |u: &Undercut| {
                     (u.r - g.radius).abs() <= 1e-9 && (u.height - g.flute_len).abs() <= 1e-9 && (u.neck_r - g.shank_radius).abs() <= 1e-9
@@ -164,7 +168,7 @@ impl Cutter {
                 let e = rho - flat;
                 if e <= 0.0 { 0.0 } else if e >= cr { a.z1 } else { cr - (cr * cr - e * e).max(0.0).sqrt() }
             }
-            Prof::Cone { k, .. } => rho / k,
+            Prof::Cone { k, tip, .. } => (rho - tip).max(0.0) / k,
             // A dovetail's bottom is flat; a ball rises as a sphere.
             Prof::Dove { .. } => 0.0,
             Prof::Ball(r) => if rho >= r { r } else { r - (r * r - rho * rho).max(0.0).sqrt() },
@@ -200,9 +204,13 @@ impl Cutter {
             }
             z = fl;
         } else if self.tip_angle > 0.0 && tan_half.is_finite() && tan_half > 0.0 {
-            let top = (r / tan_half).min(fl);
+            let tip = self.taper_tip_radius;
+            if !ok(tip) || tip >= r {
+                return Vec::new();
+            }
+            let top = ((r - tip) / tan_half).min(fl);
             if top > 0.0 {
-                v.push(Atom { z0: 0.0, z1: top, prof: Prof::Cone { k: tan_half, r }, cap: false });
+                v.push(Atom { z0: 0.0, z1: top, prof: Prof::Cone { k: tan_half, r, tip }, cap: false });
                 z = top;
             }
         } else if cr > 0.0 {
@@ -243,8 +251,8 @@ pub(super) enum Prof {
     /// Toroidal corner: rho = flat + sqrt(cr^2 - (cr - s)^2); a ball is
     /// `flat = 0`.
     Bull { flat: f64, cr: f64 },
-    /// Point cone, capped at the flute radius.
-    Cone { k: f64, r: f64 },
+    /// Cone or frustum, widening from the physical tip to the flute radius.
+    Cone { k: f64, r: f64, tip: f64 },
     /// Dovetail head (#1444): rho = r - k s, widest at its bottom.
     Dove { r: f64, k: f64 },
     /// Lollipop head (#1444): the whole ball of radius r over [0, 2r].
@@ -277,7 +285,7 @@ impl Atom {
                 let t = (cr - s).clamp(0.0, cr);
                 flat + (cr * cr - t * t).max(0.0).sqrt()
             }
-            Prof::Cone { k, r } => (k * s).min(r),
+            Prof::Cone { k, r, tip } => (tip + k * s).min(r),
             Prof::Dove { r, k } => (r - k * s).max(0.0),
             Prof::Ball(r) => (2.0 * r * s - s * s).max(0.0).sqrt(),
         }

@@ -61,8 +61,8 @@ pub(super) enum Atom {
     Flat,
     /// The ball nose: a sphere of the tool radius, centre `r` above the tip.
     Ball,
-    /// The chamfer cone: `cot` of its half-angle from the axis.
-    Cone(f64),
+    /// The cone or frustum of a taper.
+    Cone(super::Cone),
     /// The bull nose: its corner radius `c`, `0 < c <= r`.
     Bull(f64),
 }
@@ -74,7 +74,7 @@ impl Atom {
         match self {
             Atom::Flat => 0.0,
             Atom::Ball => r - (r * r - d * d).max(0.0).sqrt(),
-            Atom::Cone(cot) => cot * d,
+            Atom::Cone(cone) => cone.lift(d),
             Atom::Bull(c) => {
                 let e = (d - (r - c)).max(0.0);
                 c - (c * c - e * e).max(0.0).sqrt()
@@ -90,9 +90,13 @@ impl Atom {
         // The distance to a circle point is convex in u up to here,
         // concave past it.
         let dist_bend = (hi > 0.0).then(|| (lo / hi).clamp(-1.0, 1.0).acos());
+        let flat_edge = |flat: f64| {
+            let s = (flat * flat - (rad - rho).powi(2)) / (4.0 * rad * rho);
+            (s > 0.0 && s < 1.0 && s.is_finite()).then(|| 2.0 * s.sqrt().asin())
+        };
         match self {
             Atom::Flat => [None, None],
-            Atom::Cone(_) => [dist_bend, None],
+            Atom::Cone(cone) => [dist_bend, flat_edge(cone.tip_radius)],
             Atom::Ball => {
                 // z - sqrt(C + B cos u): convex wherever
                 // B cos^2 u + 2 C cos u + B >= 0, which only fails
@@ -101,12 +105,7 @@ impl Atom {
                 let root = (b > 0.0 && c > b).then(|| ((-c + (c * c - b * b).sqrt()) / b).clamp(-1.0, 1.0).acos());
                 [root, None]
             }
-            Atom::Bull(c) => {
-                let flat = r - c;
-                let s = (flat * flat - (rad - rho).powi(2)) / (4.0 * rad * rho);
-                let edge = (s > 0.0 && s < 1.0 && s.is_finite()).then(|| 2.0 * s.sqrt().asin());
-                [dist_bend, edge]
-            }
+            Atom::Bull(c) => [dist_bend, flat_edge(r - c)],
         }
     }
 }
@@ -192,7 +191,7 @@ impl Dexel {
                     Point3::new(m.to.x, m.to.y, m.to.z + r),
                     r,
                 ),
-                Atom::Cone(cot) => self.cut_cone(m.from, m.to, r, cot),
+                Atom::Cone(cone) => self.cut_taper(m.from, m.to, r, cone),
                 Atom::Bull(c) => self.cut_bull(m.from, m.to, r, c),
             }
             return;

@@ -27,7 +27,7 @@ mod tests;
 #[derive(Clone)]
 pub(super) enum Shape {
     Sweep(Arc<Sweep>),
-    Cone(f64),
+    Cone(super::Cone),
 }
 
 #[derive(Clone)]
@@ -104,7 +104,8 @@ impl History {
                 return Err("exact side-on carry tool span is not finite".into());
             }
             let tool = match (op.cone, op.corner) {
-                (Some(cot), _) => SdfTool::Taper { r: op.radius, cot },
+                (Some(cone), _) if cone.tip_radius > 0.0 => SdfTool::FlatTaper { r: op.radius, cone, flank },
+                (Some(cone), _) => SdfTool::Taper { r: op.radius, cot: cone.cot },
                 (None, Some(corner)) => SdfTool::BullNose { r: op.radius, corner, flank },
                 (None, None) if op.ball => SdfTool::Shanked { r: op.radius, shank: flank },
                 _ => SdfTool::Flat { r: op.radius, flank },
@@ -116,8 +117,8 @@ impl History {
                     return Err("exact side-on carry tool coordinates exceed finite geometric arithmetic".into());
                 }
                 let profile = Arc::new(Profile::new(op, *m, chord_tol));
-                if let Some(cot) = op.cone {
-                    self.cuts.push(Cut { frame: Frame::IDENTITY, shape: Shape::Cone(cot), profile });
+                if let Some(cone) = op.cone {
+                    self.cuts.push(Cut { frame: Frame::IDENTITY, shape: Shape::Cone(cone), profile });
                     continue;
                 }
                 let pieces = match m.arc {
@@ -231,7 +232,7 @@ impl Cut {
     fn distance(&self, p: Point3) -> (f64, f64) {
         match &self.shape {
             Shape::Sweep(s) => (s.dist([0.0, 0.0, 1.0], p), s.residual()),
-            Shape::Cone(cot) => self.profile.cone_distance(p, *cot),
+            Shape::Cone(cone) => self.profile.cone_distance(p, *cone),
         }
     }
 

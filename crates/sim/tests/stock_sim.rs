@@ -745,7 +745,7 @@ fn the_cone_atom_leaves_the_face_the_chamfer_promised() {
     let wall_x = 9.0; // the corner depth the kernel posts for top 5,
     let corner_z = 3.0; // width 2 at 45 degrees: 5 - 2 * tan(45).
     let o = [feed(p(wall_x, 1.0, corner_z), p(wall_x, 9.0, corner_z))];
-    let ops = [stock_sim::SimOp { moves: &o, radius: 3.0, ball: false, cone: Some(1.0), corner: None }];
+    let ops = [stock_sim::SimOp { moves: &o, radius: 3.0, ball: false, cone: Some(camcraft_sim::stock_sim::Cone::sharp(1.0)), corner: None }];
     stock_sim::simulate(&mut d, &ops).expect("cone op");
     // Row whose centers stand on the traverse: iy = 5 reads y = 5.5.
     for ix in 0..d.nx {

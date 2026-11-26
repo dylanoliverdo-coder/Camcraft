@@ -108,6 +108,7 @@ function onParameter(name, value) {
       section[name] = value;
       return;
     case "ToolKind": case "ToolDiameter": case "ToolCornerRadius":
+    case "ToolTipForm": case "ToolTipDiameter": case "ToolTipAngle":
       if (section[name] !== undefined && section[name] !== value) {
         refuse("conflicting " + name + " declarations in one section");
       }
@@ -147,11 +148,21 @@ function checkToolDefinition() {
   if (required(cornerRadius, "ToolCornerRadius") < 0 || cornerRadius > diameter / 2) {
     refuse("ToolCornerRadius requires a compatible ToolDiameter");
   }
+  var tip = null;
+  if (section.ToolTipForm !== undefined || section.ToolTipDiameter !== undefined || section.ToolTipAngle !== undefined) {
+    var tipDiameter = required(section.ToolTipDiameter, "ToolTipDiameter");
+    var tipAngle = required(section.ToolTipAngle, "ToolTipAngle");
+    if (kind !== "chamfer mill" || section.ToolTipForm !== "flat" || cornerRadius !== 0 ||
+        tipDiameter <= 0 || tipDiameter >= diameter || tipAngle <= 0 || tipAngle >= 180) {
+      refuse("flat tip metadata requires a compatible chamfer mill");
+    }
+    tip = [section.ToolTipForm, tipDiameter, tipAngle];
+  }
   // Compare the original identity, before shortening it for a program comment.
   // Keep every slot for the entire program, including tools used again later.
-  var definition = JSON.stringify([section.toolName, kind, diameter, cornerRadius]);
+  var definition = JSON.stringify([section.toolName, kind, diameter, cornerRadius, tip]);
   if (toolDefinitions[section.tool] !== undefined && toolDefinitions[section.tool] !== definition) {
-    refuse("conflicting definitions for tool T" + section.tool + " (name, kind, diameter or corner radius)");
+    refuse("conflicting definitions for tool T" + section.tool + " (name, kind, diameter, corner radius or tip)");
   }
   toolDefinitions[section.tool] = definition;
 }

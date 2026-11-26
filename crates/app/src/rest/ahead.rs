@@ -27,7 +27,7 @@ pub(super) struct Ahead {
     /// the rest grid must sweep the same cone the program sim does, or
     /// a predecessor's chamfer would evaporate a full disc of
     /// material that is really still standing.
-    pub(super) cone: Option<f64>,
+    pub(super) cone: Option<stock_sim::Cone>,
     /// #2441: true when `cone` is a twist drill with a cylindrical flute above it.
     pub(super) drill: bool,
     /// The bull nose's corner radius (M13.1, `stock_sim::bull_corner`):
@@ -114,7 +114,11 @@ fn collect(world: &World, name: &str, with_moves: bool, keep: impl Fn(&Option<St
                     | crate::tools::ToolKind::Wire
             )
         });
-        let (cut, sig, moves) = if probe {
+        let cone = tool.as_ref().and_then(stock_sim::Cone::of);
+        let unread = tool.as_ref().is_some_and(camcraft_tools::taper::is_unread_tip)
+            && (cone.is_none() || op.params.kind() != crate::operation::OpType::Engrave
+                || tool.as_ref().is_some_and(|t| !t.center_cutting));
+        let (cut, sig, moves) = if probe || unread {
             (false, 0, Vec::new())
         } else {
             e.entity_view(world)
@@ -124,13 +128,6 @@ fn collect(world: &World, name: &str, with_moves: bool, keep: impl Fn(&Option<St
                 })
                 .unwrap_or((false, 0, Vec::new()))
         };
-        let cone = tool
-            .as_ref()
-            .filter(|t| matches!(t.kind, crate::tools::ToolKind::Taper | crate::tools::ToolKind::Drill))
-            .filter(|t| t.tip_angle.is_finite() && t.tip_angle > 0.0 && t.tip_angle < 180.0)
-            .map(|t| (t.tip_angle.to_radians() * 0.5).tan())
-            .filter(|x| x.is_finite() && *x > 0.0)
-            .map(|x| 1.0 / x);
         let drill = cone.is_some()
             && tool.as_ref().is_some_and(|t| t.kind == crate::tools::ToolKind::Drill);
         out.push(Ahead {
@@ -193,7 +190,7 @@ pub(super) fn digest_of(ahead: &[Ahead]) -> u64 {
             match a.cone {
                 Some(c) => {
                     h.write_u8(1);
-                    h.write(&c.to_bits().to_le_bytes());
+                    h.write(&c.cot.to_bits().to_le_bytes());
                 }
                 None => h.write_u8(0),
             }
@@ -212,6 +209,10 @@ pub(super) fn digest_of(ahead: &[Ahead]) -> u64 {
             if a.band > 0.0 {
                 h.write_u8(4);
                 h.write(&a.band.to_bits().to_le_bytes());
+            }
+            if let Some(c) = a.cone.filter(|c| c.tip_radius > 0.0) {
+                h.write_u8(5);
+                h.write(&c.tip_radius.to_bits().to_le_bytes());
             }
         } else {
             h.write_u8(0);

@@ -24,6 +24,7 @@ fn cutter() -> Cutter {
         radius: 2.0,
         corner_r: 0.0,
         tip_angle: 0.0,
+        taper_tip_radius: 0.0,
         flute_len: 20.0,
         shank_radius: 2.0,
         shank_len: 10.0,

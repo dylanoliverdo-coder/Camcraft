@@ -55,7 +55,7 @@ impl Sweep {
             Sweep::Revolve { kind, .. } => match kind {
                 RevKind::Flat { r, flank } => r.hypot(*flank),
                 RevKind::Taper { r, cot } => r.hypot(r * cot),
-                RevKind::Drill { r, cot, flank } => r.hypot(flank.max(r * cot)),
+                RevKind::Drill { r, cone, flank } => r.hypot(flank.max(cone.lift(*r))),
                 RevKind::Bull { r, flank, .. } | RevKind::Dove { r, flank, .. } => r.hypot(*flank),
             },
             Sweep::Arc(_) => 0.0, // its stadium is its own (`ArcPiece::stadium`)
@@ -78,7 +78,7 @@ impl Sweep {
             Sweep::Revolve { kind, .. } => match kind {
                 RevKind::Flat { r, flank } => (*r, *flank),
                 RevKind::Taper { r, cot } => (*r, r * cot),
-                RevKind::Drill { r, cot, flank } => (*r, flank.max(r * cot)),
+                RevKind::Drill { r, cone, flank } => (*r, flank.max(cone.lift(*r))),
                 RevKind::Bull { r, flank, .. } | RevKind::Dove { r, flank, .. } => (*r, *flank),
             },
             Sweep::Arc(p) => p.reach(),

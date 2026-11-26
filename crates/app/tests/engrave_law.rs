@@ -209,6 +209,37 @@ fn a_whole_model_cut_deep_under_the_part_gouges_and_never_posts_on_either_stock(
 }
 
 #[test]
+fn a_flat_tip_engrave_keeps_the_physical_datum_and_the_post_gate() {
+    use camcraft_app::tools::{TaperTip, Tool};
+
+    for (top, bottom, should_post) in [(TOP, 7.7, true), (7.0, 6.7, false)] {
+        let (world, mut h) = job(false);
+        let (_, sharp) = catalog().into_iter().find(|(name, _)| *name == "CM-0600-90").expect("taper");
+        let flat = Tool { tip_form: TaperTip::Flat, tip_diameter: 1.0, center_cutting: true, ..sharp };
+        let tool_kind = flat.kind.to_string();
+        h.execute(&world, AddTool::new(&world, "FLAT", flat).expect("tool"));
+        h.execute(&world, CreateOperation::new(&world, "E1", "FLAT", whole(), cut(Kind::Engrave, top, bottom)).expect("create flat-tip Engrave"));
+        h.execute(&world, GenerateOperation::new(&world, "E1").expect("generate"));
+        let entity = model::find_by_name(&world, "E1").expect("operation");
+        let cache = model::toolpath_of(&world, &entity).expect("cache");
+        let depth = cache.path.moves.iter().map(|m| m.to.z).fold(f64::INFINITY, f64::min);
+        assert!((depth - bottom).abs() < 1e-9, "physical tip depth {depth}");
+        if should_post {
+            assert!(cache.warnings.iter().all(|w| !w.blocks_post()), "{:?}", cache.warnings);
+            let program = posting::post_setup_unwritten(&world).expect("a verified flat-tip mark posts");
+            let records = posting::stream_records(&world).expect("verified stream");
+            use camcraft_app::post::cnc::Record::Param;
+            assert!(records.contains(&Param { name: "ToolKind".into(), value: json!(tool_kind) }), "canonical tool kind");
+            assert!(records.contains(&Param { name: "ToolTipDiameter".into(), value: json!(1.0) }), "physical tip diameter");
+            assert!(program.program.contains("FLAT TIP D"), "the post must describe the tip: {}", program.program);
+        } else {
+            assert!(gouges(&cache.warnings) > 0, "{:?}", cache.warnings);
+            assert_post_refused(&world, "flat-tip-low-top", false);
+        }
+    }
+}
+
+#[test]
 fn a_shallow_mark_is_clean_on_the_operation_and_posts_on_both_stocks() {
     // 0.3 mm into the top face along every edge. Before #1595 the
     // aligned program sim refused this (and a 0.02 mm one) as a gouge.

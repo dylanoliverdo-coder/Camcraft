@@ -35,7 +35,7 @@ pub(crate) enum ToolKind {
     Shanked { r: f64, shank: f64 },
     Flat { r: f64, flank: f64 },
     Taper { r: f64, cot: f64 },
-    Drill { r: f64, cot: f64, flank: f64 },
+    Drill { r: f64, cone: super::Cone, flank: f64 },
     Bull { r: f64, corner: f64, flank: f64 },
     /// The dovetail head's frustum (#1444), widest at the tip.
     Dove { r: f64, cot: f64, flank: f64 },
@@ -87,7 +87,15 @@ pub(crate) fn tool_kind(tool: &SdfTool) -> Result<ToolKind, StockError> {
             radius(r)?;
             length("cone slope", cot)?;
             length("flank length", flank)?;
-            ToolKind::Drill { r: *r, cot: *cot, flank: (*flank).max(*r * *cot) }
+            ToolKind::Drill { r: *r, cone: super::Cone::sharp(*cot), flank: (*flank).max(*r * *cot) }
+        }
+        SdfTool::FlatTaper { r, cone, flank } => {
+            radius(r)?;
+            length("flank length", flank)?;
+            if cone.tip_radius <= 0.0 || !cone.valid(*r) || !cone.lift(*r).is_finite() {
+                return Err(StockError::Invalid("field subtract: invalid flat-tip taper".into()));
+            }
+            ToolKind::Drill { r: *r, cone: *cone, flank: (*flank).max(cone.lift(*r)) }
         }
         SdfTool::BullNose { r, corner, flank } => {
             radius(r)?;
@@ -186,7 +194,7 @@ pub(crate) enum RevKind {
     /// truncated cone: apex at the anchor, up to radius `r`
     Taper { r: f64, cot: f64 },
     /// twist drill (#2441): cone up to `r * cot`, then cylinder of `r` up to `flank`
-    Drill { r: f64, cot: f64, flank: f64 },
+    Drill { r: f64, cone: super::Cone, flank: f64 },
     /// bull nose (M13.1): cylinder of `r` to `flank`, its bottom edge
     /// rounded by `corner` (`field_bull`'s profile)
     Bull { r: f64, corner: f64, flank: f64 },
@@ -224,7 +232,13 @@ pub(crate) fn pose_dist(ax: [f64; 3], t: Point3, q: Point3, kind: &RevKind) -> f
                 )
             }
         }
-        RevKind::Drill { r, cot, flank } => drill_dist(rho, zl, *r, *cot, *flank),
+        RevKind::Drill { r, cone, flank } => {
+            if cone.tip_radius > 0.0 {
+                flat_taper_dist(rho, zl, *r, *cone, *flank)
+            } else {
+                drill_dist(rho, zl, *r, cone.cot, *flank)
+            }
+        }
         RevKind::Bull { r, corner, flank } => super::field_bull::bull_dist(rho, zl, *r, *corner, *flank),
         RevKind::Dove { r, cot, flank } => dove_dist(rho, zl, *r, *cot, *flank),
     }
@@ -247,6 +261,22 @@ fn dove_dist(rho: f64, zl: f64, r: f64, cot: f64, flank: f64) -> f64 {
         dist_pt_seg2(rho, zl, r, 0.0, top, flank),
         dist_pt_seg2(rho, zl, 0.0, flank, top, flank),
     )
+}
+
+/// Distance to the tip face, cone flank, cylinder and end face in the meridian.
+fn flat_taper_dist(rho: f64, z: f64, r: f64, cone: super::Cone, flank: f64) -> f64 {
+    let tip = cone.tip_radius;
+    let h = cone.lift(r);
+    let side = ((rho - tip) * cone.cot - z) / cone.cot.hypot(1.0);
+    let halfspaces = side.max(-z).max(z - flank).max(rho - r);
+    if halfspaces <= 0.0 {
+        return halfspaces;
+    }
+    min3(
+        dist_pt_seg2(rho, z, 0.0, 0.0, tip, 0.0),
+        dist_pt_seg2(rho, z, tip, 0.0, r, h),
+        dist_pt_seg2(rho, z, r, h, r, flank),
+    ).min(dist_pt_seg2(rho, z, r, flank, 0.0, flank))
 }
 
 /// Exact Euclidean SDF to a twist drill profile: cone from apex `(0, 0)`
@@ -339,7 +369,7 @@ mod tests {
         let f = pose_dist(ax, p(0.0, 0.0, 0.0), p(2.0, 0.0, 2.0), &RevKind::Taper { r: 4.0, cot: 1.0 });
         assert!(f.abs() < 1e-12, "on the flank: {f}");
         // Twist drill (45-degree half angle, cone height 3, shank to z 10).
-        let drill = RevKind::Drill { r: 3.0, cot: 1.0, flank: 10.0 };
+        let drill = RevKind::Drill { r: 3.0, cone: super::super::Cone::sharp(1.0), flank: 10.0 };
         assert!(pose_dist(ax, p(0.0, 0.0, 0.0), p(2.0, 0.0, 2.0), &drill).abs() < 1e-12, "on drill cone");
         assert!(pose_dist(ax, p(0.0, 0.0, 0.0), p(3.0, 0.0, 6.0), &drill).abs() < 1e-12, "on drill flute");
         assert!((pose_dist(ax, p(0.0, 0.0, 0.0), p(4.0, 0.0, 6.0), &drill) - 1.0).abs() < 1e-12, "outside flute");

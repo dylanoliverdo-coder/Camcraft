@@ -31,6 +31,25 @@ fn refused_mark(world: &World, history: &mut History) -> String {
 }
 
 #[test]
+fn a_flat_tip_can_engrave_the_open_sketch_and_post() {
+    use camcraft_app::commands::AddTool;
+    use camcraft_app::operation::OpType;
+    use camcraft_app::tools::{TaperTip, Tool, catalog};
+
+    let (world, mut history) = job(TOP);
+    let (_, sharp) = catalog().into_iter().find(|(name, _)| *name == "CM-0600-90").expect("taper");
+    let flat = Tool { tip_form: TaperTip::Flat, tip_diameter: 1.0, center_cutting: true, ..sharp };
+    history.execute(&world, AddTool::new(&world, "FLAT", flat).expect("flat-tip tool"));
+    let src = SrcRef::Selection(vec![open_pick(&world)]);
+    let engraving = params(OpType::Engrave, true, 0.3, 0.3);
+    history.execute(&world, CreateOperation::new(&world, OP, "FLAT", src, engraving).expect("create open engraving"));
+    let mark = generated(&world, &mut history);
+    assert!(mark.warnings.iter().all(|warning| !warning.blocks_post()), "{:?}", mark.warnings);
+    assert!(mark.path.moves.iter().any(|m| m.arc.is_some() && (m.to.z - (TOP - 0.3)).abs() < 1e-6));
+    posting::post_setup_unwritten(&world).expect("the open flat-tip mark posts");
+}
+
+#[test]
 fn sketch_marks_deeper_than_the_cutter_radius_or_through_stock_do_not_post() {
     for kind in KINDS {
         for (height, depth, expected) in [(TOP, 2.2, "mark"), (0.4, 0.5, "through")] {

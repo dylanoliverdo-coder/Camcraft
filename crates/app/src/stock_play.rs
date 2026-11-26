@@ -132,7 +132,7 @@ struct PlayOp {
     moves: Vec<crate::cl::Move>,
     radius: f64,
     ball: bool,
-    cone: Option<f64>,
+    cone: Option<crate::stock_sim::Cone>,
     corner: Option<f64>,
     drill: bool,
     /// Global index of this op's first move.

@@ -40,7 +40,7 @@ fn cut(tip_z: f64) -> Dexel {
     let facets = part();
     let mut d = Dexel::from_facets(&facets, 0.25).expect("the finished part as stock");
     let moves = ride(tip_z);
-    let op = SimOp { moves: &moves, radius: 3.0, ball: false, cone: Some(1.0), corner: None };
+    let op = SimOp { moves: &moves, radius: 3.0, ball: false, cone: Some(camcraft_sim::stock_sim::Cone::sharp(1.0)), corner: None };
     stock_sim::simulate(&mut d, &[op]).expect("the ride cuts");
     d
 }
@@ -94,7 +94,7 @@ fn a_model_top_above_the_edge_is_never_the_bevels() {
     facets.extend(cube(p(0.3, 5.0, 10.0), p(0.8, 6.0, 15.0)).facets.iter().copied());
     let mut d = Dexel::from_facets(&facets, 0.25).expect("stock");
     let moves = ride(9.0);
-    let op = SimOp { moves: &moves, radius: 3.0, ball: false, cone: Some(1.0), corner: None };
+    let op = SimOp { moves: &moves, radius: 3.0, ball: false, cone: Some(camcraft_sim::stock_sim::Cone::sharp(1.0)), corner: None };
     stock_sim::simulate(&mut d, &[op]).expect("the ride cuts");
     let mut dev = deviate(&d, &facets, DEV_TOL).expect("verdict");
     credit_breaks(&mut dev, &d, &facets, &[declared(&LOOP)]);
