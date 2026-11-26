@@ -157,6 +157,20 @@ pub fn stack_hits(path: &Toolpath, facets: &[Triangle], cutter: &Cutter, law: &S
     judged(path, facets, cutter, law, Exemptions { stack_only: true, ..Exemptions::none() })
 }
 
+/// Finished-part backstop for envelope paths, which do not take the
+/// ordinary solid law. Do not rejudge their cutting moves or lateral links.
+pub(super) fn vertical_rapid_hits(
+    path: &Toolpath, facets: &[Triangle], cutter: &Cutter, law: &SolidLaw,
+) -> Vec<Warning> {
+    judged(path, facets, cutter, law, Exemptions { vertical_rapids_only: true, ..Exemptions::none() })
+}
+
+fn vertical_rapid(m: &crate::cl::Move) -> bool {
+    m.kind == MoveKind::Rapid && m.arc.is_none()
+        && m.from.is_finite() && m.to.is_finite()
+        && m.from.x == m.to.x && m.from.y == m.to.y && m.from.z != m.to.z
+}
+
 struct Exemptions<'a> {
     walls: &'a [HoleAxis],
     bores: &'a [ThreadBore],
@@ -164,11 +178,20 @@ struct Exemptions<'a> {
     tip_radius: f64,
     chamfers: &'a [HoleChamfer],
     stack_only: bool,
+    vertical_rapids_only: bool,
 }
 
 impl<'a> Exemptions<'a> {
     fn none() -> Self {
-        Self { walls: &[], bores: &[], reliefs: &[], tip_radius: 0.0, chamfers: &[], stack_only: false }
+        Self {
+            walls: &[],
+            bores: &[],
+            reliefs: &[],
+            tip_radius: 0.0,
+            chamfers: &[],
+            stack_only: false,
+            vertical_rapids_only: false,
+        }
     }
 }
 
@@ -179,7 +202,22 @@ fn judged(path: &Toolpath, facets: &[Triangle], cutter: &Cutter, law: &SolidLaw,
     let bores = ex.bores;
     let reliefs = ex.reliefs;
     let stack_only = ex.stack_only;
+    let rapid_warning = |at| {
+        if ex.vertical_rapids_only {
+            Warning::RapidInPart { at }
+        } else {
+            Warning::RapidInStock { at }
+        }
+    };
     let first_cut = path.moves.iter().position(|m| m.kind != MoveKind::Rapid);
+    let first_vertical = if ex.vertical_rapids_only {
+        let Some(at) = path.moves.iter().position(vertical_rapid) else {
+            return Vec::new();
+        };
+        Some(at)
+    } else {
+        None
+    };
     if facets.is_empty() {
         return Vec::new();
     }
@@ -187,7 +225,11 @@ fn judged(path: &Toolpath, facets: &[Triangle], cutter: &Cutter, law: &SolidLaw,
     let allow = if law.allow.is_finite() { law.allow.max(0.0) } else { 0.0 };
     let index = SolidIndex::build(facets);
     let (Some(mut index), false) = (index, atoms.is_empty()) else {
-        return first_cut.map(|at| vec![Warning::Gouge { at }]).unwrap_or_default();
+        return if let Some(at) = first_vertical {
+            vec![rapid_warning(at)]
+        } else {
+            first_cut.map(|at| vec![Warning::Gouge { at }]).unwrap_or_default()
+        };
     };
     // The fluted length is the cutting edge; the bands above it are the
     // shank and holder. A cut that only the bands make is not a gouge -
@@ -204,6 +246,9 @@ fn judged(path: &Toolpath, facets: &[Triangle], cutter: &Cutter, law: &SolidLaw,
     let upright_chamfers = !ex.chamfers.is_empty() && path.moves.iter().all(|m| m.axis.is_none());
     let mut out = Vec::new();
     for (i, m) in path.moves.iter().enumerate() {
+        if ex.vertical_rapids_only && !vertical_rapid(m) {
+            continue;
+        }
         if !(m.from.is_finite() && m.to.is_finite()) {
             continue; // the NonFinite law owns it
         }
@@ -249,7 +294,7 @@ fn judged(path: &Toolpath, facets: &[Triangle], cutter: &Cutter, law: &SolidLaw,
                 // the cylinder the feed in cut ([`super::fine_bore`]); the
                 // shank and holder are read where the shift puts them.
                 if hits(&body) {
-                    out.push(Warning::RapidInStock { at: i });
+                    out.push(rapid_warning(i));
                 }
                 continue;
             }
@@ -260,12 +305,12 @@ fn judged(path: &Toolpath, facets: &[Triangle], cutter: &Cutter, law: &SolidLaw,
                 // the caller's; everything the lift enters is ours.
                 let (fr, column) = (Frame::new(m.from, None), rise(&edge, m.to.z - m.from.z));
                 if hits(&body) || (!column.is_empty() && index.hits(&fr, [0.0; 3], &column, allow, 0.0, &[], &[], &[])) {
-                    out.push(Warning::RapidInStock { at: i });
+                    out.push(rapid_warning(i));
                 }
                 continue;
             }
             if hits(&atoms) {
-                out.push(Warning::RapidInStock { at: i });
+                out.push(rapid_warning(i));
             }
         } else if !stack_only && hits(&edge) {
             out.push(Warning::Gouge { at: i });

@@ -307,6 +307,8 @@ pub enum Warning {
     /// Rapid `move` travels through stock: under the clearance plane,
     /// or (#2121) at it under the stock top.
     RapidInStock { at: usize },
+    /// The tool assembly meets the finished part on rapid move `at` (#4062).
+    RapidInPart { at: usize },
     /// #2901: the path starts at `height_mm`, under the `top_mm` of the
     /// start stock or of a fixture (`fixture`). The first traverse comes
     /// from an X/Y the machine does not know, so it can cross that top
@@ -498,6 +500,9 @@ impl core::fmt::Display for Warning {
             ),
             Warning::RapidInStock { at } => {
                 write!(f, "rapid move {at} travels through stock (below the clearance plane, or at it below the stock top)")
+            }
+            Warning::RapidInPart { at } => {
+                write!(f, "tool meets the part on rapid move {at}")
             }
             Warning::FirstTraverseLow { at, height_mm, top_mm, fixture, tilted: false } => write!(
                 f,
