@@ -259,6 +259,7 @@ fn a_vault_cuts_no_ring_at_top_z_but_keeps_each_inner_ring_opening_plane() {
 #[test]
 fn a_staged_face_cuts_no_level_at_top_z_and_a_plain_face_stays_one_pass() {
     let p = FaceParams {
+        retract_feed: 0.0,
         holes: Default::default(),
         tool_diameter: 6.0,
         stepover: 4.0,

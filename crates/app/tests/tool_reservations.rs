@@ -95,6 +95,7 @@ fn legacy_cutting_job() -> World {
     }, Location::default()).expect("stock"));
     history.execute(&world, AddTool::new(&world, "End mill", mill()).expect("mill"));
     history.execute(&world, CreateOperation::new(&world, "Face", "End mill", SrcRef::Stock, OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(), blend_turns: false, blend_radius: None, tilt: None, stepover: 3.0,
         clearance_z: Height::fixed(25.0), cut_z: Height::fixed(19.5), top_z: None,

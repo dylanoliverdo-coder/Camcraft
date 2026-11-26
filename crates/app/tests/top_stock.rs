@@ -44,6 +44,7 @@ fn scene(stock_top: f64, face: Option<f64>) -> World {
     );
     if let Some(cut) = face {
         let params = OpParams::Face {
+            retract_feed: 0.0,
             floor_stock: 0.0,
             holes: Default::default(),
             blend_turns: false, blend_radius: None,
@@ -257,6 +258,7 @@ fn a_narrow_mesh_stock_feature_is_not_acquitted_by_an_unsampled_prior() {
         ),
     );
     let face = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,

@@ -306,6 +306,7 @@ fn a_rotary_contour_on_a_reduced_model_is_judged_and_past_the_bound_refused_by_n
 
 fn face() -> OpParams {
     OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

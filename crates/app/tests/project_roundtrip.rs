@@ -375,7 +375,8 @@ fn tools_and_generated_operations_round_trip() {
             "Face1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+            OpParams::Face {
+                retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(19.5),
@@ -552,7 +553,8 @@ fn a_stated_pose_round_trips_verbatim() {
             "Face1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+            OpParams::Face {
+                retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 5.0,
                 clearance_z: Height::fixed(15.0),
                 cut_z: Height::fixed(9.0),
@@ -1076,7 +1078,8 @@ fn patch_selection_round_trips() {
                 entity: "boss".into(),
                 feature: FeatureSel::Patch(pid),
             }]),
-            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+            OpParams::Face {
+                retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(4.5),

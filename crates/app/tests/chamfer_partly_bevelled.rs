@@ -89,6 +89,7 @@ fn one_side_bevelled_plate(extra_vertex: bool) -> Mesh {
 
 fn chamfer(width: f64) -> OpParams {
     let base = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

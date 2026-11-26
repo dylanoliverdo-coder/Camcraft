@@ -325,6 +325,9 @@ pub enum ParamsDto {
         cut_z: HeightDto,
         feed: f64,
         plunge_feed: f64,
+        /// Vertical fed retract rate (mm/min, Journeyman S3); absent is 0 (rapid).
+        #[serde(default, skip_serializing_if = "is_zero")]
+        retract_feed: f64,
         climb: bool,
         /// Declared at v5, wired in step 4: absent (or the defaults) is
         /// exactly the legacy single-level face.

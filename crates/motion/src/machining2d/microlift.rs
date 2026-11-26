@@ -101,21 +101,19 @@ pub(super) fn profile(a: Point2, ret: &Return) -> Vec<(Point2, f64)> {
 
 /// Feed from where the tool stands on plane `z` along [`profile`] onto
 /// the next pass's start on plane `z`.
-pub(super) fn link(b: &mut PathBuilder, ret: &Return, z: f64, m: &Motion) {
-    link_at(b, ret, z, m.hop_z, m.feed);
+pub(super) fn link(b: &mut PathBuilder, ret: &Return, z: f64, mat_top: f64, m: &Motion) {
+    let hz = crate::fed_retract::switch_z(mat_top, m.links.approach.plunge_height, m.hop_z);
+    link_at_retract(b, ret, z, m.hop_z, m.feed, hz, m.links.approach.retract_feed);
 }
 
-fn push_prof(b: &mut PathBuilder, prof: &[(Point2, f64)], z: f64, hop_z: f64, feed: f64, high: bool) {
-    let at = b.at();
+fn push_prof(b: &mut PathBuilder, prof: &[(Point2, f64)], z: f64, hop_z: f64, feed: f64, high: bool, ret_lift: (f64, f64)) {
     if high {
-        // Up, across and down to the lift in rapid (vertical rapids in
-        // the cut's own kerf and column; the lateral one over the
-        // retract plane), then down the lead at feed.
-        let Some(&(top, hz)) = prof.first() else { return };
-        let hop = hop_z.max(z + hz);
-        b.push(MoveKind::Rapid, Point3::new(at.x, at.y, hop), None);
+        // Up, across and down to the lift (fed to switch height if retract_feed > 0, S3).
+        let Some(&(top, lift_h)) = prof.first() else { return };
+        let hop = hop_z.max(z + lift_h);
+        crate::fed_retract::lift_up(b, hop, ret_lift.0, ret_lift.1);
         b.push(MoveKind::Rapid, Point3::new(top.x, top.y, hop), None);
-        b.push(MoveKind::Rapid, Point3::new(top.x, top.y, lattice(z + hz)), None);
+        b.push(MoveKind::Rapid, Point3::new(top.x, top.y, lattice(z + lift_h)), None);
     }
     for &(p, dz) in prof.iter().skip(1) {
         let zz = if dz > 0.0 { lattice(z + dz) } else { z };
@@ -123,22 +121,26 @@ fn push_prof(b: &mut PathBuilder, prof: &[(Point2, f64)], z: f64, hop_z: f64, fe
     }
 }
 
-fn try_prof(b: &mut PathBuilder, prof: &[(Point2, f64)], z: f64, hop_z: f64, feed: f64, high: bool) -> bool {
+fn try_prof(b: &mut PathBuilder, prof: &[(Point2, f64)], z: f64, hop_z: f64, feed: f64, high: bool, ret_lift: (f64, f64)) -> bool {
     if high && prof.len() < 2 {
         return false;
     }
     let mut probe = PathBuilder::new(b.at());
-    push_prof(&mut probe, prof, z, hop_z, feed, high);
+    push_prof(&mut probe, prof, z, hop_z, feed, high, ret_lift);
     if super::arc_cross::moves_cross_prior(probe.moves(), b.moves()) {
         return false;
     }
-    push_prof(b, prof, z, hop_z, feed, high);
+    push_prof(b, prof, z, hop_z, feed, high, ret_lift);
     true
 }
 
 /// [`link`] on bare numbers: the hop plane a `high` return rides and
 /// the cutting feed (the 3-D ladder's per-level port, `machining3d::hsm`).
 pub(crate) fn link_at(b: &mut PathBuilder, ret: &Return, z: f64, hop_z: f64, feed: f64) {
+    link_at_retract(b, ret, z, hop_z, feed, hop_z, 0.0);
+}
+
+fn link_at_retract(b: &mut PathBuilder, ret: &Return, z: f64, hop_z: f64, feed: f64, hz: f64, retract_feed: f64) {
     let at = b.at();
     let Some(end) = ret.down.last().or(ret.via.last()).or(ret.up.last()).copied() else {
         return;
@@ -156,7 +158,7 @@ pub(crate) fn link_at(b: &mut PathBuilder, ret: &Return, z: f64, hop_z: f64, fee
         && g <= 0.02
     {
         let hop = hop_z.max(z + 0.1);
-        b.push(MoveKind::Rapid, Point3::new(at.x, at.y, hop), None);
+        crate::fed_retract::lift_up(b, hop, hz, retract_feed);
         b.push(MoveKind::Rapid, Point3::new(end.x, end.y, hop), None);
         b.push(MoveKind::Plunge, Point3::new(end.x, end.y, z), Some(feed));
         return;
@@ -171,7 +173,7 @@ pub(crate) fn link_at(b: &mut PathBuilder, ret: &Return, z: f64, hop_z: f64, fee
     };
     let adjusted = Return { lift, ..ret.clone() };
     let prof = profile(Point2::new(at.x, at.y), &adjusted);
-    if try_prof(b, &prof, z, hop_z, feed, adjusted.high) {
+    if try_prof(b, &prof, z, hop_z, feed, adjusted.high, (hz, retract_feed)) {
         return;
     }
     if !adjusted.high {
@@ -183,7 +185,7 @@ pub(crate) fn link_at(b: &mut PathBuilder, ret: &Return, z: f64, hop_z: f64, fee
         return;
     }
     let hop = hop_z.max(z + lift);
-    b.push(MoveKind::Rapid, Point3::new(at.x, at.y, hop), None);
+    crate::fed_retract::lift_up(b, hop, hz, retract_feed);
     b.push(MoveKind::Rapid, Point3::new(end.x, end.y, hop), None);
     b.push(MoveKind::Plunge, Point3::new(end.x, end.y, z), Some(feed));
 }

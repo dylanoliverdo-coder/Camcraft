@@ -29,7 +29,8 @@ fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Region {
 }
 
 fn params() -> FaceParams {
-    FaceParams { holes: Default::default(),
+    FaceParams {
+        retract_feed: 0.0, holes: Default::default(),
         tool_diameter: 10.0,
         stepover: 5.0,
         clearance_z: 5.0,

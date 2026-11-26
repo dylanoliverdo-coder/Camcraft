@@ -102,6 +102,7 @@ fn face_posted(rig: Rig, a_deg: f64, b_deg: f64, over: f64, post: Option<PostRef
     let t = catalog().into_iter().find(|(n, _)| *n == "EM-0400-2FL").map(|(_, t)| t).expect("catalog");
     h.execute(&world, AddTool::new(&world, "EM-0400-2FL", t).expect("tool"));
     let p = OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: Some(Tilt { basis_version: 1, a_deg, b_deg, origin: [0.0, 0.0, ORIGIN_Z] }),

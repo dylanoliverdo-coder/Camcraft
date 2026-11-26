@@ -172,6 +172,7 @@ fn walled_world() -> (World, History) {
     }
     for (op, tool) in [("Face1", TOOL), ("Face2", BARE)] {
         let params = OpParams::Face {
+            retract_feed: 0.0,
             floor_stock: 0.0,
             holes: Default::default(),
             tilt: None,

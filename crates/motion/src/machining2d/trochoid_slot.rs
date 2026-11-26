@@ -251,7 +251,7 @@ pub(super) fn plan_lane_layout(chain: &[Point2], p: &TrochoidParams, open: bool,
     let level = |lay: &Layout| -> Result<Toolpath, GenError> {
         let s = bore_start(lay, p, open);
         let mut bld = PathBuilder::new(Point3::new(s.x, s.y, 1.0));
-        emit_level(&mut bld, lay, p, 0.0, 1.0, false, open)?;
+        emit_level(&mut bld, lay, p, 0.0, 1.0, false, open, 0.0)?;
         Ok(bld.finish())
     };
     let mut best: Option<(f64, Point3, f64)> = None;
@@ -336,7 +336,7 @@ fn finish(lay: &Layout, p: &TrochoidParams, step: f64, deg: f64, b: f64, room: f
         let from = (above + crate::approach::DEFAULT_PLUNGE_HEIGHT).min(hop).max(above);
         bld.push(MoveKind::Rapid, Point3::new(entry.x, entry.y, from), None);
         // #871: a part-way refusal hands back the levels so far.
-        emit_level(&mut bld, lay, p, z, from, true, open).map_err(|e| e.with_ghost_moves(bld.moves()))?;
+        emit_level(&mut bld, lay, p, z, from, true, open, 0.0).map_err(|e| e.with_ghost_moves(bld.moves()))?;
         above = z;
     }
     let at = bld.at();

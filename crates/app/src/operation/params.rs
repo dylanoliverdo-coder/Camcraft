@@ -46,6 +46,7 @@ impl OpParams {
                 climb,
                 blend_turns, blend_radius,
                 holes,
+                retract_feed,
                 tilt, ..
             } => {
                 w(h, *stepover);
@@ -77,6 +78,10 @@ impl OpParams {
                     crate::machining2d::FaceHoles::Lift => {}
                     crate::machining2d::FaceHoles::CutAir => h.write_u8(0xB2),
                     crate::machining2d::FaceHoles::Through => h.write_u8(0xB3),
+                }
+                if *retract_feed != 0.0 {
+                    h.write_u8(0xB6);
+                    w(h, *retract_feed);
                 }
             }
             OpParams::Contour {

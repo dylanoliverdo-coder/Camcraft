@@ -155,6 +155,7 @@ fn the_same_slot_over_stock_to_its_top_is_silent() {
 /// pass).
 fn face(cut: f64) -> OpParams {
     OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,

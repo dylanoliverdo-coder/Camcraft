@@ -72,6 +72,7 @@ pub(super) fn wall_arc(
     z: f64,
     z_top: f64,
     hop_z: f64,
+    lift_mat_top: f64,
     first: Option<&Seg>,
 ) -> Result<(), &'static str> {
     let p = eng.p;
@@ -84,9 +85,8 @@ pub(super) fn wall_arc(
     let r = a.arc_nominal(p.tool_diameter);
     let arc = arc_lead_swept(e2, dir, z_top, z, r, a.arc_sweep_rad(), p.tolerance, holds)?;
     let s = arc.start;
-    let cur = b.at();
-    let lift = cur.z.max(hop_z);
-    b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, lift), None);
+    let lift = b.at().z.max(hop_z);
+    crate::fed_retract::lift_approach(b, lift, lift_mat_top, hop_z, a);
     b.push(MoveKind::Rapid, Point3::new(s.x, s.y, lift), None);
     // #1559: over carried stock the rapid stops at the plunge height
     // above it; the plunge below feeds the rest.

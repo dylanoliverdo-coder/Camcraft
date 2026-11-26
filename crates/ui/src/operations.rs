@@ -427,7 +427,8 @@ mod height_row_tests {
     #[test]
     fn the_pane_note_appears_only_while_something_is_unresolved() {
         let world = new_world();
-        let ok = OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        let ok = OpParams::Face {
+            retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
             stepover: 3.0,
             clearance_z: Height::fixed(25.0),
             cut_z: Height::fixed(19.5),
@@ -438,7 +439,8 @@ mod height_row_tests {
             climb: true,
         };
         assert_eq!(unresolved_note(&world, None, None, &ok), None, "all fixed - no alarm");
-        let broken = OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        let broken = OpParams::Face {
+            retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
             stepover: 3.0,
             clearance_z: Height::fixed(25.0),
             cut_z: Height::of(HeightReference::BottomOfStock, 0.0),

@@ -13,6 +13,7 @@ fn polygon(points: &[(f64, f64)]) -> Loop {
 
 fn params() -> FaceParams {
     FaceParams {
+        retract_feed: 0.0,
         tool_diameter: 3.0,
         stepover: 1.5,
         clearance_z: 5.0,

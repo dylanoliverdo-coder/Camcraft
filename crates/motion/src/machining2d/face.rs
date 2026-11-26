@@ -62,6 +62,8 @@ pub struct FaceParams {
     /// air, or ignored - the pre-M13.11 band serpentine. A region with
     /// no holes faces the same under every law.
     pub holes: FaceHoles,
+    /// Vertical fed retract rate (mm/min, Journeyman S3); `0` is rapid.
+    pub retract_feed: f64,
     /// The stock top in the facer's frame (#2004), read only when
     /// staging: stock over `top_z` keeps a level at `top_z`, so the first
     /// bite is never deeper than one stepdown. `None` is Top Z as the
@@ -108,6 +110,9 @@ impl FaceParams {
         }
         if self.feed <= 0.0 || self.plunge_feed <= 0.0 {
             return Err(GenError::Invalid("feeds must be positive".into()));
+        }
+        if let Some(why) = crate::fed_retract::retract_feed_refusal(self.retract_feed) {
+            return Err(GenError::Invalid(why.into()));
         }
         if self.blend_turns {
             super::fillet_tally::corner_arc_radius(self.blend_radius, self.tool_diameter).map_err(GenError::Invalid)?;
@@ -251,6 +256,8 @@ pub fn face_over_kept(
     }
     let mut lifted = false;
     let mut tally = face_keep::Tally::default();
+    let mut mat_top = p.stock_top.into_iter().chain(p.top_z).fold(p.cut_z, f64::max);
+    let mut lift_top = mat_top;
     for &z in &zs {
         // #3343: the rows of this level, cut short at the protected keep-out.
         let Some(lv) = face_keep::level(keep, z, &rows, &pieces, (entry, ys[0]), &mut tally)? else {
@@ -258,11 +265,10 @@ pub fn face_over_kept(
         };
         let (ex, ey) = lv.start;
         if tally.levels > 1 {
-            // New material is engaged from the air, never from under:
-            // lift to clearance and re-enter above the row's start.
-            let at = b.at();
-            b.push(MoveKind::Rapid, Point3::new(at.x, at.y, p.clearance_z), None);
+            // New material is engaged from the air, never from under.
+            crate::fed_retract::lift_motion(&mut b, p.clearance_z, lift_top, crate::approach::DEFAULT_PLUNGE_HEIGHT, p.clearance_z, p.retract_feed);
         }
+        lift_top = mat_top;
         b.push(MoveKind::Rapid, Point3::new(ex, ey, p.clearance_z), None);
         b.push(MoveKind::Plunge, Point3::new(ex, ey, z), Some(p.plunge_feed));
         let pieces = lv.pieces.as_ref();
@@ -275,7 +281,7 @@ pub fn face_over_kept(
                     // Across a bridged hole (or onto a row whose start
                     // was clipped): the level link, through clearance.
                     lifted = true;
-                    link(&mut b, Point3::new(x0, *y, z), p);
+                    link(&mut b, Point3::new(x0, *y, z), lift_top, p);
                 }
                 b.push(MoveKind::Feed, Point3::new(x1, *y, z), Some(p.feed));
             }
@@ -289,7 +295,7 @@ pub fn face_over_kept(
                     // reversal to ride, the link takes the tool over.
                     lifted = true;
                     if let Some(&(x0, _)) = pieces[i + 1].first() {
-                        link(&mut b, Point3::new(x0, y1, z), p);
+                        link(&mut b, Point3::new(x0, y1, z), lift_top, p);
                     }
                 } else if let Some(turn) = turns.get(i).copied().flatten() {
                     // Blended reversal: the step's own endpoints, one
@@ -317,6 +323,7 @@ pub fn face_over_kept(
                 }
             }
         }
+        mat_top = z;
     }
     if lifted && !forbidden.is_empty() {
         b.note("facing rows lifted over the region's holes at the clearance plane");
@@ -324,8 +331,7 @@ pub fn face_over_kept(
     for n in tally.finish(keep)? {
         b.note(n);
     }
-    let at = b.at();
-    b.push(MoveKind::Rapid, Point3::new(at.x, at.y, p.clearance_z), None);
+    crate::fed_retract::lift_motion(&mut b, p.clearance_z, lift_top, crate::approach::DEFAULT_PLUNGE_HEIGHT, p.clearance_z, p.retract_feed);
 
     let path = b.finish();
     if !path.all_finite() {
@@ -334,12 +340,9 @@ pub fn face_over_kept(
     Ok(path)
 }
 
-/// The facer's link from where the path stands to `to` on the cut
-/// level: up to the clearance plane, across at it, and down at the
-/// plunge feed - the level-to-level lift, used across a bridged hole.
-fn link(b: &mut PathBuilder, to: Point3, p: &FaceParams) {
-    let at = b.at();
-    b.push(MoveKind::Rapid, Point3::new(at.x, at.y, p.clearance_z), None);
+/// The facer's link from where the path stands to `to` on the cut level.
+fn link(b: &mut PathBuilder, to: Point3, lift_top: f64, p: &FaceParams) {
+    crate::fed_retract::lift_motion(b, p.clearance_z, lift_top, crate::approach::DEFAULT_PLUNGE_HEIGHT, p.clearance_z, p.retract_feed);
     b.push(MoveKind::Rapid, Point3::new(to.x, to.y, p.clearance_z), None);
     b.push(MoveKind::Plunge, to, Some(p.plunge_feed));
 }

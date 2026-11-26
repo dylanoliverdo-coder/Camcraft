@@ -397,7 +397,8 @@ fn the_gouge_clause_speaks_the_document_s_units() {
 
 #[test]
 fn a_face_cut_into_the_part_is_a_gouge() {
-    let face = |cut: f64| OpParams::Face { floor_stock: 0.0, holes: Default::default(),
+    let face = |cut: f64| OpParams::Face {
+        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 4.0,

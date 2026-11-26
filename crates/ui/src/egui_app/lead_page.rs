@@ -59,11 +59,14 @@ fn link_of(i: usize) -> Link {
     }
 }
 
-/// The whole tab. `first` is the kind's first entry and its helix lead
-/// radius, `None` for a kind whose first engagement is not a choice (the
-/// bore's centre dive).
+/// The whole tab for 2D `Links` operations (includes fed retract, S3).
 pub(super) fn leads_tab(ui: &mut Ui, u: Unit, tag: &str, first: Option<(&mut Entry3D, &mut f64)>, links: &mut Links) {
-    leads_tab_with_retract(ui, u, tag, first, links, true);
+    leads_tab_inner(ui, u, tag, first, links, true, true);
+}
+
+/// The whole tab for 3D / rotary / multi-axis operations (no 2D fed retract, S3).
+pub(super) fn leads_tab_3d(ui: &mut Ui, u: Unit, tag: &str, first: Option<(&mut Entry3D, &mut f64)>, links: &mut Links) {
+    leads_tab_inner(ui, u, tag, first, links, true, false);
 }
 
 /// Roughing links use clearance while Heights has no retract hop (#3318).
@@ -76,13 +79,25 @@ pub(super) fn leads_tab_with_retract(
     links: &mut Links,
     has_retract: bool,
 ) {
+    leads_tab_inner(ui, u, tag, first, links, has_retract, true);
+}
+
+fn leads_tab_inner(
+    ui: &mut Ui,
+    u: Unit,
+    tag: &str,
+    first: Option<(&mut Entry3D, &mut f64)>,
+    links: &mut Links,
+    has_retract: bool,
+    show_retract_feed: bool,
+) {
     let entry = first.as_ref().map(|(e, _)| **e);
     if let Some((entry, helix_radius)) = first {
         group(ui, "Entry", None, |ui| entry_group(ui, u, tag, entry, helix_radius, links));
     }
     group(ui, "Linking", None, |ui| linking_group(ui, u, tag, entry, links, has_retract));
     plunge_group(ui, u, &mut links.approach);
-    feeds_group(ui, u, &mut links.approach);
+    feeds_group(ui, u, &mut links.approach, show_retract_feed);
     engagement_group(ui, &mut links.approach);
 }
 

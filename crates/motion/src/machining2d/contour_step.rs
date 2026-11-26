@@ -44,6 +44,8 @@ pub(super) struct Step {
     /// or the vertical lead-in's height over it (M11.3 C) - the lead then
     /// descends along itself.
     pub lead_top: f64,
+    /// Material top of the level being left (Journeyman spec S3).
+    pub lift_mat_top: f64,
 }
 
 /// Structural refusals, each said once per path.
@@ -75,9 +77,8 @@ pub(super) fn engage_level(b: &mut PathBuilder, eng: &Engage, s: &Step, lead: &[
         (false, Link::Retract) => eng.m.hop_z,
         (false, _) => p.clearance_z,
     };
-    let cur = b.at();
     if !s.first {
-        b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, tz), None);
+        crate::fed_retract::lift_approach(b, tz, s.lift_mat_top, eng.m.hop_z, &p.links.approach);
     }
     let (e2, z) = (s.e2, s.z);
     if s.inside && s.tabbed {
@@ -150,6 +151,50 @@ fn graze(b: &mut PathBuilder, eng: &Engage, e2: Point2, z: f64, arm: Entry3D) {
         ));
     }
     feed_down(b, e2, z, p.entry_top(), eng.m, a.plunge(p.plunge_feed));
+}
+
+/// Material top that governed the descent into a contour level (Journeyman S3).
+#[allow(clippy::too_many_arguments)]
+pub(super) fn level_mat_top(
+    p: &super::contour_params::ContourParams,
+    inside: bool,
+    tabbed: bool,
+    rzi: usize,
+    rz: &[f64],
+    first: bool,
+    arm: Entry3D,
+    hop_z: f64,
+) -> f64 {
+    if !inside || tabbed || first || rzi == 0 {
+        return p.entry_top();
+    }
+    let prev_z = rz[rzi - 1];
+    if prev_z >= p.clearance_z {
+        return p.entry_top().min(prev_z);
+    }
+    let tz = if p.links.level == Link::Retract { hop_z } else { p.clearance_z };
+    let opened = rzi >= 2 || (rzi == 1 && arm == p.entry);
+    if !opened && tz > prev_z { p.entry_top().max(prev_z) } else { prev_z }
+}
+
+/// Lift off a contour cut to `target_z`: when `retract_feed > 0` feeds to switch
+/// height then rapids (Journeyman S3); when `0` keeps the pre-S3 feed-to-hop lift.
+pub(super) fn lift_over(
+    b: &mut PathBuilder,
+    p: &super::contour_params::ContourParams,
+    target_z: f64,
+    mat_top: f64,
+    hop_z: f64,
+) {
+    if p.links.approach.retract_feed > 0.0 {
+        crate::fed_retract::lift_approach(b, target_z, mat_top, hop_z, &p.links.approach);
+        return;
+    }
+    let cur = b.at();
+    b.push(MoveKind::Feed, Point3::new(cur.x, cur.y, hop_z), Some(p.feed));
+    if target_z > hop_z {
+        b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, target_z), None);
+    }
 }
 
 /// What the user can change to lift the refusal. The Arc entry is already

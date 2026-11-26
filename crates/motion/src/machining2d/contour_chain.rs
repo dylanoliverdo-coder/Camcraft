@@ -128,10 +128,11 @@ pub(crate) fn contour_along_chain_zs(
             hop
         }
     };
+    let mut lift_mat_top = p.entry_top();
     for (k, &z) in zs.iter().enumerate() {
         if k > 0 {
-            let cur = b.at();
-            b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, lift_z), None);
+            crate::fed_retract::lift_approach(&mut b, lift_z, lift_mat_top, hop, &p.links.approach);
+            lift_mat_top = zs[k - 1];
         }
         let cur = b.at();
         b.push(MoveKind::Rapid, Point3::new(entry.x, entry.y, cur.z), None);
@@ -144,8 +145,7 @@ pub(crate) fn contour_along_chain_zs(
         push_segs(&mut b, &walk, z, p.feed);
         push_segs(&mut b, &out, z, p.feed);
     }
-    let cur = b.at();
-    b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
+    crate::fed_retract::lift_approach(&mut b, p.clearance_z, lift_mat_top, hop, &p.links.approach);
 
     let path = b.finish();
     if let Some(why) = crate::approach::refusal(&path) {

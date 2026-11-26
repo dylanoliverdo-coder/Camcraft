@@ -126,6 +126,7 @@ fn face_edge_chains(world: &World, entity: &str, want_n: [f64; 3], want_off: f64
 
 fn face_params(cut: Height, clearance: f64) -> OpParams {
     OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,

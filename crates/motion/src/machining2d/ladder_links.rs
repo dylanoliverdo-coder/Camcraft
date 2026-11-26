@@ -28,6 +28,8 @@ pub(super) struct LevelWalk<'a> {
     pub prev_z: f64,
     /// The material's top at this level (M11.3 B's plunge height).
     pub mat_top: f64,
+    /// The material's top of the level being left (Journeyman spec S3).
+    pub lift_mat_top: f64,
     /// Previous level's cutter-center region when per-level keep-outs vary
     /// with height (#2055); `None` shares `cert`.
     pub prev_center: Option<&'a Region>,
@@ -110,7 +112,9 @@ pub(super) fn level_link(
 ) {
     let cur = b.at();
     let at = Point2::new(cur.x, cur.y);
-    let lift = |b: &mut PathBuilder, to: f64| b.push(MoveKind::Rapid, Point3::new(at.x, at.y, to), None);
+    let lift = |b: &mut PathBuilder, to: f64| {
+        crate::fed_retract::lift_approach(b, to, lv.lift_mat_top, m.hop_z, &m.links.approach);
+    };
     let dove = match (m.links.level, cert) {
         (Link::Clearance, _) => {
             lift(b, m.clearance_z);
@@ -187,7 +191,7 @@ pub(super) fn pass_link(b: &mut PathBuilder, lv: &LevelWalk, m: &Motion, cert: O
     };
     // The climb-and-dive every planar ladder has posted between passes:
     // the floor its neighbours already cleared, crossed in air.
-    b.push(MoveKind::Rapid, Point3::new(at.x, at.y, plane), None);
+    crate::fed_retract::lift_approach(b, plane, lv.lift_mat_top, m.hop_z, &m.links.approach);
     // #3567: a dead end of the Outside plan (a later pass no lead-in
     // reaches, marked by the plan) enters by the ramp along its own pass,
     // never by a plunge or helix into the stock in front of it. The ramp

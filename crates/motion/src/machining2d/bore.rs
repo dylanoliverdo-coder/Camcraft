@@ -29,7 +29,7 @@
 
 use std::f64::consts::PI;
 
-use crate::cl::{MoveKind, PathBuilder, Toolpath};
+use crate::cl::{PathBuilder, Toolpath};
 use crate::entry::Entry3D;
 use crate::geo2d::{Loop, Point2, Region};
 use crate::geometry::Point3;
@@ -340,11 +340,10 @@ pub fn bore_started(p: &BoreParams, pass_start: PassStart) -> Result<Toolpath, G
         // law: it lifts to clearance, positions over the dive point,
         // and only then opens the ladder - the same motion the pocket
         // posts between its islands, so no second hop is added here.
-        run_levels(&mut b, &passes, &zs, &motion, Some(p.tolerance), cert.as_ref(), cert.as_ref());
+        let last_above = run_levels(&mut b, &passes, &zs, &motion, Some(p.tolerance), cert.as_ref(), cert.as_ref());
         // Close this hole at the clearance plane so the next hole's
         // hop (or the path's end) starts from a safe Z.
-        let cur = b.at();
-        b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
+        crate::fed_retract::lift_approach(&mut b, p.clearance_z, last_above, motion.hop_z, &motion.links.approach);
     }
 
     let path = b.finish();

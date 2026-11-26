@@ -73,6 +73,7 @@ fn second_setup(world: &World, h: &mut History, second: Second) {
 
 fn face(cut_z: f64, stepover: f64) -> OpParams {
     OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

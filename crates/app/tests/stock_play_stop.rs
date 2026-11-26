@@ -25,6 +25,7 @@ const COARSE: f64 = (2.0 * HALF) * (2.0 * HALF) * 20.0 / 3.6;
 
 fn face(cut_z: f64) -> OpParams {
     OpParams::Face {
+        retract_feed: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

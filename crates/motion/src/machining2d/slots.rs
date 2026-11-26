@@ -224,9 +224,8 @@ pub fn slot(a: Point2, b: Point2, p: &SlotParams) -> Result<Toolpath, GenError> 
     let area = if p.blend_turns { stadium_center(a, b, h) } else { None };
     let turns = super::slot_turns::round(&rows, p, area.as_ref(), &mut bld);
     let runs = super::slot_turns::with_lap(&rows, turns, lap);
-    run_level_walks(&mut bld, &[pass], &zs, &motion, runs.as_deref(), center.as_ref(), link_cert.as_ref());
-    let cur = bld.at();
-    bld.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
+    let last_above = run_level_walks(&mut bld, &[pass], &zs, &motion, runs.as_deref(), center.as_ref(), link_cert.as_ref());
+    crate::fed_retract::lift_approach(&mut bld, p.clearance_z, last_above, motion.hop_z, &motion.links.approach);
 
     let path = bld.finish();
     if let Some(why) = crate::approach::refusal(&path) {

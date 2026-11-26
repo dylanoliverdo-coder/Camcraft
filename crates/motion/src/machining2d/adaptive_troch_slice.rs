@@ -180,7 +180,7 @@ pub(super) fn layout_confined(
     p: &PocketParams,
 ) -> Result<bool, GenError> {
     let mut bld = PathBuilder::new(Point3::new(lattice(lay.entry.x), lattice(lay.entry.y), p.top_z));
-    emit_level(&mut bld, &lay.lay, &lay.tp, p.bottom_z, p.top_z, false, lay.open)
+    emit_level(&mut bld, &lay.lay, &lay.tp, p.bottom_z, p.top_z, false, lay.open, 0.0)
         .map_err(super::adaptive_troch::renamed)?;
     let path = bld.finish();
     if super::adaptive_troch::confined(&path, center)?.is_some() {

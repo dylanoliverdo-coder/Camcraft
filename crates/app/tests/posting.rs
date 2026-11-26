@@ -238,7 +238,8 @@ fn an_unborn_toolpath_refuses_to_post() {
 }
 
 fn face_params() -> OpParams {
-    OpParams::Face { floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
+    OpParams::Face {
+        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 3.0,
         clearance_z: Height::fixed(25.0),
@@ -574,7 +575,8 @@ fn a_non_g54_slot_is_what_the_script_writes() {
         SetWcsOrigin::new(&world, Location::default()).expect("place the WCS"),
     );
     history.execute(&world, SetSetupWorkOffset::new(&world, "Setup1", Some(1)).expect("pick G55"));
-    let params = OpParams::Face { floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
+    let params = OpParams::Face {
+        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 3.0,
         clearance_z: Height::of(HeightReference::WorkOffset, 25.0),

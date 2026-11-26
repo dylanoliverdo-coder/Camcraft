@@ -41,6 +41,7 @@ fn face_world() -> (flecs_ecs::prelude::World, History) {
             "EM-0400-2FL",
             SrcRef::Stock,
             OpParams::Face {
+                retract_feed: 0.0,
                 floor_stock: 0.0,
                 holes: Default::default(),
                 tilt: None,

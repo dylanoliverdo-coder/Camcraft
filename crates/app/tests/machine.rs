@@ -87,7 +87,8 @@ fn faced_doc() -> (World, History) {
         "Face1",
         "EM-0400-2FL",
         SrcRef::Stock,
-        OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+        OpParams::Face {
+            retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
             stepover: 3.0,
             clearance_z: Height::fixed(25.0),
             cut_z: Height::fixed(18.0),
@@ -641,7 +642,8 @@ fn the_changer_counts_the_distinct_tools() {
             "Face2",
             "EM-0600-4FL",
             SrcRef::Stock,
-            OpParams::Face { floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
+            OpParams::Face {
+                retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), tilt: None, blend_turns: false, blend_radius: None,
                 stepover: 3.0,
                 clearance_z: Height::fixed(25.0),
                 cut_z: Height::fixed(18.0),

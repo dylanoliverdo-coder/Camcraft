@@ -44,6 +44,9 @@ pub struct ApproachDto {
     pub ramp_feed: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plunge_feed: Option<f64>,
+    /// Vertical fed retract rate (mm/min, Journeyman S3); absent is 0 (rapid).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retract_feed: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lead_feed_pct: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -130,6 +133,7 @@ pub fn approach_to_dto(a: &Approach) -> Option<ApproachDto> {
         approach_distance: num(a.approach_distance, d.approach_distance),
         ramp_feed: num(a.ramp_feed, d.ramp_feed),
         plunge_feed: num(a.plunge_feed, d.plunge_feed),
+        retract_feed: num(a.retract_feed, d.retract_feed),
         lead_feed_pct: num(a.lead_feed_pct, d.lead_feed_pct),
         max_engagement: num(a.max_engagement, d.max_engagement),
         lead_out: a.lead_out.map(lead_dto),
@@ -172,6 +176,7 @@ pub fn approach_from_dto(d: Option<&ApproachDto>) -> Approach {
         approach_distance: d.approach_distance.unwrap_or(a.approach_distance),
         ramp_feed: d.ramp_feed.unwrap_or(a.ramp_feed),
         plunge_feed: d.plunge_feed.unwrap_or(a.plunge_feed),
+        retract_feed: d.retract_feed.unwrap_or(a.retract_feed),
         lead_feed_pct: d.lead_feed_pct.unwrap_or(a.lead_feed_pct),
         max_engagement: d.max_engagement.unwrap_or(a.max_engagement),
         lead_out: d.lead_out.map(lead_of),

@@ -130,6 +130,7 @@ impl ParamsDto {
                 stepdown,
                 feed,
                 plunge_feed,
+                retract_feed,
                 climb,
                 blend_turns, blend_radius,
                 holes,
@@ -141,6 +142,7 @@ impl ParamsDto {
                 cut_z: (*cut_z).into(),
                 feed: *feed,
                 plunge_feed: *plunge_feed,
+                retract_feed: *retract_feed,
                 climb: *climb,
                 top_z: (*top_z).map(Into::into),
                 stepdown: *stepdown,
@@ -1496,6 +1498,7 @@ impl ParamsDto {
                 stepdown,
                 feed,
                 plunge_feed,
+                retract_feed,
                 climb,
                 blend_turns, blend_radius,
                 holes,
@@ -1509,6 +1512,7 @@ impl ParamsDto {
                 stepdown: *stepdown,
                 feed: *feed,
                 plunge_feed: *plunge_feed,
+                retract_feed: *retract_feed,
                 climb: *climb,
                 blend_turns: *blend_turns, blend_radius: *blend_radius,
                 holes: (*holes).into(),
@@ -2848,6 +2852,7 @@ mod face_holes_law {
 
     fn face(holes: FaceHoles) -> OpParams {
         OpParams::Face {
+            retract_feed: 0.0,
             floor_stock: 0.0,
             holes,
             blend_turns: false, blend_radius: None,
