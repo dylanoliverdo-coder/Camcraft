@@ -21,6 +21,8 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             feed,
             plunge_feed,
             retract_feed,
+            finish_levels,
+            finish_stepdown,
             climb,
             blend_turns, blend_radius,
             holes,
@@ -63,6 +65,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
                         );
                         prop_row(ui, "Stepdown", |ui| num(ui, u, stepdown.get_or_insert(1.0)));
                     }
+                    lead_page::finish_level_rows(ui, u, finish_levels, finish_stepdown);
                 });
             }
             if tab == SEC_PASSES {
@@ -213,7 +216,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
                     }
                     Lead::None => {}
                 }
-                lead_page::leads_tab(ui, u, "c", Some((entry, helix_radius)), links);
+                lead_page::leads_tab_with_finish(ui, u, "c", Some((entry, helix_radius)), links);
                 hint(ui, "keep down between levels cuts each ring all the way down, descending on the ring itself");
                 super::approach_page::contour_leads_editor(ui, u, &mut links.approach);
                 let mut tabs = f64::from(*tab_count);
@@ -252,7 +255,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             ..
         } => {
             if tab == SEC_LEADS {
-                lead_page::leads_tab(ui, u, "p", Some((&mut *entry, helix_radius)), links);
+                lead_page::leads_tab_with_finish(ui, u, "p", Some((&mut *entry, helix_radius)), links);
                 super::approach_page::pocket_arc_group(ui, u, *entry, &mut links.approach);
                 super::approach_page::approach_distance_group(ui, u, *pass_start, &mut links.approach);
                 super::predrilled_page::predrilled_group(ui, &mut links.approach, rest.is_some());

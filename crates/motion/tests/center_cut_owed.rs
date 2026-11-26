@@ -127,7 +127,7 @@ fn a_finish_whose_entries_fall_through_air_passes_untouched() {
 
 fn face_p(top_z: Option<f64>) -> FaceParams {
     FaceParams {
-        retract_feed: 0.0, holes: Default::default(),
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, holes: Default::default(),
         tool_diameter: 10.0,
         stepover: 6.0,
         clearance_z: 25.0,

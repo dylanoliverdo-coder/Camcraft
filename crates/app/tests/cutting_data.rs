@@ -108,7 +108,7 @@ fn faced_doc() -> (World, History) {
     let stock = SetStock::new(&world, StockShape::Box { dx: 60.0, dy: 60.0, dz: 20.0 }, Default::default());
     h.execute(&world, stock.expect("stock"));
     let face = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(),
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(),
         blend_turns: false, blend_radius: None,
         tilt: None,
         stepover: 3.0,

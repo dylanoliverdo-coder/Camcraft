@@ -45,7 +45,7 @@ fn generated_contour_and_face() -> flecs_ecs::prelude::World {
     tool.rpm = 3500.0;
     history.execute(&world, AddTool::new(&world, name, tool).unwrap());
     let face = OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false,

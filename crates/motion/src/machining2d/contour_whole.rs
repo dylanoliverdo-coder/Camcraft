@@ -122,9 +122,7 @@ fn trim_ladder(lad: &Ladder, z_cut: f64) -> Ladder {
         .iter()
         .map(|zs| zs.iter().copied().filter(|&z| z > z_cut + SAME_LEVEL).collect())
         .collect();
-    let mut zs: Vec<f64> = per_ring.iter().flatten().copied().collect();
-    zs.sort_by(|a, b| b.total_cmp(a));
-    zs.dedup_by(|a, b| a.to_bits() == b.to_bits());
+    let zs = super::contour_depth::merge_levels(&per_ring);
     Ladder { zs, per_ring, unread: lad.unread.clone() }
 }
 

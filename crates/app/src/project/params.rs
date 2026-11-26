@@ -328,6 +328,12 @@ pub enum ParamsDto {
         /// Vertical fed retract rate (mm/min, Journeyman S3); absent is 0 (rapid).
         #[serde(default, skip_serializing_if = "is_zero")]
         retract_feed: f64,
+        /// Finishing depth levels (Journeyman S8); absent is 0.
+        #[serde(default, skip_serializing_if = "is_zero_u32")]
+        finish_levels: u32,
+        /// Stepdown of each finishing level in mm (Journeyman S8); absent is 0.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        finish_stepdown: f64,
         climb: bool,
         /// Declared at v5, wired in step 4: absent (or the defaults) is
         /// exactly the legacy single-level face.

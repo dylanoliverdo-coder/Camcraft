@@ -52,7 +52,7 @@ fn faced_doc(at: Point3, model_top: f64) -> (World, History) {
     let hi = Point3::new(at.x + HALF, at.y + HALF, model_top);
     history.execute(&world, ImportModel::from_mesh("part", cube(lo, hi)));
     let params = OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(),
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(),
         tilt: None,
         stepover: 3.0,
         clearance_z: Height::fixed(25.0),

@@ -91,6 +91,12 @@ pub struct ApproachDto {
     /// absent is the remainder ladder, every earlier file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub equal_steps: Option<bool>,
+    /// Finishing depth levels (Journeyman S8); absent is 0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish_levels: Option<u32>,
+    /// Stepdown of each finishing level in mm (Journeyman S8); absent is 0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish_stepdown: Option<f64>,
 }
 
 fn lead_dto(l: Lead) -> LeadDto {
@@ -150,6 +156,8 @@ pub fn approach_to_dto(a: &Approach) -> Option<ApproachDto> {
         start_point: a.start_point.map(|q| [q.x, q.y]),
         exit_point: a.exit_point.map(|q| [q.x, q.y]),
         equal_steps: flag(a.equal_steps, d.equal_steps),
+        finish_levels: (a.finish_levels != d.finish_levels).then_some(a.finish_levels),
+        finish_stepdown: num(a.finish_stepdown, d.finish_stepdown),
     };
     (dto != ApproachDto::default()).then_some(dto)
 }
@@ -198,6 +206,8 @@ pub fn approach_from_dto(d: Option<&ApproachDto>) -> Approach {
         start_point: d.start_point.map(|[x, y]| crate::geo2d::Point2::new(x, y)),
         exit_point: d.exit_point.map(|[x, y]| crate::geo2d::Point2::new(x, y)),
         equal_steps: d.equal_steps.unwrap_or(a.equal_steps),
+        finish_levels: d.finish_levels.unwrap_or(a.finish_levels),
+        finish_stepdown: d.finish_stepdown.unwrap_or(a.finish_stepdown),
         center_cutting: true,
         // #2004: runtime only - the generation lays the stock top over it.
         stock_top: None,

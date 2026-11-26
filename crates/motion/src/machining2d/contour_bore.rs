@@ -99,6 +99,16 @@ pub(super) fn bore_entry(b: &mut PathBuilder, eng: &Engage, s: &BoreStep, lead: 
         let at_d = Lvl { mat_top: top_at(b, d), ..lvl };
         substituted_dive(b, &at_d, e2, z, m, why, tz)
     };
+    // Journeyman spec S8 (`finish_stepdown == 0`): repeating an already-cut
+    // level has zero axial drop; e2 was already opened to prev_z == z on the
+    // preceding level, so descend directly at e2 (never into the uncut core).
+    if !s.first && prev_z <= z + 1e-9 {
+        if leg.x != e2.x || leg.y != e2.y {
+            b.push(MoveKind::Rapid, Point3::new(e2.x, e2.y, tz), None);
+        }
+        feed_down(b, e2, z, prev_z, m, pf);
+        return None;
+    }
     if !a.center_cutting && arm == Entry3D::Plunge {
         b.note_once(&format!("{NOT_CENTER_CUTTING} - the bore side's plunge entry"));
         return sub(b, "the plunge arm");

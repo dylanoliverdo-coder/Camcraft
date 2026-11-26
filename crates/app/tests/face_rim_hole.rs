@@ -65,7 +65,7 @@ fn setup_world(mesh: Mesh) -> (World, History) {
 
 fn run_face(world: &World, h: &mut History, cut_z: f64) -> camcraft_app::schema::Toolpath {
     let params = OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: FaceHoles::Lift,
         blend_turns: false, blend_radius: None,

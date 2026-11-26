@@ -158,7 +158,7 @@ fn face_job(rpm: f64) -> (flecs_ecs::prelude::World, History) {
         ImportModel::from_mesh("part", cube(Point3::new(-30.0, -30.0, 0.0), Point3::new(30.0, 30.0, 18.0))),
     );
     let face = OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

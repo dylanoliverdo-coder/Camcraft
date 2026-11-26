@@ -31,7 +31,7 @@ use camcraft_sim::verify::AvoidSpec;
 use super::adaptive::{RestStock, StockFloor};
 use super::corner_relief::CornerRelief;
 use super::face::GenError;
-use super::levels::cut_levels_under;
+use super::equal_steps::cut_levels_for;
 use super::pocket::PocketParams;
 use super::pocket_avoid_level::emit_rest_avoid;
 use super::rest2d::{rest_strategy, RestParams, RestPlan, RestSource, REST_REACH};
@@ -244,7 +244,7 @@ fn rest_pocket_previous_inner(
     }
     rest.validate_alone()?;
     let p = &PocketParams { strategy: rest_strategy(p.strategy)?, ..*p };
-    let zs = cut_levels_under(p.top_z, p.links.approach.stock_top, p.bottom_z, p.stepdown)?;
+    let zs = cut_levels_for(p.top_z, &p.links.approach, p.bottom_z, p.stepdown)?;
     let bottom = zs.iter().copied().fold(f64::INFINITY, f64::min);
     let (plan, read) = match prior {
         Some(cols) => {

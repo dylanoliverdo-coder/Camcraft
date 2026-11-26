@@ -43,7 +43,7 @@ fn cut_planes(t: &Toolpath) -> Vec<f64> {
 
 fn fp(stock_top: Option<f64>) -> FaceParams {
     FaceParams {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         holes: Default::default(),
         tool_diameter: 6.0,
         stepover: 4.0,

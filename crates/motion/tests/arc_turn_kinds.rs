@@ -41,7 +41,7 @@ const FACE_R: f64 = 5.0;
 
 fn fp(stepover: f64, blend: bool, radius: Option<f64>) -> FaceParams {
     FaceParams {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         holes: Default::default(),
         tool_diameter: 2.0 * FACE_R,
         stepover,

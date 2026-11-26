@@ -216,7 +216,7 @@ fn a_carry_the_lattice_refuses_refuses_the_rest_reading_by_name() {
     h.execute(&world, CreateSetup::new(&world, None, None).expect("Setup1"));
     let face = |name: &str| {
         let p = OpParams::Face {
-            retract_feed: 0.0,
+            retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
             floor_stock: 0.0,
             holes: Default::default(),
             tilt: None,
@@ -264,7 +264,7 @@ fn faced_then_turned(deg: f64) -> (World, History) {
     h.execute(&world, CreateSetup::new(&world, None, None).expect("Setup1"));
     let face = |name: &str| {
         let p = OpParams::Face {
-            retract_feed: 0.0,
+            retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
             floor_stock: 0.0,
             holes: Default::default(),
             tilt: None,

@@ -90,7 +90,7 @@ fn a_cutter_below_the_minimum_is_still_refused_beside_a_probe() {
     em.rpm = 100.0; // under the 770MX's 175
     h.execute(&world, camcraft_app::commands::ChangeTool::new(&world, "EM-0400-2FL", em).expect("slow cutter"));
     let face = OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

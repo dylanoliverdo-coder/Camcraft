@@ -90,6 +90,8 @@ fn main() -> ExitCode {
     };
     let p = FaceParams {
         retract_feed: 0.0,
+        finish_levels: 0,
+        finish_stepdown: 0.0,
         tool_diameter: d,
         stepover,
         clearance_z,

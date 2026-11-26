@@ -143,7 +143,7 @@ fn drilled() -> (World, History) {
 fn faced() -> (World, History) {
     let (world, mut h) = world_with(StockShape::Box { dx: 20.0, dy: 2.0, dz: 8.0 }, -4.0, false);
     let params = OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         blend_turns: false, blend_radius: None,

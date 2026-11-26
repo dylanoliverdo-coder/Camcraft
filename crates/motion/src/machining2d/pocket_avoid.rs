@@ -256,6 +256,7 @@ pub(super) fn pocket_avoid_over(
         let cert_links = Cert::Region(&links_center);
         let hold_fitted = !p.blend_turns
             && (hold_crossings || matches!(actual, PocketStrategy::Waterline | PocketStrategy::OffsetRings));
+        ws.next_level();
         if hold_fitted && let Some(ref mut r) = runs {
             enforce_level_crossing_free(
                 &b,

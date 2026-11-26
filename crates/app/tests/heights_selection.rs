@@ -112,7 +112,7 @@ fn pocket_from_selection() -> OpParams {
 /// A facing pass over the picked face, cutting AT the face (bottom end).
 fn face_on_selection() -> OpParams {
     OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(),
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(),
         tilt: None,
         stepover: 2.0,
         clearance_z: Height::of(R::TopOfSelection, 15.0),

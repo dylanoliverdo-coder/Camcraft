@@ -354,6 +354,12 @@ impl OpParams {
                     h.write_u8(0xCB);
                     w(h, a.retract_feed);
                 }
+                // Journeyman spec S8: finishing depth levels, written only when non-default.
+                if a.finish_levels > 0 || a.finish_stepdown != 0.0 {
+                    h.write_u8(0xCC);
+                    h.write_u32(a.finish_levels);
+                    w(h, a.finish_stepdown);
+                }
                 match a.lead_out {
                     None => h.write_u8(0xFF),
                     Some(Lead::None) => h.write_u8(0),

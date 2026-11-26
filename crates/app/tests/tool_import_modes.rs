@@ -57,7 +57,7 @@ fn world_with_op() -> (World, History) {
     h.execute(&w, AddTool::new(&w, "T2", cat("EM-0600-4FL")).expect("T2"));
     h.execute(&w, SetToolNumber::new(&w, "T1", Some(7)).expect("number"));
     let params = OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,

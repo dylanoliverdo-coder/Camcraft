@@ -305,6 +305,7 @@ pub(super) fn run_levels(
 #[derive(Clone)]
 pub(super) struct WalkState {
     first: bool,
+    level_started: bool,
     pub(super) last_cut_z: Option<f64>,
     above: f64,
     st: LinkState,
@@ -312,25 +313,31 @@ pub(super) struct WalkState {
 
 impl WalkState {
     pub(super) fn new(top_z: f64) -> Self {
-        Self { first: true, last_cut_z: None, above: top_z, st: LinkState::default() }
+        Self { first: true, level_started: false, last_cut_z: None, above: top_z, st: LinkState::default() }
     }
 
     pub(super) fn above(&self) -> f64 {
         self.above
     }
 
+    /// Begin a new level in the ladder (even if its Z equals the previous level
+    /// under Journeyman spec S8 `finish_stepdown == 0`).
+    pub(super) fn next_level(&mut self) {
+        self.level_started = false;
+    }
+
     /// Resume a walk already at cut plane `z` with material top `above`
     /// (Journeyman spec S5; Held 1991, Stori & Wright 2000; no vendor
     /// parameters, text or code).
     pub(super) fn resumed_at(z: f64, above: f64) -> Self {
-        Self { first: false, last_cut_z: Some(z), above, st: LinkState::default() }
+        Self { first: false, level_started: true, last_cut_z: Some(z), above, st: LinkState::default() }
     }
 
     /// Start a walk already retracted above the cut plane with material top
     /// `above` (Journeyman spec S5): the first pass enters by descending from
     /// retract rather than feeding from the cut plane.
     pub(super) fn retracted(above: f64) -> Self {
-        Self { first: false, last_cut_z: None, above, st: LinkState::default() }
+        Self { first: false, level_started: false, last_cut_z: None, above, st: LinkState::default() }
     }
 
     /// Raise the material top for subsequent passes at the current level (e.g.
@@ -367,6 +374,7 @@ pub(super) fn run_level_walks(
 ) -> f64 {
     let mut ws = WalkState::new(m.top_z);
     for &z in zs {
+        ws.next_level();
         walk_one_level(b, z, passes, runs, m, center, links_cert, None, &mut ws);
     }
     ws.finish(b, m);
@@ -395,7 +403,8 @@ pub(super) fn walk_one_level(
         let walk = runs.and_then(|r| r.get(pi)).map(Vec::as_slice);
         let prev_z = ws.last_cut_z.unwrap_or(m.clearance_z);
         let lift_mat_top = ws.above;
-        if ws.last_cut_z != Some(z) {
+        let new_level = !ws.level_started || ws.last_cut_z != Some(z);
+        if new_level {
             ws.above = ws.last_cut_z.unwrap_or(m.top_z);
         }
         let mat_top = ws.above;
@@ -403,7 +412,7 @@ pub(super) fn walk_one_level(
         if ws.first {
             let dove = descend(b, m.entry, false, center, &lv, m.clearance_z, m);
             ws.st.begin_level(dove);
-        } else if ws.last_cut_z == Some(z) {
+        } else if !new_level {
             if let Some(Some(ret)) = m.micro.get(pi) {
                 super::microlift::link(b, ret, z, lift_mat_top, m);
             } else {
@@ -416,9 +425,10 @@ pub(super) fn walk_one_level(
             };
             level_link(b, arm, zig, cert, &lv, m, &mut ws.st);
         }
-        let entered = ws.last_cut_z != Some(z);
+        let entered = new_level;
         let scale = m.links.approach.engagement_scale();
         ws.first = false;
+        ws.level_started = true;
         if entered && scale < 1.0 && m.arc_radius > 0.0 {
             let segs = match walk {
                 Some(w) => w.to_vec(),

@@ -49,7 +49,7 @@ fn a_stock_face_enters_from_air_for_a_tool_that_is_not_centre_cutting() {
     let (world, _h) = world_with("EM-0800-4FL");
     for (top_z, stepdown) in [(None, None), (Some(Height::fixed(20.0)), Some(1.0))] {
         let face = OpParams::Face {
-            retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(),
+            retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(),
             blend_turns: false, blend_radius: None,
             tilt: None,
             stepover: 4.0,
@@ -97,7 +97,7 @@ fn an_inner_patch_face_runs_its_entry_out_to_air_for_a_tool_that_is_not_centre_c
         [(None, None, true), (None, None, false), (Some(Height::fixed(20.0)), Some(1.0), true)]
     {
         let params = OpParams::Face {
-            retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(),
+            retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(),
             blend_turns: false, blend_radius: None,
             tilt: None,
             stepover: 4.0,
@@ -123,7 +123,7 @@ fn an_inner_patch_face_runs_its_entry_out_to_air_for_a_tool_that_is_not_centre_c
             .expect("loop")])
             .expect("region"),
             &FaceParams {
-                retract_feed: 0.0, holes: Default::default(),
+                retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, holes: Default::default(),
                 tool_diameter: 8.0,
                 stepover: 4.0,
                 clearance_z: 30.0,

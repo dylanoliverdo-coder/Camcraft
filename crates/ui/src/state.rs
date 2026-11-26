@@ -1034,7 +1034,7 @@ impl Default for OpUi {
             // default must already be the seed shape the panes display -
             // quick-add and the retype menu then say the same thing.
             params: OpParams::Face {
-                retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(),
+                retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(),
                 tilt: None,
                 stepover: 3.0,
                 clearance_z: Height::of(HeightReference::TopOfStock, 25.0),

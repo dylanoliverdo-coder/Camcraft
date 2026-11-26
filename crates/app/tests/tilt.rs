@@ -457,7 +457,7 @@ fn an_insane_tilt_refuses_at_the_command_door() {
     );
     add_tool(&world, &mut history, "EM-0400-2FL");
     let face = |tilt: Option<Tilt>| OpParams::Face {
-        retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
         tilt,
         stepover: 3.0,
         clearance_z: Height::fixed(25.0),
@@ -563,7 +563,7 @@ fn a_tilt_edit_marks_the_operation_stale_and_undo_restores() {
     history.execute(
         &world,
         CreateOperation::new(&world, "F", "EM-0400-2FL", SrcRef::Stock, OpParams::Face {
-            retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
+            retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
             tilt: None,
             stepover: 3.0,
             clearance_z: Height::fixed(25.0),
@@ -584,7 +584,7 @@ fn a_tilt_edit_marks_the_operation_stale_and_undo_restores() {
             &world,
             "F",
             OpParams::Face {
-                retract_feed: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
+                retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0, floor_stock: 0.0, holes: Default::default(), blend_turns: false, blend_radius: None,
                 tilt: Some(Tilt {
                     basis_version: 1,
                     a_deg: 0.0,

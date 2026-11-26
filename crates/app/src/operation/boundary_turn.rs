@@ -227,7 +227,7 @@ mod law {
 
     fn facing() -> machining2d::FaceParams {
         machining2d::FaceParams {
-            retract_feed: 0.0,
+            retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
             tool_diameter: 10.0,
             stepover: 6.0,
             clearance_z: 40.0,

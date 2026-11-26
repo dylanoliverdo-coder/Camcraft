@@ -297,7 +297,7 @@ fn held_op_world() -> (World, History) {
     h.execute(&w, AddTool::new(&w, DRAWN, cat("EM-0600-4FL")).expect("tool"));
     h.execute(&w, SetToolBody::library(&w, DRAWN, "BT30 ER20", None, None).expect("holder"));
     let params = OpParams::Face {
-        retract_feed: 0.0,
+        retract_feed: 0.0, finish_levels: 0, finish_stepdown: 0.0,
         floor_stock: 0.0,
         holes: Default::default(),
         tilt: None,
