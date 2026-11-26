@@ -14,14 +14,14 @@ use super::GenError;
 use super::equal_steps::equal_stepdown;
 use super::levels::cut_levels_under;
 
-/// Refusal message when `finish_stepdown` is negative or non-finite.
+/// Refusal message when `finish_stepdown` is negative, non-finite, or above 10 m.
 pub const FINISH_STEPDOWN_REFUSAL: &str =
-    "finish_stepdown must be zero or a finite non-negative length in mm";
+    "finish_stepdown must be zero or a finite non-negative length in mm (at most 10000 mm)";
 
-/// Refuse a negative or non-finite `finish_stepdown` by name; `None` is valid.
+/// Refuse an invalid `finish_stepdown` by name; `None` is valid.
 #[must_use]
 pub fn finish_stepdown_refusal(v: f64) -> Option<&'static str> {
-    if v.is_finite() && v >= 0.0 {
+    if v.is_finite() && (0.0..=10_000.0).contains(&v) {
         None
     } else {
         Some(FINISH_STEPDOWN_REFUSAL)
@@ -207,10 +207,11 @@ mod tests {
     }
 
     #[test]
-    fn finish_stepdown_refusal_catches_negative_and_non_finite() {
+    fn finish_stepdown_refusal_catches_negative_non_finite_and_oversized() {
         assert!(finish_stepdown_refusal(0.0).is_none());
         assert!(finish_stepdown_refusal(0.25).is_none());
-        for bad in [-0.01, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert!(finish_stepdown_refusal(10_000.0).is_none());
+        for bad in [-0.01, -1.0, 10_000.01, 1e308, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             let msg = finish_stepdown_refusal(bad).expect("bad finish_stepdown refused");
             assert!(msg.contains("finish_stepdown"), "{msg}");
         }

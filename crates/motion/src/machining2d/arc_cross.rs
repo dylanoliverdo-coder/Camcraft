@@ -66,6 +66,10 @@ struct Chord {
     z0: f64,
     z1: f64,
     own: Option<Key>,
+    /// Identical planar arc identity `(from.x, from.y, key)` so an arc
+    /// repeated at the same Z plane (S8 `finish_stepdown == 0`) does not
+    /// falsely cross its own bracket (`fan` vs `hull`).
+    arc_id: Option<(u64, u64, Key)>,
     /// A corner arc's end tangents (`arc_touch`), by index.
     touch: Option<usize>,
 }
@@ -136,7 +140,7 @@ pub(crate) fn moves_cross_prior(cand: &[Move], prior: &[Move]) -> bool {
 /// descending chord only over a shared depth RANGE - a touch at a
 /// single endpoint is the graze every entry makes by construction).
 fn crosses(p: &Chord, q: &Chord) -> bool {
-    if p.mv == q.mv || !z_depths_overlap(p.z0, p.z1, q.z0, q.z1) {
+    if p.mv == q.mv || (p.arc_id.is_some() && p.arc_id == q.arc_id) || !z_depths_overlap(p.z0, p.z1, q.z0, q.z1) {
         return false;
     }
     let (oa, ob) = (orient(p.a, p.b, q.a), orient(p.a, p.b, q.b));
@@ -156,6 +160,7 @@ fn chords(path: &Toolpath, keys: &HashSet<Key>, blends: &HashSet<Key>) -> (Vec<C
         }
         let (z0, z1) = (m.from.z, m.to.z);
         let own = move_key(m).filter(|k| keys.contains(k));
+        let arc_id = own.map(|k| (m.from.x.to_bits(), m.from.y.to_bits(), k));
         let bracketed = own.and_then(|_| {
             let a = m.arc?;
             bracket(Point2::new(m.from.x, m.from.y), a.center, a.ccw, Point2::new(m.to.x, m.to.y))
@@ -171,10 +176,10 @@ fn chords(path: &Toolpath, keys: &HashSet<Key>, blends: &HashSet<Key>) -> (Vec<C
                         touches.len() - 1
                     });
                 for poly in [fan, hull] {
-                    out.extend(poly.windows(2).map(|w| Chord { mv: i, a: w[0], b: w[1], z0, z1, own, touch }));
+                    out.extend(poly.windows(2).map(|w| Chord { mv: i, a: w[0], b: w[1], z0, z1, own, arc_id, touch }));
                 }
             }
-            None => out.extend(m.chords(ARC_FIT_TOL).into_iter().map(|(a, b)| Chord { mv: i, a, b, z0, z1, own, touch: None })),
+            None => out.extend(m.chords(ARC_FIT_TOL).into_iter().map(|(a, b)| Chord { mv: i, a, b, z0, z1, own, arc_id, touch: None })),
         }
     }
     (out, touches)

@@ -13,11 +13,14 @@
 use camcraft_motion::cl::{Move, MoveKind, Toolpath};
 use camcraft_motion::entry::Entry3D;
 use camcraft_motion::geo2d::{Loop, Point2, Region};
+use camcraft_motion::geometry::{Point3, Triangle};
 use camcraft_motion::links::{Approach, Link, Links};
 use camcraft_motion::machining2d::{
     ContourParams, FaceHoles, FaceParams, Lead, PocketParams, PocketStrategy, Side, WallPasses,
-    contour, cut_levels_for, face, pocket,
+    contour, contour_whole_bodies, cut_levels_for, face, pocket, pocket_avoid,
 };
+use camcraft_motion::tools::ToolGeom;
+use camcraft_motion::verify::{AvoidItem, AvoidSpec, Cutter};
 
 fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Region {
     let lp = Loop::new(vec![
@@ -376,4 +379,140 @@ fn s8_pocket_finishing_levels_shift_passes_identically() {
     assert_level_shifted(&path, -5.25, -5.5, 0.25);
     assert_level_shifted(&path, -5.5, -5.75, 0.25);
     assert_level_shifted(&path, -5.75, -6.0, 0.25);
+}
+
+fn box_facets(x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> Vec<Triangle> {
+    let v = [
+        Point3::new(x0, y0, z0),
+        Point3::new(x1, y0, z0),
+        Point3::new(x1, y1, z0),
+        Point3::new(x0, y1, z0),
+        Point3::new(x0, y0, z1),
+        Point3::new(x1, y0, z1),
+        Point3::new(x1, y1, z1),
+        Point3::new(x0, y1, z1),
+    ];
+    let q = |a: usize, b: usize, c: usize, d: usize| [Triangle::new(v[a], v[b], v[c]), Triangle::new(v[a], v[c], v[d])];
+    [q(0, 3, 2, 1), q(4, 5, 6, 7), q(0, 1, 5, 4), q(2, 3, 7, 6), q(0, 4, 7, 3), q(1, 2, 6, 5)]
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+#[test]
+fn s8_whole_model_multi_band_contour_preserves_zero_stepdown_repeat() {
+    // Stepped solid: narrow 20x20 upper boss on [-2, 0] atop wider 40x40 base on [-4, -2].
+    // Whole-model contour exercises `reach_up` when the outline grows at Z=-2.
+    let mut part = box_facets(-10.0, -10.0, -2.0, 10.0, 10.0, 0.0);
+    part.extend(box_facets(-20.0, -20.0, -4.0, 20.0, 20.0, -2.0));
+    let top_region = rect(-10.0, -10.0, 10.0, 10.0);
+
+    let p_base = contour_boss_params(0.0, -4.0, 2.0, false, 0, 0.0);
+    let p_rep = contour_boss_params(0.0, -4.0, 2.0, false, 1, 0.0);
+    let base = contour_whole_bodies(&top_region, &part, &[], &p_base).expect("whole base");
+    let rep = contour_whole_bodies(&top_region, &part, &[], &p_rep).expect("whole rep");
+
+    assert_eq!(
+        moves_at_level(&rep, -4.0).len(),
+        moves_at_level(&base, -4.0).len() * 2,
+        "multi-band whole-model contour must repeat final level -4.0 twice"
+    );
+}
+
+#[test]
+fn s8_inside_bore_lead_none_repeat_descends_at_opened_wall_not_uncut_core() {
+    // 30 x 30 mm bore centered at (0, 0), tool D=6 -> wall offset ring at +-12 mm.
+    // With Lead::None, e2 lies on the offset ring (|x|=12 or |y|=12), while the
+    // uncut interior core is near (0, 0). On an s=0 repeat level, the tool must
+    // descend directly at e2 (already opened on the preceding level) for both
+    // center-cutting and non-center-cutting tools, never plunging into the core.
+    let bore = rect(-15.0, -15.0, 15.0, 15.0);
+    for entry in [Entry3D::Ramp, Entry3D::Helix] {
+        for center_cutting in [true, false] {
+            let mut p = contour_boss_params(0.0, -4.0, 2.0, false, 1, 0.0);
+            p.side = Side::Inside;
+            p.lead = Lead::None;
+            p.entry = entry;
+            p.links.approach.center_cutting = center_cutting;
+
+            let mut p_base = p;
+            p_base.links.approach.finish_levels = 0;
+
+            let base = contour(&bore, &p_base).expect("bore base");
+            let rep = contour(&bore, &p).expect("bore repeat must succeed for center_cutting={center_cutting}");
+
+            assert_levels_eq(&planar_level_runs(&rep, 10.0), &[-2.0, -4.0, -4.0]);
+            // Count the 4-sided +-12 mm offset ring moves at Z=-4.0 (excluding
+            // any initial dive-link move on the first Helix level; the repeat
+            // level descends directly at opened e2 without a redundant dive link).
+            let on_ring = |x: f64, y: f64| (x.abs() - 12.0).abs() < 1e-3 || (y.abs() - 12.0).abs() < 1e-3;
+            let ring_moves = |tp: &Toolpath| {
+                moves_at_level(tp, -4.0)
+                    .into_iter()
+                    .filter(|m| on_ring(m.from.x, m.from.y) && on_ring(m.to.x, m.to.y))
+                    .count()
+            };
+            assert_eq!(ring_moves(&base), 4, "entry={entry:?} cc={center_cutting}: base must cut 4 ring sides");
+            assert_eq!(
+                ring_moves(&rep),
+                8,
+                "entry={entry:?} cc={center_cutting}: final level -4.0 must cut the 4-sided ring twice"
+            );
+            // Every plunge landing at Z=-4.0 must lie on the +-12 mm offset ring,
+            // never at the uncut interior core near (0, 0).
+            let core_plunges: Vec<_> = rep
+                .moves
+                .iter()
+                .filter(|m| {
+                    m.kind == MoveKind::Plunge
+                        && (m.to.z - (-4.0)).abs() < 1e-6
+                        && m.to.x.abs() < 11.5
+                        && m.to.y.abs() < 11.5
+                })
+                .collect();
+            assert!(
+                core_plunges.is_empty(),
+                "entry={entry:?} cc={center_cutting}: repeat plunged into uncut core: {core_plunges:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn s8_pocket_avoid_waterline_zero_stepdown_repeat_runs_cleanly() {
+    let pock = rect(0.0, 0.0, 60.0, 40.0);
+    // Keep-out clamp standing at the right edge of the pocket (at x in [50, 62]).
+    let clamp = box_facets(50.0, 10.0, -5.0, 62.0, 30.0, 10.0);
+    let avoid = AvoidSpec {
+        items: vec![AvoidItem { label: "clamp".into(), tris: clamp, edges: vec![] }],
+        cutter: Cutter::flat(&ToolGeom {
+            radius: 3.0,
+            nose_radius: 0.0,
+            flute_len: 10.0,
+            shank_radius: 3.0,
+            shank_len: 15.0,
+            holder_radius: 10.0,
+            holder_len: 20.0,
+        }),
+        clearance: 0.5,
+    };
+
+    let mut base_p = pocket_params(0.0, -4.0, 2.0, false, 0, 0.0);
+    base_p.strategy = PocketStrategy::Waterline;
+    let mut rep_p = base_p;
+    rep_p.links.approach.finish_levels = 1;
+
+    let base = pocket_avoid(&pock, &base_p, &avoid).expect("pocket_avoid base");
+    let rep = pocket_avoid(&pock, &rep_p, &avoid).expect("pocket_avoid rep");
+
+    assert_levels_eq(&planar_level_runs(&rep, 10.0), &[-2.0, -4.0, -4.0]);
+    assert_eq!(
+        moves_at_level(&rep, -4.0).len(),
+        moves_at_level(&base, -4.0).len() * 2,
+        "pocket_avoid waterline must repeat final level -4.0 twice"
+    );
+    assert!(
+        camcraft_sim::verify::crossed_pairs(&rep, 0.01).is_empty(),
+        "pocket_avoid waterline repeat must remain crossing-free"
+    );
 }

@@ -1,23 +1,10 @@
-//! The planar ladder's descents, one plan per motion (moved out of
-//! `levels.rs` by M11.2 C so a level change can take any of them, from
-//! any plane; M11.3 B/D their shapes and feeds, `approach.rs`): plunge,
-//! the ramp chord, the zig-zag ramp at a maximum angle along the level's
-//! first cut, the helix at a radius and pitch, the vertical-plane arc.
-//! Each is PLANNED first (so a keep-down link knows where the descent
-//! starts) and POSTED second, from whatever plane the tool travels at.
+//! The planar ladder's descents, one plan per motion (M11.2 C / M11.3 B/D):
+//! plunge, ramp chord, zig-zag ramp, helix, vertical-plane arc. Each is PLANNED
+//! first (for keep-down links) and POSTED second; every descent starts at
+//! material top plus `plunge_height` (above that the tool rapids).
 //!
-//! M11.3 (two user hand-tests): ONE entry per level, ending on the first
-//! cut's start - a plunge dives at the pass start itself where that is
-//! off the wall, a helix is placed so its orbit closes on the pass start,
-//! so no second dive follows a good entry; where one cannot be avoided
-//! it is named. And every descent starts just over the material (its top
-//! plus the plunge height): above that the tool rapids, it never feeds
-//! or spirals through air.
-//!
-//! Provenance: standard CNC entry motions - straight plunge, linear and
-//! zig-zag ramp, helical interpolation, circular ramp - as public G-code
-//! manuals and machining handbooks describe them; the certification laws
-//! are this crate's (M8.1's superset law, `entry::dive_room`,
+//! Provenance: standard CNC entry motions per public G-code manuals and
+//! machining handbooks; certification laws are M8.1 (`entry::dive_room`,
 //! `entry_arc`). No vendor material consulted.
 
 use crate::approach::{CENTER_CUT_REFUSAL, NOT_CENTER_CUTTING};
@@ -127,13 +114,8 @@ pub(super) fn plan(arm: Entry3D, zig: bool, l: &Lvl, leg: Point2, z: f64, prev_z
 
 /// [`plan`] onto the pass start itself, without the horizontal arc.
 pub(super) fn plan_core(arm: Entry3D, zig: bool, l: &Lvl, leg: Point2, z: f64, prev_z: f64, m: &Motion) -> Descent {
-    // Journeyman spec S8 (`finish_stepdown == 0`): repeating an already-cut
-    // level has zero axial drop; feed down cleanly instead of rapiding to the
-    // cut plane or emitting a spurious zero-drop substitution note.
-    if prev_z <= z + 1e-9
-        && arm != Entry3D::Plunge
-        && let Some(&e) = l.pass.first()
-    {
+    // Journeyman S8 (`s == 0`): zero-drop repeat feeds cleanly instead of rapiding to `z`.
+    if prev_z <= z + 1e-9 && arm != Entry3D::Plunge && let Some(&e) = l.pass.first() {
         return Descent::Plunge(dive_point(l, e, m).unwrap_or(e));
     }
     let d = plan_arm(arm, zig, l, leg, z, prev_z, m);
@@ -398,22 +380,10 @@ pub(super) fn push(b: &mut PathBuilder, d: &Descent, l: &Lvl, z: f64, tz: f64, m
             helix_about(b, start, center, h.from, z, turns, fd, !a.helix_cw);
             link(dive_link(b, l, start, e, z, m))
         }
-        Descent::Arc(lead, zf) => {
-            push_arc_lead(b, lead, tz, *zf, fd, a.plunge(m.plunge_feed));
-            Vec::new()
-        }
+        Descent::Arc(lead, zf) => { push_arc_lead(b, lead, tz, *zf, fd, a.plunge(m.plunge_feed)); Vec::new() }
         Descent::Sub(why) => link(substituted_dive(b, l, e, z, m, why, tz)),
-        Descent::Named(inner, note) => {
-            b.note_once(note);
-            push(b, inner, l, z, tz, m)
-        }
-        Descent::Refused(why) => {
-            // The ladder turns this note into the operation's refusal
-            // (`approach::refusal`); nothing is posted for a descent no
-            // tool law allows.
-            b.note_once(why);
-            Vec::new()
-        }
+        Descent::Named(inner, note) => { b.note_once(note); push(b, inner, l, z, tz, m) }
+        Descent::Refused(why) => { b.note_once(why); Vec::new() }
         Descent::XyArc(inner, x) => push_xy(b, inner, x, l, z, tz, m),
     }
 }
