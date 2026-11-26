@@ -312,6 +312,10 @@ pub(crate) fn marching(g: &Grid) -> Vec<Triangle> {
     out
 }
 
+/// The fraction of a lattice edge within which a crossing is put on the
+/// sample (#4107): at a 0.25 mm step it moves a corner at most 0.25 nm.
+const NODE_SNAP: f64 = 1e-6;
+
 /// Polygonize one tetrahedron: inside is d < 0.
 fn tet(out: &mut Vec<Triangle>, p: [Point3; 4], v: [f64; 4]) {
     let inside: Vec<usize> = (0..4).filter(|&c| v[c] < 0.0).collect();
@@ -319,6 +323,11 @@ fn tet(out: &mut Vec<Triangle>, p: [Point3; 4], v: [f64; 4]) {
     let cross = |a: usize, b: usize| {
         let (da, db) = (v[a], v[b]);
         let t = if (da - db).abs() > f64::EPSILON { (da / (da - db)).clamp(0.0, 1.0) } else { 0.5 };
+        // #4107: a crossing within NODE_SNAP of a sample sits on it. A value
+        // a few picometres from zero (a floor on the lattice) put the corner
+        // that close to the sample, under the 1e-9 weld; on the sample the
+        // facets that share it are exactly zero-area and `push` drops them.
+        let t = if t < NODE_SNAP { 0.0 } else if t > 1.0 - NODE_SNAP { 1.0 } else { t };
         let (pa, pb) = (p[a], p[b]);
         Point3::new(pa.x + (pb.x - pa.x) * t, pa.y + (pb.y - pa.y) * t, pa.z + (pb.z - pa.z) * t)
     };
