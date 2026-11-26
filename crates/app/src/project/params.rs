@@ -311,6 +311,102 @@ impl From<AdaptiveFinishDto> for crate::machining2d::AdaptiveFinish {
     }
 }
 
+/// File mirror of `machining2d::FinishDirection` (Journeyman spec S4): `same`
+/// is the default and stays off the wire.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FinishDirectionDto {
+    #[default]
+    Same,
+    Climb,
+    Conventional,
+}
+
+impl FinishDirectionDto {
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    fn is_same(&self) -> bool {
+        *self == Self::Same
+    }
+}
+
+/// File mirror of `machining2d::PocketFinish` (Journeyman spec S4; Held 1991,
+/// Smid 2007; no vendor parameters, text or code). Omitted from JSON when at
+/// defaults so older files load and save unchanged.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct PocketFinishDto {
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub finish_passes: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub finish_spacing: f64,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub spring_passes: u32,
+    #[serde(default, skip_serializing_if = "FinishDirectionDto::is_same")]
+    pub finish_direction: FinishDirectionDto,
+    #[serde(default, skip_serializing_if = "FinishLevelDto::is_every")]
+    pub finish_level: FinishLevelDto,
+}
+
+impl Default for PocketFinishDto {
+    fn default() -> Self {
+        Self {
+            finish_passes: 0,
+            finish_spacing: 0.0,
+            spring_passes: 0,
+            finish_direction: FinishDirectionDto::Same,
+            finish_level: FinishLevelDto::Every,
+        }
+    }
+}
+
+impl PocketFinishDto {
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    fn is_default(&self) -> bool {
+        self.finish_passes == 0
+            && self.finish_spacing == 0.0
+            && self.spring_passes == 0
+            && self.finish_direction == FinishDirectionDto::Same
+            && self.finish_level == FinishLevelDto::Every
+    }
+}
+
+impl From<crate::machining2d::PocketFinish> for PocketFinishDto {
+    fn from(p: crate::machining2d::PocketFinish) -> Self {
+        Self {
+            finish_passes: p.finish_passes,
+            finish_spacing: p.finish_spacing,
+            spring_passes: p.spring_passes,
+            finish_direction: match p.finish_direction {
+                crate::machining2d::FinishDirection::Same => FinishDirectionDto::Same,
+                crate::machining2d::FinishDirection::Climb => FinishDirectionDto::Climb,
+                crate::machining2d::FinishDirection::Conventional => FinishDirectionDto::Conventional,
+            },
+            finish_level: match p.finish_level {
+                crate::machining2d::FinishLevel::Every => FinishLevelDto::Every,
+                crate::machining2d::FinishLevel::Last => FinishLevelDto::Last,
+            },
+        }
+    }
+}
+
+impl From<PocketFinishDto> for crate::machining2d::PocketFinish {
+    fn from(d: PocketFinishDto) -> Self {
+        Self {
+            finish_passes: d.finish_passes,
+            finish_spacing: d.finish_spacing,
+            spring_passes: d.spring_passes,
+            finish_direction: match d.finish_direction {
+                FinishDirectionDto::Same => crate::machining2d::FinishDirection::Same,
+                FinishDirectionDto::Climb => crate::machining2d::FinishDirection::Climb,
+                FinishDirectionDto::Conventional => crate::machining2d::FinishDirection::Conventional,
+            },
+            finish_level: match d.finish_level {
+                FinishLevelDto::Every => crate::machining2d::FinishLevel::Every,
+                FinishLevelDto::Last => crate::machining2d::FinishLevel::Last,
+            },
+        }
+    }
+}
+
 /// The file mirror of `operation::OpParams`, tool-free by the same rule as
 /// the domain type: the diameter lives in the tool, never a parameter.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -492,6 +588,10 @@ pub enum ParamsDto {
         /// #3316): absent is `auto` on every earlier file - no version step.
         #[serde(default, skip_serializing_if = "PassStartDto::is_auto")]
         pass_start: PassStartDto,
+        /// Journeyman spec S4: wall finishing passes after clearing; absent is
+        /// clearing alone (every earlier file loads and saves unchanged).
+        #[serde(default, skip_serializing_if = "PocketFinishDto::is_default")]
+        finish: PocketFinishDto,
     },
     /// 2D Adaptive (M2.4 A): the pocket arm without the strategy tag -
     /// the kind fixes the ladder; every default the pocket needs, this

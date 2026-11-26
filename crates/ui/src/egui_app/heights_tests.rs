@@ -19,7 +19,7 @@ use camcraft_app::tools::catalog;
 use crate::state::{CommandKind, State};
 
 fn pocket(clearance_z: Height, top_z: Height, bottom_z: Height) -> OpParams {
-    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
+    OpParams::Pocket { finish: Default::default(), floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         tilt: None,

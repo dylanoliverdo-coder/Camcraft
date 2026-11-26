@@ -807,6 +807,7 @@ fn seed_pocket(c: &Carried) -> OpParams {
         corner_relief: crate::machining2d::CornerRelief::default(),
         tilt: c.tilt,
         pass_start: crate::machining2d::PassStart::Auto,
+        finish: crate::machining2d::PocketFinish::default(),
     }
 }
 

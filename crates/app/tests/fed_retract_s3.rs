@@ -63,6 +63,7 @@ fn pocket_40x30(retract_feed: f64) -> OpParams {
         rest: Default::default(),
         corner_relief: Default::default(),
         pass_start: Default::default(),
+        finish: Default::default(),
     }
 }
 

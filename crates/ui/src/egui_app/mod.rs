@@ -213,6 +213,7 @@ mod mill2d_page;
 mod contour_pass_rows;
 // Journeyman spec S5: 2D Adaptive wall finishing pass rows.
 mod adaptive_finish_rows;
+mod pocket_finish_rows;
 // #1815: 2D Pocket's "Rest machining" group on the Passes tab.
 mod rest_pocket_page;
 mod mill3d_page;

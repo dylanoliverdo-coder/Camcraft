@@ -31,7 +31,7 @@ fn sec_index(name: &str) -> usize {
 }
 
 fn pocket(rest: Option<RestParams>) -> OpParams {
-    OpParams::Pocket {
+    OpParams::Pocket { finish: Default::default(),
         floor_stock: 0.0,
         links: camcraft_app::links::Links::PLANAR,
         stepover: 1.5,

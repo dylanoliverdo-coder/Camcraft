@@ -94,6 +94,9 @@ mod pass_start;
 mod ring_fill;
 mod ring_side;
 mod pocket;
+mod pocket_finish;
+mod pocket_finish_avoid;
+mod pocket_finish_rings;
 mod pocket_plan;
 mod pocket_emit;
 mod pocket_zigzag;
@@ -192,6 +195,10 @@ pub use pass_start::{PASS_START_NOTE, PASS_START_REST_NOTE, PASS_START_ZIGZAG_NO
 pub use pocket::{
     pocket, pocket_entered, pocket_entered_with_relief, pocket_started, pocket_started_on, PocketParams, PocketStrategy,
 };
+pub use pocket_finish::{
+    FinishDirection, MAX_FINISH_SPACING, PocketFinish, pocket_flute_covers_wall, pocket_with_finish,
+};
+pub use pocket_finish_avoid::pocket_avoid_with_finish;
 pub use pocket_avoid::{
     pocket_avoid, pocket_avoid_entered_started, pocket_avoid_entered_with_relief, pocket_avoid_started,
     pocket_avoid_started_on, pocket_avoid_with_relief,

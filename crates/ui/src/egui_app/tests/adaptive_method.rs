@@ -133,3 +133,60 @@ fn adaptive_passes_tab_shows_wall_finishing_rows_and_offset_hides_them() {
     let off = passes_of(OpType::Offset2D);
     assert_eq!(off.query_all_by_label("Finishing passes").count(), 0, "Offset2D hides Finishing passes");
 }
+
+/// Journeyman spec S4 (Held 1991, Smid 2007; no vendor parameters, text or
+/// code): 2D Pocket's Passes tab shows finishing passes, spring passes, and
+/// reveals spacing, finish direction, and finish levels when active; non-Pocket
+/// operations hide Pocket's Finish direction row.
+#[test]
+fn pocket_passes_tab_shows_wall_finishing_rows_and_other_ops_hide_direction() {
+    use camcraft_app::machining2d::{FinishDirection, FinishLevel};
+
+    let mut harness = passes_of(OpType::Pocket);
+    assert_eq!(harness.query_all_by_label("Finishing passes").count(), 1);
+    assert_eq!(harness.query_all_by_label("Spring passes").count(), 1);
+    assert_eq!(harness.query_all_by_label("Finishing spacing").count(), 0, "hidden while finish_passes == 0");
+    assert_eq!(harness.query_all_by_label("Finish direction").count(), 0, "hidden while inactive");
+    assert_eq!(harness.query_all_by_label("Finish levels").count(), 0, "hidden while inactive");
+
+    if let OpParams::Pocket { finish, .. } = &mut harness.state_mut().state.op_ui.params {
+        finish.finish_passes = 2;
+        finish.finish_spacing = 0.1;
+        finish.finish_direction = FinishDirection::Conventional;
+        finish.finish_level = FinishLevel::Last;
+    } else {
+        panic!("draft is not Pocket");
+    }
+    harness.run();
+    assert_eq!(harness.query_all_by_label("Finishing spacing").count(), 1, "shown when finish_passes > 0");
+    assert_eq!(harness.query_all_by_label("Finish direction").count(), 1, "shown when active");
+    assert_eq!(harness.query_all_by_label("Finish levels").count(), 1, "shown when active");
+    assert_eq!(combos_showing(&harness, "Conventional"), 1);
+    assert_eq!(combos_showing(&harness, "Last level only"), 1);
+
+    // Spring pass alone reveals Finish direction and Finish levels while hiding Finishing spacing.
+    if let OpParams::Pocket { finish, .. } = &mut harness.state_mut().state.op_ui.params {
+        finish.finish_passes = 0;
+        finish.finish_spacing = 0.0;
+        finish.spring_passes = 1;
+        finish.finish_direction = FinishDirection::Climb;
+        finish.finish_level = FinishLevel::Every;
+    }
+    harness.run();
+    assert_eq!(harness.query_all_by_label("Finishing spacing").count(), 0, "hidden when finish_passes == 0");
+    assert_eq!(harness.query_all_by_label("Finish direction").count(), 1, "shown when spring_passes > 0");
+    assert_eq!(harness.query_all_by_label("Finish levels").count(), 1, "shown when spring_passes > 0");
+    assert_eq!(combos_showing(&harness, "Climb"), 1);
+
+    // Non-Pocket operations do not show Pocket's Finish direction control.
+    let mut adapt = passes_of(OpType::Adaptive2D);
+    if let OpParams::Adaptive2D { finish, .. } = &mut adapt.state_mut().state.op_ui.params {
+        finish.finish_passes = 1;
+        finish.finish_spacing = 0.2;
+    }
+    adapt.run();
+    assert_eq!(adapt.query_all_by_label("Finish direction").count(), 0, "Adaptive2D hides Finish direction");
+    let off = passes_of(OpType::Offset2D);
+    assert_eq!(off.query_all_by_label("Finish direction").count(), 0, "Offset2D hides Finish direction");
+    assert_eq!(off.query_all_by_label("Finishing passes").count(), 0, "Offset2D hides Finishing passes");
+}

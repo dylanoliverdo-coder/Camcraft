@@ -104,6 +104,7 @@ fn params_sanity_gates() {
         blend_turns: false,
         corner_relief: Default::default(),
         pass_start: Default::default(),
+        finish: Default::default(),
     };
     assert!(!bad.is_sane());
     // A depth range that runs upward is nonsense, refused at command
@@ -532,6 +533,7 @@ fn the_arc_entry_splits_the_stamp_and_leaves_the_others_alone() {
         blend_turns: false,
         corner_relief: Default::default(),
         pass_start: Default::default(),
+        finish: Default::default(),
     };
     let digest = |p: &OpParams| {
         let mut h = std::hash::DefaultHasher::new();

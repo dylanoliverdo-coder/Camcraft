@@ -68,7 +68,7 @@ fn from_ops() -> RestParams {
 }
 
 fn rough(bottom: f64) -> OpParams {
-    OpParams::Pocket {
+    OpParams::Pocket { finish: Default::default(),
         floor_stock: 0.0,
         rest: None,
         blend_radius: None,

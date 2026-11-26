@@ -252,6 +252,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             corner_relief,
             tilt,
             pass_start,
+            finish,
             ..
         } => {
             if tab == SEC_LEADS {
@@ -323,6 +324,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
                     consequence(ui, note);
                 }
                 super::rest_pocket_page::rest_group(ui, u, cx.tool_diameter, *strategy, &links.approach, rest);
+                super::pocket_finish_rows::pocket_finish_rows(ui, u, finish);
             }
             if tab == SEC_FEEDS {
                 prop_row(ui, "Feed", |ui| num_feed(ui, u, feed));

@@ -60,7 +60,7 @@ fn contour_op(lead: Lead, links: Links) -> OpParams {
 /// level descent pitch 1.0, keep down between levels, retract plane
 /// between passes, top = model top.
 fn pocket_op(links: Links) -> OpParams {
-    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
+    OpParams::Pocket { finish: Default::default(), floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         stepover: 2.4,
         stock_to_leave: 0.0,

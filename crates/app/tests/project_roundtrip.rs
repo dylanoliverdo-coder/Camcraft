@@ -970,7 +970,7 @@ fn v5_roundtrips_retract_and_auto() {
             "Pocket1",
             "EM-0400-2FL",
             SrcRef::Stock,
-            OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None, blend_radius: None, tilt: None,
+            OpParams::Pocket { finish: Default::default(), floor_stock: 0.0, pass_start: Default::default(), rest: None, blend_radius: None, tilt: None,
                 links: camcraft_app::links::Links::PLANAR,
                 stepover: 1.0,
                 stock_to_leave: 0.0,
@@ -5894,4 +5894,53 @@ fn adaptive_finish_passes_round_trip_refusals_and_undo() {
         );
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Journeyman spec S4, check 6: 2D Pocket finishing fields round-trip through
+/// the project file, defaults stay off the wire so pre-S4 projects load with
+/// defaults and save unchanged.
+#[test]
+fn pocket_finish_passes_round_trip_and_legacy_defaults() {
+    use camcraft_app::machining2d::{FinishDirection, FinishLevel, PocketFinish};
+
+    let make = |finish: PocketFinish| OpParams::Pocket {
+        floor_stock: 0.0,
+        stepover: 2.0,
+        stock_to_leave: 0.0,
+        clearance_z: Height::fixed(15.0),
+        retract_z: Some(Height::fixed(12.0)),
+        top_z: Height::fixed(10.0),
+        bottom_z: Height::fixed(0.0),
+        stepdown: 2.5,
+        feed: 900.0,
+        plunge_feed: 250.0,
+        climb: true,
+        strategy: PocketStrategy::Waterline,
+        entry: camcraft_app::machining3d::Entry3D::Helix,
+        helix_radius: 1.5,
+        links: camcraft_app::links::Links::PLANAR,
+        optimal_load: camcraft_app::load::DEFAULT_OPTIMAL_LOAD,
+        blend_turns: false,
+        blend_radius: None,
+        rest: None,
+        corner_relief: Default::default(),
+        tilt: None,
+        pass_start: Default::default(),
+        finish,
+    };
+
+    let set = make(PocketFinish {
+        finish_passes: 2,
+        finish_spacing: 0.1,
+        spring_passes: 1,
+        finish_direction: FinishDirection::Conventional,
+        finish_level: FinishLevel::Last,
+    });
+    let wire = project::params_to_json(&set);
+    assert_eq!(project::params_from_json(&wire).expect("reads back"), set, "S4 fields round-trip");
+
+    let plain = make(PocketFinish::default());
+    let plain_wire = project::params_to_json(&plain);
+    assert!(!plain_wire.to_string().contains("\"finish\""), "default stays off the wire: {plain_wire}");
+    assert_eq!(project::params_from_json(&plain_wire).expect("reads back"), plain, "absent key loads defaults");
 }
