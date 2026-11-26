@@ -797,10 +797,17 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             rest,
             corner_relief,
             pass_start,
+            finish,
             ..
         } => {
             if *strategy == PocketStrategy::Adaptive {
                 return Err(GenError::Invalid(super::POCKET_ADAPTIVE_RETIRED.into()));
+            }
+            if let Some(why) = finish.refusal() {
+                return Err(GenError::Invalid(why));
+            }
+            if rest.is_some() && finish.is_active() {
+                return Err(GenError::Invalid(super::rest_op::REST_POCKET_FINISH.into()));
             }
             let region = region_for_job(
                     &mut picked_region,
@@ -837,6 +844,11 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
                     blend_radius: *blend_radius,
             };
             pp.validate()?;
+            // Journeyman spec S4: `finish_level = last` cuts the whole wall
+            // height with the side of the tool, so the flute must cover it.
+            if finish.is_active() && finish.finish_level == machining2d::FinishLevel::Last {
+                machining2d::pocket_flute_covers_wall(pp.top_z, pp.bottom_z, tool.flute_len)?;
+            }
             let (relieved_region, zones) = super::corner_relief::check_op_relief(
                 &region,
                 &super::corner_relief::JobReliefCtx {
@@ -887,14 +899,27 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
                     corner_relief,
                 ),
                 (Some(r), Some(spec)) => machining2d::rest_pocket_avoid_with_relief(&region, pp, r, spec, corner_relief),
-                (None, Some(spec)) => {
-                    machining2d::pocket_avoid_entered_started(&region, pp, &holes, spec, corner_relief, *pass_start)
-                }
+                (None, Some(spec)) => machining2d::pocket_avoid_with_finish(
+                    &region,
+                    pp,
+                    &holes,
+                    spec,
+                    corner_relief,
+                    &machining2d::StartSide::from(*pass_start),
+                    finish,
+                ),
                 (Some(r), None) if from_ops => {
                     machining2d::rest_pocket_previous_with_relief(&region, pp, r, ahead_cols.as_ref(), corner_relief)
                 }
                 (Some(r), None) => machining2d::rest_pocket_with_relief(&region, pp, r, corner_relief),
-                (None, None) => machining2d::pocket_started(&region, pp, &holes, corner_relief, *pass_start),
+                (None, None) => machining2d::pocket_with_finish(
+                    &region,
+                    pp,
+                    &holes,
+                    corner_relief,
+                    &machining2d::StartSide::from(*pass_start),
+                    finish,
+                ),
             };
             let mut path = pocket(&pp)?;
             if let Some(m) = carry_need!(&relieved_region, &path) {

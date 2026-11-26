@@ -20,7 +20,7 @@ use camcraft_app::tools::catalog;
 use crate::state::{CommandKind, ErrorScope, State, UiTarget};
 
 fn pocket() -> OpParams {
-    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
+    OpParams::Pocket { finish: Default::default(), floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         tilt: None,

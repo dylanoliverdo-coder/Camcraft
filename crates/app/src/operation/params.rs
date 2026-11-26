@@ -202,6 +202,7 @@ impl OpParams {
                 blend_turns,
                 tilt,
                 pass_start,
+                finish,
                 ..
             } => {
                 w(h, *stepover);
@@ -251,6 +252,7 @@ impl OpParams {
                 write_rest(rest, h, true);
                 write_corner_relief(corner_relief, h);
                 digest::write_pass_start(*pass_start, h); // #3354: only off Auto
+                digest::write_pocket_finish(finish, h);
             }
             // The roughing twins (M2.4 A): the pocket's digest minus
             // the strategy byte - the kind tag at the head already

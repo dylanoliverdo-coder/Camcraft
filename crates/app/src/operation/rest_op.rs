@@ -150,10 +150,14 @@ fn adaptive_rest_refusal(p: &OpParams) -> Option<String> {
     Some(why.to_string())
 }
 
+/// Rest machining beside wall finishing passes on 2D Pocket (Journeyman spec S4;
+/// Held 1991, Smid 2007; no vendor parameters, text or code).
+pub const REST_POCKET_FINISH: &str = "wall finishing passes are not available with rest machining on a 2D Pocket - turn off one of the two";
+
 /// The refusal of a Pocket's rest group that needs no tool: values the
 /// generator refuses, a strategy it does not run, pre-drilled entry.
 pub fn rest_refusal(p: &OpParams) -> Option<String> {
-    let OpParams::Pocket { rest: Some(r), strategy, links, .. } = p else {
+    let OpParams::Pocket { rest: Some(r), strategy, links, finish, .. } = p else {
         return adaptive_rest_refusal(p);
     };
     if let Err(e) = r.validate_alone() {
@@ -161,6 +165,9 @@ pub fn rest_refusal(p: &OpParams) -> Option<String> {
     }
     if let Err(e) = rest_strategy(*strategy) {
         return Some(said(e));
+    }
+    if finish.is_active() {
+        return Some(REST_POCKET_FINISH.to_string());
     }
     if r.source == RestSource::PreviousOperations && p.tilt().is_some() {
         return Some(REST_PREVIOUS_TILTED.to_string());

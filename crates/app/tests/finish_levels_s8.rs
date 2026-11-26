@@ -192,6 +192,7 @@ fn pocket_params(
         corner_relief: Default::default(),
         tilt: None,
         pass_start: Default::default(),
+        finish: Default::default(),
     }
 }
 

@@ -93,12 +93,32 @@ pub(super) fn round_walks(passes: &[Vec<Point2>], base: &[Vec<Seg>], blend: &Ble
 pub(super) fn post_blended_crossing_free(
     b: PathBuilder,
     passes: &[Vec<Point2>],
-    mut base: Vec<Vec<Seg>>,
+    base: Vec<Vec<Seg>>,
     blend: &Blend,
     seed_bans: &Bans,
     tally: &mut ProofTally,
     post: impl Fn(&mut PathBuilder, Option<&[Vec<Seg>]>),
 ) -> Toolpath {
+    let n = passes.len();
+    post_blended_prefix_crossing_free(b, passes, base, n, blend, seed_bans, tally, post)
+}
+
+/// [`post_blended_crossing_free`] rounding only the first `blend_len` walks
+/// (e.g. clearing passes before unblended finishing rings in Journeyman S4),
+/// while holding the crossing law with `#2317` `arc_touch` exemptions across
+/// every clearing and finishing move.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn post_blended_prefix_crossing_free(
+    b: PathBuilder,
+    passes: &[Vec<Point2>],
+    mut base: Vec<Vec<Seg>>,
+    blend_len: usize,
+    blend: &Blend,
+    seed_bans: &Bans,
+    tally: &mut ProofTally,
+    post: impl Fn(&mut PathBuilder, Option<&[Vec<Seg>]>),
+) -> Toolpath {
+    let k_blend = blend_len.min(passes.len()).min(base.len());
     let noted = |r: &Rounded| {
         let mut bb = b.clone();
         for n in r.notes() {
@@ -108,11 +128,13 @@ pub(super) fn post_blended_crossing_free(
     };
     let mut bans = seed_bans.clone();
     for round in 0..=CROSS_ROUNDS {
-        let rounded = round_walks(passes, &base, blend, &bans);
+        let rounded = round_walks(&passes[..k_blend], &base[..k_blend], blend, &bans);
+        let mut combined = rounded.runs.clone();
+        combined.extend(base[k_blend..].iter().cloned());
         let mut bb = noted(&rounded);
-        post(&mut bb, Some(rounded.runs.as_slice()));
+        post(&mut bb, Some(combined.as_slice()));
         let path = bb.finish();
-        let keys = own_keys(&rounded.runs);
+        let keys = own_keys(&combined);
         let traced: Vec<(Key, usize, &Source)> =
             rounded.trace.iter().map(|(i, t)| (key(t.to, t.center, t.ccw), *i, &t.source)).collect();
         let blends: HashSet<Key> =
@@ -149,6 +171,8 @@ pub(super) fn post_blended_crossing_free(
     // The rounds are spent: no corner arc, and the plain law on the
     // fitted walks. Every corner that would round is counted `crossed`.
     bans.all = true;
-    let rounded = round_walks(passes, &base, blend, &bans);
-    post_crossing_free(noted(&rounded), passes, rounded.runs, tally, post)
+    let rounded = round_walks(&passes[..k_blend], &base[..k_blend], blend, &bans);
+    let mut combined = rounded.runs.clone();
+    combined.extend(base[k_blend..].iter().cloned());
+    post_crossing_free(noted(&rounded), passes, combined, tally, post)
 }

@@ -37,6 +37,7 @@ fn pocket(rest: Option<RestParams>) -> OpParams {
         blend_turns: false,
         corner_relief: Default::default(),
         pass_start: Default::default(),
+        finish: Default::default(),
     }
 }
 

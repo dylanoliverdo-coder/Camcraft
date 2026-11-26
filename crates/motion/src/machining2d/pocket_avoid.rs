@@ -95,7 +95,7 @@ pub fn pocket_avoid_entered_started(
     pocket_avoid_entered_on(region, p, holes, avoid, relief, &StartSide::from(start))
 }
 
-fn pocket_avoid_entered_on(
+pub(super) fn pocket_avoid_entered_on(
     region: &Region,
     p: &PocketParams,
     holes: &[PreHole],

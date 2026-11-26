@@ -118,7 +118,7 @@ fn drill(tip: f64, radius: f64) -> OpParams {
 }
 
 fn pocket(predrilled: bool) -> OpParams {
-    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
+    OpParams::Pocket { finish: Default::default(), floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         stepover: 1.6,
         stock_to_leave: 0.0,

@@ -25,7 +25,7 @@ use crate::boundary_summary;
 use crate::state::{CommandKind, State, UiTarget};
 
 pub(super) fn pocket(entry: Entry3D) -> OpParams {
-    OpParams::Pocket { floor_stock: 0.0, pass_start: Default::default(), rest: None,
+    OpParams::Pocket { finish: Default::default(), floor_stock: 0.0, pass_start: Default::default(), rest: None,
         blend_radius: None,
         links: camcraft_app::links::Links::PLANAR,
         tilt: None,

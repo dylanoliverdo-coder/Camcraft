@@ -253,6 +253,7 @@ impl ParamsDto {
                 corner_relief,
                 tilt,
                 pass_start,
+                finish,
             } => ParamsDto::Pocket {
                 floor_stock: *floor_stock,
                 links: links_to_dto(links, &p.default_links()),
@@ -290,6 +291,7 @@ impl ParamsDto {
                 corner_relief: cr_to_dto(corner_relief),
                 tilt: (*tilt).map(Into::into),
                 pass_start: (*pass_start).into(),
+                finish: (*finish).into(),
             },
             // The twins drop the strategy tag - the variant itself
             // says which ladder runs (M2.4 A).
@@ -1630,6 +1632,7 @@ impl ParamsDto {
                 corner_relief,
                 tilt,
                 pass_start,
+                finish,
             } => OpParams::Pocket {
                 floor_stock: *floor_stock,
                 links: links_from_dto(links.as_ref(), crate::links::Links::PLANAR),
@@ -1666,6 +1669,7 @@ impl ParamsDto {
                 corner_relief: cr_from_dto(corner_relief),
                 tilt: (*tilt).map(Into::into),
                 pass_start: (*pass_start).into(),
+                finish: (*finish).into(),
             },
             ParamsDto::Adaptive2D {
                 links,

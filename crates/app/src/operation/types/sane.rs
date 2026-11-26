@@ -161,8 +161,10 @@ impl OpParams {
             OpParams::SinkerBurn(p) => p.compensation_refusal(),
             OpParams::SinkerSideBurn(p) => p.refusal(),
             OpParams::SlotUndercut(p) => p.refusal(),
-            OpParams::Pocket { corner_relief, .. }
-            | OpParams::Offset2D { corner_relief, .. } => corner_relief.validate().err().map(|e| e.to_string()),
+            OpParams::Pocket { corner_relief, finish, .. } => finish
+                .refusal()
+                .or_else(|| corner_relief.validate().err().map(|e| e.to_string())),
+            OpParams::Offset2D { corner_relief, .. } => corner_relief.validate().err().map(|e| e.to_string()),
             OpParams::Adaptive2D { method, troch, corner_relief, pass_start, finish, .. } => finish
                 .refusal()
                 .or_else(|| troch.refusal())
@@ -346,6 +348,7 @@ impl OpParams {
                 strategy,
                 optimal_load,
                 corner_relief,
+                finish,
                 ..
             } => {
                 // The entry family joined the planar pocket at M5.1 H,
@@ -368,6 +371,7 @@ impl OpParams {
                     && (optimal_load.is_finite()
                         && (!matches!(strategy, PocketStrategy::OffsetRings)
                             || crate::load::load_in_door(*optimal_load)))
+                    && finish.refusal().is_none()
                     && corner_relief.validate().is_ok()
             }
             // The twins' doors are the pocket's, read with the

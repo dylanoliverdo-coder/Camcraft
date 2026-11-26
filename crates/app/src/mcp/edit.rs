@@ -175,6 +175,28 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
     if let OpParams::Drill { chamfer_width, .. } = &next {
         back.insert("chamfer_width".into(), json!(chamfer_width));
     }
+    // Journeyman spec S4 (Held 1991, Smid 2007; no vendor parameters, text or
+    // code): restore typed `finish` fields for 2D Pocket so resetting back to
+    // defaults via MCP passes `lost` while unknown sub-keys stay refused.
+    if let OpParams::Pocket { finish, .. } = &next {
+        back.insert(
+            "finish".into(),
+            json!({
+                "finish_passes": finish.finish_passes,
+                "finish_spacing": finish.finish_spacing,
+                "spring_passes": finish.spring_passes,
+                "finish_direction": match finish.finish_direction {
+                    crate::machining2d::FinishDirection::Same => "same",
+                    crate::machining2d::FinishDirection::Climb => "climb",
+                    crate::machining2d::FinishDirection::Conventional => "conventional",
+                },
+                "finish_level": match finish.finish_level {
+                    crate::machining2d::FinishLevel::Every => "every",
+                    crate::machining2d::FinishLevel::Last => "last",
+                },
+            }),
+        );
+    }
     // Journeyman spec S5 (Held 1991, Stori & Wright 2000; no vendor
     // parameters, text or code): the project DTO omits default `finish`
     // sub-fields; restore the typed fields so resetting back to defaults via

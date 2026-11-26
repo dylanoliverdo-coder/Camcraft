@@ -248,6 +248,10 @@ pub enum OpParams {
         /// parameter); read by the ring strategies. `Auto` is every
         /// earlier file, byte for byte.
         pass_start: crate::machining2d::PassStart,
+        /// Wall finishing passes with independent direction (Journeyman spec S4;
+        /// Held 1991, Smid 2007; no vendor parameters, text or code). Default is
+        /// clearing alone, byte for byte.
+        finish: crate::machining2d::PocketFinish,
     },
     /// 2D Adaptive roughing (M2.4 A): the pocket's constant-engagement
     /// ladder as its own catalog name. The rings are the `Adaptive`
