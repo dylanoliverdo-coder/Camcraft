@@ -313,7 +313,8 @@ pub(crate) fn marching(g: &Grid) -> Vec<Triangle> {
 }
 
 /// The fraction of a lattice edge within which a crossing is put on the
-/// sample (#4107): at a 0.25 mm step it moves a corner at most 0.25 nm.
+/// sample (#4107): at a 0.25 mm step it moves a corner at most 0.43 nm
+/// (a body diagonal of the cell).
 const NODE_SNAP: f64 = 1e-6;
 
 /// Polygonize one tetrahedron: inside is d < 0.
@@ -328,20 +329,19 @@ fn tet(out: &mut Vec<Triangle>, p: [Point3; 4], v: [f64; 4]) {
         // that share it are exactly zero-area and `push` drops them. The test
         // reads |da| and |db| against |da - db|, which are the same numbers
         // when the edge is crossed from its other end, so two tetrahedra that
-        // share the edge snap together or not at all.
+        // share the edge snap together or not at all. A snapped corner is
+        // the sample itself: pa + (pb - pa) is not always pb.
         let span = (da - db).abs();
-        let t = if span > f64::EPSILON {
-            if da.abs() < NODE_SNAP * span {
-                0.0
-            } else if db.abs() < NODE_SNAP * span {
-                1.0
-            } else {
-                (da / (da - db)).clamp(0.0, 1.0)
-            }
-        } else {
-            0.5
-        };
         let (pa, pb) = (p[a], p[b]);
+        if span > f64::EPSILON {
+            if da.abs() < NODE_SNAP * span {
+                return pa;
+            }
+            if db.abs() < NODE_SNAP * span {
+                return pb;
+            }
+        }
+        let t = if span > f64::EPSILON { (da / (da - db)).clamp(0.0, 1.0) } else { 0.5 };
         Point3::new(pa.x + (pb.x - pa.x) * t, pa.y + (pb.y - pa.y) * t, pa.z + (pb.z - pa.z) * t)
     };
     let mean = |s: &[usize]| {
@@ -481,6 +481,37 @@ mod tests {
         assert_eq!(open_edges(&piece), 0, "streamed piece closed");
         let v = volume(&piece);
         assert!((v - 100.0 * 100.0 * 2.0).abs() < 0.03 * 20000.0, "slab volume {v} vs 20000");
+    }
+
+    #[test]
+    fn a_snapped_corner_is_the_sample_itself() {
+        // #4107: two inside, two outside, one outside sample at zero. The
+        // facets reach that sample from both inside corners; each corner
+        // there must be the sample bit for bit, or a sliver survives `push`
+        // and collapses at the weld.
+        // Coordinates from a fixed linear congruential sequence in (-1, 1).
+        let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
+        let mut next = || {
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+            (seed >> 11) as f64 / (1u64 << 53) as f64 * 2.0 - 1.0
+        };
+        for _ in 0..20_000 {
+            let mut corner = || Point3::new(next(), next(), next());
+            let mut p = [corner(), corner(), corner(), corner()];
+            // A lattice sample at "zero" carries a rounding residue (as
+            // 0.1 * 3 - 0.3 does); beside it pa + (pb - pa) is not pb.
+            p[2].x *= 1e-16;
+            let mut out = Vec::new();
+            tet(&mut out, p, [-1.0, -0.5, 0.0, 1.0]);
+            for t in &out {
+                for q in [t.a, t.b, t.c] {
+                    let gap = q - p[2];
+                    if gap.dot(gap) < 1e-18 {
+                        assert!(q == p[2], "corner {q:?} beside the sample {:?}", p[2]);
+                    }
+                }
+            }
+        }
     }
 
     #[test]
