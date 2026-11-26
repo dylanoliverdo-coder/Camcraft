@@ -219,7 +219,8 @@ pub(super) fn trochoidal_inside_finish(
             let from = (above + crate::approach::DEFAULT_PLUNGE_HEIGHT).min(hop).max(above);
             last_from = from;
             bld.push(MoveKind::Rapid, p3(lay.entry, from), None);
-            emit_level(&mut bld, &lay.lay, &lay.tp, z, from, true, lay.open, rf).map_err(|e| renamed(e).with_ghost_moves(bld.moves()))?;
+            emit_level(&mut bld, &lay.lay, &lay.tp, z, from, true, lay.open, rf, above, p.links.approach.feed_from)
+                .map_err(|e| renamed(e).with_ghost_moves(bld.moves()))?;
         }
         emit_cleanup(&mut bld, &clean, p, z, above, hop);
         if let Some(f) = finish
@@ -279,6 +280,9 @@ pub(super) fn trochoidal_inside_finish(
     }
 
     let path = bld.finish();
+    if let Some(why) = crate::approach::refusal(&path) {
+        return Err(GenError::Invalid(why).with_ghost(&path));
+    }
     check_path(&path, &center_final)?;
     if t.max_engagement != DEFAULT_MAX_ENGAGEMENT {
         let spec = crate::quality::QualitySpec::new(p.tool_diameter);

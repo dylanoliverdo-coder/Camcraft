@@ -11,7 +11,9 @@ use camcraft_motion::entry::Entry3D;
 use camcraft_motion::geo2d::{Loop, Point2, Region};
 use camcraft_motion::links::{Link, Links};
 use camcraft_motion::machining2d::{
-    ContourParams, Lead, PocketParams, PocketStrategy, Side, WallPasses, contour_open_side, pocket,
+    AdaptiveFinish, AdaptiveTrochParams, ContourParams, Lead, PocketParams, PocketStrategy, Side,
+    TrochoidReturn, WallPasses, adaptive_trochoidal_with, adaptive_trochoidal_with_finish, contour,
+    contour_open_side, pocket,
 };
 
 fn open_params(bottom_z: f64, stepdown: f64, feed_from: FeedFrom) -> ContourParams {
@@ -289,4 +291,123 @@ fn helix_and_ramp_entries_keep_their_own_start_heights() {
             first_cut(&stated)
         );
     }
+}
+
+#[test]
+fn contour_ring_link_clearance_respects_stated_feed_from_without_hop_dip() {
+    // Two disjoint islands so ring_link fires under Link::Clearance (clearance=10, hop=5).
+    let reg = Region::new(vec![
+        Loop::new(vec![
+            Point2::new(0.0, 0.0),
+            Point2::new(20.0, 0.0),
+            Point2::new(20.0, 20.0),
+            Point2::new(0.0, 20.0),
+        ])
+        .expect("loop1"),
+        Loop::new(vec![
+            Point2::new(40.0, 0.0),
+            Point2::new(60.0, 0.0),
+            Point2::new(60.0, 20.0),
+            Point2::new(40.0, 20.0),
+        ])
+        .expect("loop2"),
+    ])
+    .expect("two islands");
+
+    let mk = |feed_from: FeedFrom| ContourParams {
+        tool_diameter: 6.0,
+        stock_to_leave: 0.0,
+        clearance_z: 10.0,
+        retract_z: 5.0,
+        top_z: 0.0,
+        bottom_z: -4.0,
+        stepdown: 4.0,
+        feed: 500.0,
+        plunge_feed: 120.0,
+        climb: true,
+        side: Side::Outside,
+        lead: Lead::Linear { length: 3.0 },
+        tolerance: 0.005,
+        tab_count: 0,
+        tab_width: 0.0,
+        tab_height: 0.0,
+        entry: Entry3D::Plunge,
+        helix_radius: 1.0,
+        blend_turns: false,
+        blend_radius: None,
+        links: Links {
+            level: Link::Clearance,
+            pass: Link::Clearance,
+            approach: Approach { feed_from, ..Approach::DEFAULT },
+            ..Links::PLANAR
+        },
+        passes: WallPasses::default(),
+    };
+
+    // Absolute { z: 20.0 } above clearance 10.0 -> zero downward rapids anywhere.
+    let path_hi = contour(&reg, &mk(FeedFrom::Absolute { z: 20.0 })).expect("abs 20");
+    let down_hi: Vec<_> = path_hi
+        .moves
+        .iter()
+        .filter(|m| m.kind == MoveKind::Rapid && m.to.z < m.from.z - 1e-9)
+        .collect();
+    assert!(down_hi.is_empty(), "expected 0 downward rapids with abs z=20: {down_hi:?}");
+    let plunges_hi = plunge_pairs(&path_hi.moves);
+    assert!(plunges_hi.len() >= 2, "expected >= 2 plunges across 2 rings");
+    assert!(plunges_hi.iter().all(|(_, m)| (m.from.z - 10.0).abs() < 1e-9));
+
+    // Absolute { z: 8.0 } between hop=5.0 and clearance=10.0 -> rapids stop at 8.0, never dipping to 5.0.
+    let path_mid = contour(&reg, &mk(FeedFrom::Absolute { z: 8.0 })).expect("abs 8");
+    let plunges_mid = plunge_pairs(&path_mid.moves);
+    assert!(plunges_mid.len() >= 2);
+    for (rapid, plunge) in plunges_mid {
+        let rapid = rapid.expect("rapid to 8.0");
+        assert_eq!(rapid.kind, MoveKind::Rapid);
+        assert!((rapid.to.z - 8.0).abs() < 1e-9, "rapid must stop at 8.0, not hop 5.0: {rapid:?}");
+        assert!((plunge.from.z - 8.0).abs() < 1e-9, "plunge must start at 8.0: {plunge:?}");
+    }
+}
+
+#[test]
+fn adaptive_trochoidal_cleanup_retract_and_finishing_respect_feed_from() {
+    let reg = rect_region(0.0, 0.0, 40.0, 26.0);
+    let mut p = pocket_params(Entry3D::Helix, FeedFrom::Absolute { z: 20.0 });
+    p.strategy = PocketStrategy::Adaptive;
+    p.clearance_z = 5.0;
+    p.retract_z = Some(5.0);
+    p.bottom_z = -2.5;
+    p.stepdown = 2.5;
+
+    // Trochoidal with Retract return and Absolute { z: 20.0 } above traverse 5.0:
+    // neither loop retracts nor cleanup chains may rapid downward below traverse 5.0
+    // (the bore helix still starts at its own height).
+    let troch_ret = AdaptiveTrochParams { ret: Some(TrochoidReturn::Retract), ..AdaptiveTrochParams::default() };
+    let path = adaptive_trochoidal_with(&reg, &p, &troch_ret).expect("troch retract abs 20");
+    // Every vertical feed dive at plunge_feed (retract returns & cleanup dives) must start at traverse z = 5.0.
+    let vertical_dives: Vec<_> = path
+        .moves
+        .iter()
+        .filter(|m| {
+            m.kind == MoveKind::Feed
+                && (m.from.x - m.to.x).abs() < 1e-6
+                && (m.from.y - m.to.y).abs() < 1e-6
+                && m.to.z < m.from.z - 1e-6
+        })
+        .collect();
+    assert!(!vertical_dives.is_empty(), "expected retract/cleanup vertical dives");
+    for mv in &vertical_dives {
+        assert!(
+            (mv.from.z - 5.0).abs() < 1e-6,
+            "with Absolute z=20 above hop=5, vertical dive must feed from 5.0, got {mv:?}"
+        );
+    }
+
+    // Trochoidal with Absolute { z: -1.0 } (below stock top 0.0) + cleanup or finishing
+    // must be refused by name (never silently return Ok).
+    let mut p_bad = p;
+    p_bad.links.approach.feed_from = FeedFrom::Absolute { z: -1.0 };
+    let fin = AdaptiveFinish { finish_passes: 1, finish_spacing: 0.5, ..AdaptiveFinish::default() };
+    let err = adaptive_trochoidal_with_finish(&reg, &p_bad, &AdaptiveTrochParams::default(), None, &fin)
+        .expect_err("trochoidal finishing/cleanup rapid into material must refuse by name");
+    assert!(err.to_string().contains("descent feed height refused"), "{err}");
 }

@@ -1,9 +1,12 @@
 //! One trochoidal slot level (issue #220): the bore, then each loop's
 //! wall lead and front arc, with the microlift or retract return between
-//! loops. Moved out of `trochoid_slot` (#2004, the 400-line law). Ours,
-//! no vendor material.
+//! loops. Moved out of `trochoid_slot` (#2004, the 400-line law).
+//! Provenance: Journeyman spec S7 (`feed_from`,
+//! docs/journeyman/specs/S7-descent-feed-height.md; Smid 2007, RS-274/ISO 6983);
+//! no vendor parameters, text or code.
 
 use crate::cl::{MoveKind, PathBuilder, lattice};
+use crate::feed_from::FeedFrom;
 use crate::geo2d::Point2;
 use crate::geometry::Point3;
 
@@ -17,7 +20,18 @@ use super::trochoid_slot::{TrochoidParams, TrochoidReturn};
 /// whether a retract return may hop (the planner's single level lifts
 /// in place instead, which reads the same stock).
 #[allow(clippy::too_many_arguments)]
-pub(super) fn emit_level(b: &mut PathBuilder, lay: &Layout, p: &TrochoidParams, z: f64, from: f64, levels: bool, open: bool, retract_feed: f64) -> Result<(), GenError> {
+pub(super) fn emit_level(
+    b: &mut PathBuilder,
+    lay: &Layout,
+    p: &TrochoidParams,
+    z: f64,
+    from: f64,
+    levels: bool,
+    open: bool,
+    retract_feed: f64,
+    mat_top: f64,
+    feed_from: FeedFrom,
+) -> Result<(), GenError> {
     let p3 = |q: Point2, zz: f64| Point3::new(lattice(q.x), lattice(q.y), lattice(zz));
     bore(b, lay, p, z, from, open)?;
     let n = lay.pieces.len();
@@ -46,7 +60,13 @@ pub(super) fn emit_level(b: &mut PathBuilder, lay: &Layout, p: &TrochoidParams, 
                 let near = (z + crate::approach::DEFAULT_PLUNGE_HEIGHT).min(hop);
                 crate::fed_retract::lift_up(b, hop, near, retract_feed);
                 b.push(MoveKind::Rapid, p3(pc.start, hop), None);
-                b.push(MoveKind::Rapid, p3(pc.start, near), None);
+                if feed_from.is_auto() {
+                    b.push(MoveKind::Rapid, p3(pc.start, near), None);
+                } else {
+                    // `pc.start` was already cleared down to `z` on this level.
+                    let xy = Point2::new(lattice(pc.start.x), lattice(pc.start.y));
+                    crate::feed_from::push_stated_rapid(b, xy, lattice(z), mat_top, feed_from, true);
+                }
                 b.push(MoveKind::Feed, p3(pc.start, z), Some(p.plunge_feed));
             }
         }
