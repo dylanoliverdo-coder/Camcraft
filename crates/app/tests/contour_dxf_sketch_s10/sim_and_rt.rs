@@ -161,6 +161,16 @@ fn s10_check_8_project_roundtrip_legacy_load_and_mcp_surface() {
     let (err, gen_res) = mcp_call(&mut s, 8, "generate", json!({ "name": "Ch" }));
     assert!(!err, "{gen_res}");
 
+    // R1 [M1]: MCP edit_operation clearing chain_overrides back to [] on Chamfer2D must succeed.
+    let (err, edit_res) = mcp_call(&mut s, 9, "edit_operation", json!({
+        "name": "Ch",
+        "params": { "chain_overrides": [] }
+    }));
+    assert!(!err, "edit_operation clearing Chamfer2D chain_overrides failed: {edit_res}");
+    let (err, view2) = mcp_call(&mut s, 10, "get_operation_geometry", json!({ "operation": "Ch" }));
+    assert!(!err, "{view2}");
+    assert_eq!(view2["chain_overrides"], json!([]));
+
     // Project save / reopen roundtrip keeps status Ok and overrides intact.
     let stock = StockShape::Box { dx: 120.0, dy: 120.0, dz: 10.0 };
     let (w, mut h, ids) = world_with_dxf(&dxf, &stock, Location::default());

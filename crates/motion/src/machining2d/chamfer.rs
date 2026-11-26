@@ -214,6 +214,9 @@ pub fn chamfer_chains(
         }
         passes.push(chain.clone());
     }
+    if passes.is_empty() {
+        return Err(GenError::Empty("no chamfer chains to cut".into()));
+    }
 
     let mut b = PathBuilder::approached(Point3::new(0.0, 0.0, p.clearance_z));
     let motion = Motion::new(p.clearance_z, p.retract_z, p.feed, p.plunge_feed);
@@ -330,6 +333,24 @@ mod tests {
     fn empty_chain_list_is_refused() {
         let p = base_params(0.5, 45.0);
         let err = chamfer_chains(&[], &[], &p).expect_err("empty chains");
+        assert!(matches!(err, GenError::Empty(_)), "{err}");
+    }
+
+    #[test]
+    fn degenerate_collinear_closed_loop_is_refused_as_empty() {
+        let p = base_params(0.5, 45.0);
+        let degen = Loop::new(vec![
+            Point2::new(0.0, 0.0),
+            Point2::new(10.0, 0.0),
+            Point2::new(20.0, 0.0),
+        ])
+        .expect("collinear loop");
+        let err = chamfer_chains(
+            &[ChamferClosedChain { loop_: degen, inside: false, climb: true }],
+            &[],
+            &p,
+        )
+        .expect_err("degenerate closed loop collapses to empty");
         assert!(matches!(err, GenError::Empty(_)), "{err}");
     }
 }

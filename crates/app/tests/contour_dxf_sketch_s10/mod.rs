@@ -185,11 +185,20 @@ fn s10_checks_2_3_4_5_7_closed_open_refusal_angle_and_nested_auto() {
     assert_eq!(rf.len(), 1);
     assert!((rf[0].from.x - 40.0).abs() < 1e-4 && (rf[0].to.x - 0.0).abs() < 1e-4 && (rf[0].to.z + 0.5).abs() < 1e-6);
 
-    // Check 4: open_side none refused by name.
+    // Check 4: open_side none refused by name (both under Auto and under Inside, never citing Contour's "choose Side 'Auto'").
     run(&w3, &mut h3, CreateOperation::new(&w3, "OpenNone", CONE90, SrcRef::Entity("part".into()), s10_chamfer(0.5, 45.0)), "open none");
     let err = GenerateOperation::new(&w3, "OpenNone").err().expect("open_side none must refuse");
     let msg = err.to_string();
     assert!(msg.contains("part") && msg.contains("open_side"), "{msg}");
+
+    let mut p_inside_none = s10_chamfer(0.5, 45.0);
+    if let OpParams::Chamfer2D { side, .. } = &mut p_inside_none {
+        *side = Side::Inside;
+    }
+    run(&w3, &mut h3, CreateOperation::new(&w3, "OpenNoneInside", CONE90, SrcRef::Entity("part".into()), p_inside_none), "open none inside");
+    let err = GenerateOperation::new(&w3, "OpenNoneInside").err().expect("open_side none under Inside must refuse");
+    let msg = err.to_string();
+    assert!(msg.contains("2D Chamfer") && msg.contains("open_side") && !msg.contains("choose Side 'Auto'"), "{msg}");
 
     // Check 5: angle 30 with 120-degree chamfer mill, width 0.5 -> z = -0.2887 (to 4 places).
     let mut p30 = s10_chamfer(0.5, 30.0);

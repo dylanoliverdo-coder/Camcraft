@@ -69,7 +69,12 @@ pub(super) fn resolve_plan(
         } else {
             // Journeyman spec S10: an open chain on a 2D Chamfer always needs
             // `open_side` (left or right) to know which side holds the material.
-            if item.open_side == OpenChainSide::None && item.open_side_err.is_none() {
+            // Override Contour's `op_side != Auto` wording unless a per-chain
+            // closed-chain `side` override was explicitly set on this open chain.
+            let has_closed_side_ov = chain_overrides
+                .iter()
+                .any(|o| o.entity == item.entity && o.chain == item.chain_id && o.side.is_some());
+            if item.open_side == OpenChainSide::None && !has_closed_side_ov {
                 item.open_side_err = Some(format!(
                     "{} is an open sketch chain with open_side 'none' - a 2D Chamfer on an open edge needs the side of the material; set open_side to 'left' or 'right'",
                     item.label

@@ -127,6 +127,33 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
             }),
         );
     }
+    // Journeyman specs S9 & S10: the project DTO omits empty `chain_overrides`
+    // and default override fields; restore the typed list so resetting to `[]`
+    // or default fields via MCP `edit_operation` passes `lost`.
+    if let OpParams::Contour { chain_overrides, .. }
+    | OpParams::Chamfer2D { chain_overrides, .. } = &next
+    {
+        let rows: Vec<Value> = chain_overrides
+            .iter()
+            .map(|o| {
+                json!({
+                    "entity": o.entity,
+                    "chain": o.chain.to_string(),
+                    "side": o.side.map(|s| match s {
+                        crate::operation::ChainSide::Inside => "inside",
+                        crate::operation::ChainSide::Outside => "outside",
+                    }),
+                    "reverse": o.reverse,
+                    "open_side": match o.open_side {
+                        crate::operation::OpenChainSide::None => "none",
+                        crate::operation::OpenChainSide::Left => "left",
+                        crate::operation::OpenChainSide::Right => "right",
+                    },
+                })
+            })
+            .collect();
+        back.insert("chain_overrides".into(), Value::Array(rows));
+    }
     // An opt-in flag (`blend_turns`) is written only when ON, so `false`
     // never comes back: it is kept when `true` would have come back.
     for (k, v) in patch {

@@ -281,12 +281,15 @@ pub(crate) fn combo_owned(ui: &mut Ui, id: &str, idx: &mut usize, names: &[Strin
     });
 }
 
-/// #1864: Per-chain side and direction overrides for DXF sketch contours.
+/// #1864 / Journeyman specs S9 & S10: Per-chain side and direction overrides
+/// for DXF sketch operations. When `require_open_side` is true (2D Chamfer),
+/// `OpenChainSide::None` prompts to choose a side rather than offering Centerline.
 pub(super) fn sketch_chain_overrides_ui(
     ui: &mut Ui,
     world: &World,
     src: &SrcRef,
     overrides: &mut Vec<ChainOverride>,
+    require_open_side: bool,
 ) {
     let infos = crate::frame_cost::time("ui/properties.op.fields.sketch_chain_overrides", || {
         operation::sketch_chain_infos(world, src)
@@ -294,6 +297,7 @@ pub(super) fn sketch_chain_overrides_ui(
     if infos.is_empty() {
         return;
     }
+    let open_none_label = if require_open_side { "Choose side..." } else { "Centerline" };
     group(ui, "Per-chain overrides", None, |ui| {
         hint(ui, "Override Auto side or cut direction per DXF chain");
         for (i, info) in infos.iter().enumerate() {
@@ -305,7 +309,7 @@ pub(super) fn sketch_chain_overrides_ui(
             let mut reverse = existing.is_some_and(|k| overrides[k].reverse);
             let auto_tag = if !info.closed {
                 match open_side {
-                    OpenChainSide::None => "Centerline",
+                    OpenChainSide::None => open_none_label,
                     OpenChainSide::Left => "Left",
                     OpenChainSide::Right => "Right",
                 }
@@ -337,7 +341,7 @@ pub(super) fn sketch_chain_overrides_ui(
                         OpenChainSide::Left => 1,
                         OpenChainSide::Right => 2,
                     };
-                    combo(ui, &format!("c_ov_open_side_{i}"), &mut o_idx, &["Centerline", "Left", "Right"]);
+                    combo(ui, &format!("c_ov_open_side_{i}"), &mut o_idx, &[open_none_label, "Left", "Right"]);
                     open_side = match o_idx {
                         1 => OpenChainSide::Left,
                         2 => OpenChainSide::Right,

@@ -66,6 +66,32 @@ fn crosses_itself(p: &[Point2]) -> bool {
     false
 }
 
+/// Collapse near-coincident interior vertices within `TOL` so trimmed DXF
+/// micro-segments of length `(1e-9, TOL]` do not falsely trigger the
+/// non-adjacent proximity check while exact endpoints stay preserved.
+fn clean_chain(pts: &[Point2]) -> Result<Vec<Point2>, GenError> {
+    let raw = simple(pts)?;
+    let mut out: Vec<Point2> = Vec::with_capacity(raw.len());
+    out.push(raw[0]);
+    for &q in &raw[1..raw.len() - 1] {
+        if out.last().is_some_and(|&prev| dist(prev, q) > TOL) {
+            out.push(q);
+        }
+    }
+    let end = raw[raw.len() - 1];
+    if out.len() >= 2 && out.last().is_some_and(|&prev| dist(prev, end) <= TOL) {
+        if let Some(last) = out.last_mut() {
+            *last = end;
+        }
+    } else if out.last().is_some_and(|&prev| dist(prev, end) > 1e-9) {
+        out.push(end);
+    }
+    if out.len() < 2 {
+        return Err(GenError::Empty("a centerline run needs at least two points".into()));
+    }
+    Ok(out)
+}
+
 /// Contour along the directed open chain `pts`, placing the tool centre at
 /// `d = tool_radius + stock_to_leave` on the `left` (true) or right (false)
 /// side of `pts`. With `p.climb` on, travel runs with the material (the side
@@ -73,7 +99,7 @@ fn crosses_itself(p: &[Point2]) -> bool {
 /// Wall passes (`p.passes`), levels, leads, and links follow `ContourParams`.
 pub fn contour_open_side(pts: &[Point2], left: bool, p: &ContourParams) -> Result<Toolpath, GenError> {
     p.validate()?;
-    let chain = simple(pts)?;
+    let chain = clean_chain(pts)?;
     if crosses_itself(&chain) {
         return Err(GenError::Invalid(
             "the open chain crosses or touches itself - pick a simple open chain".into(),
@@ -257,5 +283,22 @@ mod tests {
         assert_eq!(feeds.len(), 1);
         assert!((feeds[0].from.x - 50.0).abs() < 1e-3 && (feeds[0].from.y - 5.0).abs() < 1e-3);
         assert!((feeds[0].to.x - 0.0).abs() < 1e-3 && (feeds[0].to.y - 5.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn interior_micro_segment_does_not_falsely_trigger_self_intersection() {
+        // A trimmed DXF chain with a 5e-4 mm interior micro-segment must succeed.
+        let chain = [
+            Point2::new(0.0, 0.0),
+            Point2::new(20.0, 0.0),
+            Point2::new(20.0005, 0.0),
+            Point2::new(50.0, 0.0),
+        ];
+        let path = contour_open_side(&chain, true, &base_params()).expect("micro-segment succeeds");
+        let feeds = cut_moves(&path);
+        assert!(!feeds.is_empty());
+        assert!((feeds[0].from.x - 0.0).abs() < 1e-3 && (feeds[0].from.y - 5.0).abs() < 1e-3);
+        let last = feeds[feeds.len() - 1];
+        assert!((last.to.x - 50.0).abs() < 1e-3 && (last.to.y - 5.0).abs() < 1e-3);
     }
 }

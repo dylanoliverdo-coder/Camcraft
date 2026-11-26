@@ -160,6 +160,16 @@ fn s9_check_12_project_roundtrip_legacy_load_and_mcp_surface() {
     let (err, gen_res) = mcp_call(&mut s, 8, "generate", json!({ "name": "Cut" }));
     assert!(!err, "{gen_res}");
 
+    // R1 [M1]: MCP edit_operation clearing chain_overrides back to [] must succeed.
+    let (err, edit_res) = mcp_call(&mut s, 9, "edit_operation", json!({
+        "name": "Cut",
+        "params": { "chain_overrides": [] }
+    }));
+    assert!(!err, "edit_operation clearing chain_overrides failed: {edit_res}");
+    let (err, view2) = mcp_call(&mut s, 10, "get_operation_geometry", json!({ "operation": "Cut" }));
+    assert!(!err, "{view2}");
+    assert_eq!(view2["chain_overrides"], json!([]));
+
     let stock = StockShape::Box { dx: 100.0, dy: 80.0, dz: 10.0 };
     for side in [OpenChainSide::Left, OpenChainSide::Right] {
         let (w, mut h, cid) = world_with_dxf(&line_dxf, &stock, Location::default());
