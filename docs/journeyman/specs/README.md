@@ -39,7 +39,7 @@ Each module that a spec changes or adds carries one provenance line, for example
 | S4 | Pocket: wall finishing passes with their own direction | built (7d7376c2e), checked on a lab part |
 | S5 | 2D Adaptive: wall finishing passes after clearing | built (06aa8e191), checked on a lab part |
 | S6 | Drill: chamfer each hole to a width | built (360cbfe6c), checked on a lab part |
-| S7 | 2D descents: a stated height where the rapid becomes a feed | written |
+| S7 | 2D descents: a stated height where the rapid becomes a feed | built (42df12941), checked on a lab part |
 | S8 | Contour, Pocket, Face: finishing levels at a smaller stepdown | built (0f831c0ed), checked on a lab part |
 | S9 | Contour: open sketch chain on a chosen side | built (9200f5ff2), checked on a lab part |
 | S10 | 2D Chamfer: closed and open sketch chains | built (9200f5ff2), checked on a lab part |
