@@ -1,8 +1,9 @@
-//! #1864: Enumerate and resolve DXF sketch chains from `SrcRef` selections and compute
-//! sketch Z bounds and UI per-chain descriptors.
+//! #1864 / Journeyman spec S9: Enumerate and resolve DXF sketch chains from `SrcRef`
+//! selections, validate per-chain overrides, and compute sketch Z bounds and UI descriptors.
 //!
-//! Provenance: clean-room enumeration of `geometry::sketch_chains` entities mapped through
-//! `sketch::world_pose`; original CamCraft code, no vendor material consulted.
+//! Provenance: Journeyman spec S9 (docs/journeyman/specs/S9-open-sketch-chain-side.md);
+//! clean-room enumeration of `geometry::sketch_chains` entities mapped through
+//! `sketch::world_pose`; no vendor parameters, text or code.
 
 use std::collections::HashSet;
 
@@ -15,7 +16,7 @@ use crate::machining2d::{GenError, Side};
 use crate::schema::Location;
 
 use super::contour_sketch::ResolvedSketchChain;
-use super::{ChainOverride, ChainSide, FeatureSel, GeoSel, SrcRef};
+use super::{ChainOverride, ChainSide, FeatureSel, GeoSel, OpParams, OpenChainSide, SrcRef};
 
 /// Read-only UI descriptor for one cuttable chain in a contour operation's DXF source.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,6 +84,53 @@ fn side_word(s: ChainSide) -> &'static str {
         ChainSide::Inside => "Inside",
         ChainSide::Outside => "Outside",
     }
+}
+
+pub(super) fn open_side_word(s: OpenChainSide) -> &'static str {
+    match s {
+        OpenChainSide::None => "none",
+        OpenChainSide::Left => "left",
+        OpenChainSide::Right => "right",
+    }
+}
+
+/// Journeyman spec S9: refuse `open_side` on a closed chain (and conflicting
+/// closed/open side fields on the same chain) when the override is set.
+pub(crate) fn chain_overrides_refusal(world: &World, params: &OpParams) -> Option<String> {
+    let overrides: &[ChainOverride] = match params {
+        OpParams::Contour { chain_overrides, .. } | OpParams::Chamfer2D { chain_overrides, .. } => {
+            chain_overrides
+        }
+        _ => return None,
+    };
+    for o in overrides {
+        if o.open_side == OpenChainSide::None {
+            continue;
+        }
+        let label = crate::pick::geo_label(
+            world,
+            &GeoSel {
+                entity: o.entity.clone(),
+                feature: FeatureSel::SketchChain(o.chain),
+            },
+        );
+        if o.side.is_some() {
+            return Some(format!(
+                "{label}: cannot combine closed-chain side with open_side '{}' on the same chain",
+                open_side_word(o.open_side)
+            ));
+        }
+        if let Some((_, sketch)) = crate::sketch::find(world, &o.entity)
+            && let Some(chain) = sketch.data.chains().find(o.chain)
+            && chain.is_closed()
+        {
+            return Some(format!(
+                "{label} is a closed sketch chain - open_side '{}' is not allowed on closed chains; closed chains take Inside or Outside",
+                open_side_word(o.open_side)
+            ));
+        }
+    }
+    None
 }
 
 pub(super) fn visit_src_chains(
@@ -211,6 +259,11 @@ pub(super) fn collect_chains(
         };
         let chain_id = chain.id();
         let closed = chain.is_closed();
+        // Deterministic position within the owning DXF profile (spec S10:
+        // open chamfer chains ride in profile order regardless of pick order).
+        let rank = crate::sketch::find(world, entity_name)
+            .and_then(|(_, sk)| sk.data.chains().all().position(|c| c.id() == chain_id))
+            .unwrap_or(usize::MAX);
         let pts = transform_chain_pts(pose, &chain.sample(tolerance))?;
         if (closed && pts.len() < 3) || (!closed && pts.len() < 2) {
             return Err(GenError::Invalid(format!(
@@ -220,7 +273,9 @@ pub(super) fn collect_chains(
         let ov = overrides
             .iter()
             .find(|o| o.entity == entity_name && o.chain == chain_id);
-        let eff_climb = op_climb ^ ov.is_some_and(|o| o.reverse);
+        let reversed = ov.is_some_and(|o| o.reverse);
+        let eff_climb = op_climb ^ reversed;
+        let open_side = ov.map_or(OpenChainSide::None, |o| o.open_side);
         let mut parent = None;
         let mut eff_side = None;
         let mut natural_auto = false;
@@ -229,15 +284,20 @@ pub(super) fn collect_chains(
         if !closed {
             if let Some(s) = ov.and_then(|o| o.side) {
                 open_side_err = Some(format!(
-                    "{label} is an open sketch chain - per-chain {} side compensation is not allowed; clear its side override to cut along the centerline",
+                    "{label} is an open sketch chain - per-chain {} side compensation is not allowed; clear its side override to cut along the centerline or set open_side (left/right)",
                     side_word(s)
                 ));
-            } else if op_side != Side::Auto {
+            } else if open_side == OpenChainSide::None && op_side != Side::Auto {
                 let word = if op_side == Side::Inside { "Inside" } else { "Outside" };
                 open_side_err = Some(format!(
-                    "{label} is an open sketch chain - {word} side compensation is not allowed on open chains; choose Side 'Auto' or pick closed chains"
+                    "{label} is an open sketch chain - {word} side compensation is not allowed on open chains; choose Side 'Auto', set open_side (left/right), or pick closed chains"
                 ));
             }
+        } else if open_side != OpenChainSide::None {
+            open_side_err = Some(format!(
+                "{label} is a closed sketch chain - open_side '{}' is not allowed on closed chains; closed chains take Inside or Outside",
+                open_side_word(open_side)
+            ));
         } else if let Some(s) = ov.and_then(|o| o.side) {
             eff_side = Some(match s {
                 ChainSide::Inside => Side::Inside,
@@ -273,9 +333,12 @@ pub(super) fn collect_chains(
             parent,
             eff_side,
             eff_climb,
+            reversed,
+            open_side,
             natural_auto,
             open_side_err,
             auto_role_err,
+            rank,
         });
         Ok(())
     })?;

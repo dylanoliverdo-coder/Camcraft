@@ -192,15 +192,23 @@ fn kept_moved(world: &World) -> Option<String> {
 }
 
 /// The first program op convicted of a stock-edge gouge (#2313: a
-/// stock-source chamfer or deburr that breaks into a part), with the part
-/// it enters named by the live judge. Said only beside the sim's own
+/// stock-source chamfer or deburr that breaks into a part; Journeyman S10
+/// follow-up: a profile chamfer that meets a part away from its edges),
+/// with the part it enters named by the live judge. Said only beside the sim's own
 /// gouge verdict, which already blocks.
 fn stock_edge_named(world: &World) -> Option<String> {
     use crate::verify::Warning;
     let ops = crate::posting::program_ops(world).ok()?;
     ops.iter().find_map(|(name, e)| {
         let tp = model::toolpath_of(world, e)?;
-        let w = tp.warnings.iter().find(|w| matches!(w, Warning::StockChamferGouge { .. } | Warning::StockDeburrGouge { .. }))?;
+        let w = tp.warnings.iter().find(|w| {
+            matches!(
+                w,
+                Warning::StockChamferGouge { .. }
+                    | Warning::ProfileChamferGouge { .. }
+                    | Warning::StockDeburrGouge { .. }
+            )
+        })?;
         let op = model::operation_of(world, e)?;
         Some(operation::kept_rejudge::stock_edge_problem(world, name, &op, &tp.path).unwrap_or_else(|| format!("{name}: {w}")))
     })

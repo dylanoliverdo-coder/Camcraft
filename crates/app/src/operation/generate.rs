@@ -65,6 +65,7 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
         mut picked_region,
         mut contour_sel,
         mut sketch_contour,
+        mut sketch_chamfer,
         mut drive_chains,
         mut slot_bound,
         mut rotary_picks,
@@ -88,6 +89,7 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
         around_part,
         mut keep_parts,
         mut neighbour_parts,
+        drawn_parts,
         mut area,
         avoid,
         wcs_origin,
@@ -225,13 +227,18 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
     let yaw_ctx = match wcs_yaw {
         Some(yw) => {
             verify_prior.set_yaw(yw.origin, -yw.yaw_rad);
+            let sketch_plan = if sketch_contour.is_some() {
+                &mut sketch_contour
+            } else {
+                &mut sketch_chamfer
+            };
             let saved = yw.enter(
                 &mut material,
                 &mut stock_facets,
                 &mut stock_aabb,
                 &mut picked_region,
                 &mut contour_sel,
-                &mut sketch_contour,
+                sketch_plan,
                 &mut drive_chains,
                 &mut slot_bound,
                 &mut prior,
@@ -2564,31 +2571,33 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
                     width * angle_deg.to_radians().tan()
                 )));
             }
-            let region = region_for_job(
+            let cp = ChamferParams {
+                width: *width,
+                angle_deg: *angle_deg,
+                clearance_z: hl.clearance,
+                retract_z: hl.retract,
+                top_z: req_z(hl.top, "Top of Part Z")?,
+                feed: *feed,
+                plunge_feed: *plunge_feed,
+                climb: *climb,
+                // #1555: which side of the picked loops the material
+                // stands on - the travel climb needs follows from it.
+                inside: *side == Side::Inside,
+            };
+            if let Some(plan_res) = sketch_chamfer.take() {
+                super::chamfer_sketch::generate_plan(plan_res?, &cp, *side, *climb)?
+            } else {
+                let region = region_for_job(
                     &mut picked_region,
                     &mut section_z,
                     &src,
                     &params,
-                m_gen,
-                frame.as_ref(),
-            )?;
-            let path = machining2d::chamfer(
-                &region,
-                &ChamferParams {
-                    width: *width,
-                    angle_deg: *angle_deg,
-                    clearance_z: hl.clearance,
-                    retract_z: hl.retract,
-                    top_z: req_z(hl.top, "Top of Part Z")?,
-                    feed: *feed,
-                    plunge_feed: *plunge_feed,
-                    climb: *climb,
-                    // #1555: which side of the picked loops the material
-                    // stands on - the travel climb needs follows from it.
-                    inside: *side == Side::Inside,
-                },
-            )?;
-            (region, path)
+                    m_gen,
+                    frame.as_ref(),
+                )?;
+                let path = machining2d::chamfer(&region, &cp)?;
+                (region, path)
+            }
         }
         // Circular interpolation (M2.4 B): concentric rings about an
         // authored center - the pocket family's heights and doors
@@ -3977,9 +3986,14 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             // for a whole-model source, the setup's parts for a stock one
             // (#1607: every stock-kept kind but the marks and the holes).
             if let Some(kept) = (depth_law == DepthLaw::Keep).then_some(&material.facets).or((!keep_parts.is_empty() && !parts_marked && !parts_holed && !parts_crossed).then_some(&keep_parts)) {
-                let start = warns.len();
-                contain_into(&mut warns, &path, kept, &cutter, DepthLaw::Keep, stl, material.excess, material.file_tolerance, &params, &[]);
-                super::keep_law::note_stock_chamfer_gouges(&params, part_solid, &mut warns[start..]);
+                // Journeyman S10 follow-up: a profile chamfer's own parts
+                // are judged in the program sim, with their breaks credited.
+                let kept = super::keep_law_drawn::drawn_kept(kept, drawn_parts.as_deref(), &path.breaks, material.excess, material.file_tolerance);
+                if !kept.is_empty() {
+                    let start = warns.len();
+                    contain_into(&mut warns, &path, &kept, &cutter, DepthLaw::Keep, stl, material.excess, material.file_tolerance, &params, &[]);
+                    super::keep_law::note_stock_chamfer_gouges(&params, part_solid, drawn_parts.is_some(), &mut warns[start..]);
+                }
             }
             // #1631: a hole kind off the stock - the setup's parts by the
             // containment law, its declared holes' modelled walls excused.
@@ -4189,9 +4203,14 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
             // #1603: the keep law in the plane's frame.
             let keep_local = (!keep_parts.is_empty()).then(|| f.local_facets(&keep_parts));
             if let Some(kept) = (depth_law == DepthLaw::Keep).then_some(&m_gen.facets).or(keep_local.as_ref().filter(|_| !parts_marked && !parts_holed && !parts_crossed)) {
-                let start = warns.len();
-                contain_into(&mut warns, &path, kept, &cutter, DepthLaw::Keep, stl, material.excess, material.file_tolerance, &params, &[]);
-                super::keep_law::note_stock_chamfer_gouges(&params, part_solid, &mut warns[start..]);
+                // Journeyman S10 follow-up, in the plane's frame (local
+                // parts, the local path's breaks).
+                let kept = super::keep_law_drawn::drawn_kept(kept, drawn_parts.as_deref(), &path.breaks, material.excess, material.file_tolerance);
+                if !kept.is_empty() {
+                    let start = warns.len();
+                    contain_into(&mut warns, &path, &kept, &cutter, DepthLaw::Keep, stl, material.excess, material.file_tolerance, &params, &[]);
+                    super::keep_law::note_stock_chamfer_gouges(&params, part_solid, drawn_parts.is_some(), &mut warns[start..]);
+                }
             }
             // #1631: a hole kind off the stock, in the plane's frame.
             if let Some(kept) = keep_local.as_ref().filter(|_| parts_holed) {

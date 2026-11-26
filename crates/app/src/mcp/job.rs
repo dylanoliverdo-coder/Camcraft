@@ -310,7 +310,10 @@ pub(super) fn list_tool_catalog(_env: &mut Env, _a: &Map<String, Value>) -> Resu
 pub(super) fn finding(op: &str, w: &Warning) -> Value {
     let (kind, at) = match w {
         Warning::Crossing { moves } => ("crossing", moves[0]),
-        Warning::Gouge { at } | Warning::StockChamferGouge { at } | Warning::StockDeburrGouge { at } => ("gouge", *at),
+        Warning::Gouge { at }
+        | Warning::StockChamferGouge { at }
+        | Warning::ProfileChamferGouge { at }
+        | Warning::StockDeburrGouge { at } => ("gouge", *at),
         Warning::ShankHit { at, .. } => ("shank_hit", *at),
         Warning::HolderHit { at, .. } => ("holder_hit", *at),
         Warning::SweepHit { at, .. } => ("sweep_hit", *at),

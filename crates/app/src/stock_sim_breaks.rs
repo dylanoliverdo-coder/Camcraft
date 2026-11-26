@@ -88,10 +88,23 @@ pub fn stock_part_of(world: &flecs_ecs::prelude::World, setup: Option<&str>) -> 
 }
 
 /// #2596: whether `op` is a 2D Chamfer with no picks - its source the
-/// whole model, so the generator chose its edges, not the user.
+/// whole model, so the generator chose its edges, not the user. A whole
+/// DXF profile is not that: the user drew its chains ([`drawn_edges`]).
 #[must_use]
-pub fn auto_edges(op: &crate::schema::Operation) -> bool {
-    matches!(op.params, OpParams::Chamfer2D { .. }) && matches!(op.src, crate::operation::SrcRef::Entity(_))
+pub fn auto_edges(world: &flecs_ecs::prelude::World, op: &crate::schema::Operation) -> bool {
+    matches!(op.params, OpParams::Chamfer2D { .. })
+        && matches!(op.src, crate::operation::SrcRef::Entity(_))
+        && !drawn_edges(world, op)
+}
+
+/// Journeyman S10 follow-up: whether `op` is a 2D Chamfer on a DXF profile
+/// (the whole profile or chains picked on it): the edges it breaks are the
+/// ones the user drew, at the operation's top plane, over parts that are
+/// models of their own. Its records are credited only where they stand on
+/// an edge of the model ([`camcraft_sim::stock_sim::on_drawn_edges`]).
+#[must_use]
+pub fn drawn_edges(world: &flecs_ecs::prelude::World, op: &crate::schema::Operation) -> bool {
+    matches!(op.params, OpParams::Chamfer2D { .. }) && !crate::sketch_model::source_profiles(world, &op.src).is_empty()
 }
 
 /// The records of op `name` the sim may credit: sane, on a declaring
@@ -131,7 +144,9 @@ pub fn bounded(name: &str, params: &OpParams, breaks: Vec<EdgeBreak>) -> Vec<Edg
 /// #2435: a 2D Chamfer's records are credited only where the tip
 /// stands on a wall of `facets` ([`camcraft_sim::stock_sim::on_walls`]);
 /// a dropped one is logged and its columns are judged against the model
-/// as it is.
+/// as it is. A 2D Chamfer on a DXF profile ([`drawn_edges`]) only where
+/// its drawn edge is an edge of `facets`
+/// ([`camcraft_sim::stock_sim::on_drawn_edges`]).
 pub(crate) fn program_breaks(
     world: &flecs_ecs::prelude::World,
     planned: &[super::Planned],
@@ -157,6 +172,21 @@ pub(crate) fn program_breaks(
                 dropped = p.breaks.len(),
                 "2D Chamfer with no picks on a model with modelled chamfers - credit dropped, the ride is judged against the model (#2596)"
             );
+            continue;
+        }
+        // Journeyman S10 follow-up: a drawn edge stands at the op's top
+        // plane, so it must also be the model's edge there - no part higher
+        // than it beside the tip.
+        if p.drawn {
+            let kept = camcraft_sim::stock_sim::on_drawn_edges(facets, tol, p.breaks.clone());
+            if kept.len() < p.breaks.len() {
+                tracing::warn!(
+                    op = %p.name,
+                    dropped = p.breaks.len() - kept.len(),
+                    "2D Chamfer on a profile whose chain stands on no edge of the part (off its walls, or below its top edge) - credit dropped, judged against the model"
+                );
+            }
+            out.extend(kept);
             continue;
         }
         let kept = camcraft_sim::stock_sim::on_walls(facets, tol, p.breaks.clone());

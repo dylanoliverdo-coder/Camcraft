@@ -413,6 +413,9 @@ pub enum OpParams {
         tolerance: f64,
         /// 3+2 index; see [`OpParams::Face`]'s field.
         tilt: Option<Tilt>,
+        /// Journeyman spec S10: optional per-chain side, open_side, and
+        /// direction overrides for DXF sketch chamfers; empty by default.
+        chain_overrides: Vec<super::sel::ChainOverride>,
     },
     /// Circular pocket / vault (M2.4 B): concentric rings about an
     /// AUTHORED center at an AUTHORED radius - the geometry authored

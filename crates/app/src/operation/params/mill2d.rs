@@ -231,6 +231,7 @@ impl OpParams {
                 side,
                 tolerance,
                 tilt,
+                chain_overrides,
             } => {
                 wh(h, *clearance_z);
                 wh(h, *top_z);
@@ -245,6 +246,9 @@ impl OpParams {
                 });
                 wh_opt(h, *retract_z);
                 wt(h, *tilt);
+                // Journeyman spec S10: written only when non-empty so earlier
+                // 2D Chamfer operations keep their exact cached digest.
+                super::digest::write_chain_overrides(chain_overrides, h);
             }
             // The circular ladder digests the pocket family's bytes
             // plus the authored disk: center, radius, and the dome

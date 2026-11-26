@@ -13,7 +13,7 @@ pub(super) use flecs_ecs::prelude::World;
 pub(super) use camcraft_app::machining2d::{ARC_FIT_TOL, FaceHoles, Lead, PocketStrategy, Side};
 pub(super) use camcraft_app::model;
 pub(super) use camcraft_app::operation::{
-    self, ChainOverride, ChainSide, Height, OpParams, SrcRef, Tilt,
+    self, ChainOverride, ChainSide, Height, OpParams, OpenChainSide, SrcRef, Tilt,
 };
 pub(super) use camcraft_app::units::{self, Unit};
 
@@ -281,12 +281,15 @@ pub(crate) fn combo_owned(ui: &mut Ui, id: &str, idx: &mut usize, names: &[Strin
     });
 }
 
-/// #1864: Per-chain side and direction overrides for DXF sketch contours.
+/// #1864 / Journeyman specs S9 & S10: Per-chain side and direction overrides
+/// for DXF sketch operations. When `require_open_side` is true (2D Chamfer),
+/// `OpenChainSide::None` prompts to choose a side rather than offering Centerline.
 pub(super) fn sketch_chain_overrides_ui(
     ui: &mut Ui,
     world: &World,
     src: &SrcRef,
     overrides: &mut Vec<ChainOverride>,
+    require_open_side: bool,
 ) {
     let infos = crate::frame_cost::time("ui/properties.op.fields.sketch_chain_overrides", || {
         operation::sketch_chain_infos(world, src)
@@ -294,6 +297,7 @@ pub(super) fn sketch_chain_overrides_ui(
     if infos.is_empty() {
         return;
     }
+    let open_none_label = if require_open_side { "Choose side..." } else { "Centerline" };
     group(ui, "Per-chain overrides", None, |ui| {
         hint(ui, "Override Auto side or cut direction per DXF chain");
         for (i, info) in infos.iter().enumerate() {
@@ -301,9 +305,14 @@ pub(super) fn sketch_chain_overrides_ui(
                 .iter()
                 .position(|o| o.entity == info.entity && o.chain == info.chain);
             let mut side = existing.and_then(|k| overrides[k].side);
+            let mut open_side = existing.map_or(OpenChainSide::None, |k| overrides[k].open_side);
             let mut reverse = existing.is_some_and(|k| overrides[k].reverse);
             let auto_tag = if !info.closed {
-                "Centerline"
+                match open_side {
+                    OpenChainSide::None => open_none_label,
+                    OpenChainSide::Left => "Left",
+                    OpenChainSide::Right => "Right",
+                }
             } else {
                 match info.auto_side {
                     Some(Side::Inside) => "Auto: Inside",
@@ -325,29 +334,42 @@ pub(super) fn sketch_chain_overrides_ui(
                         2 => Some(ChainSide::Outside),
                         _ => None,
                     };
+                    open_side = OpenChainSide::None;
                 } else {
-                    ui.label("Centerline");
+                    let mut o_idx = match open_side {
+                        OpenChainSide::None => 0,
+                        OpenChainSide::Left => 1,
+                        OpenChainSide::Right => 2,
+                    };
+                    combo(ui, &format!("c_ov_open_side_{i}"), &mut o_idx, &[open_none_label, "Left", "Right"]);
+                    open_side = match o_idx {
+                        1 => OpenChainSide::Left,
+                        2 => OpenChainSide::Right,
+                        _ => OpenChainSide::None,
+                    };
                     if side.is_some() && small_button(ui, "Clear side").clicked() {
                         side = None;
                     }
                 }
                 ui.checkbox(&mut reverse, "Reverse");
             });
-            match (existing, side, reverse) {
-                (Some(k), None, false) => {
+            match (existing, side, open_side, reverse) {
+                (Some(k), None, OpenChainSide::None, false) => {
                     overrides.remove(k);
                 }
-                (Some(k), s, rev) => {
+                (Some(k), s, os, rev) => {
                     overrides[k].side = s;
+                    overrides[k].open_side = os;
                     overrides[k].reverse = rev;
                 }
-                (None, s, rev) => {
-                    if s.is_some() || rev {
+                (None, s, os, rev) => {
+                    if s.is_some() || os != OpenChainSide::None || rev {
                         overrides.push(ChainOverride {
                             entity: info.entity.clone(),
                             chain: info.chain,
                             side: s,
                             reverse: rev,
+                            open_side: os,
                         });
                     }
                 }

@@ -112,7 +112,13 @@ fn part_problem(world: &World, name: &str, op: &Operation, path: &Toolpath, know
     // The laws run in the frame generation judged in: a 3+2 op's local one.
     let local = job.frame.as_ref().map(|f| local_path(f, path));
     let judged = local.as_ref().unwrap_or(path);
+    // Journeyman S10 follow-up: generation's split - a profile chamfer's
+    // own parts answer in the program sim, never to this solid law.
+    let drawn = crate::stock_sim::breaks::drawn_edges(world, op);
     for (part, facets) in parts {
+        if drawn && super::keep_law_drawn::drawn_own_part(&facets, &path.breaks, excess, job.material.file_tolerance) {
+            continue;
+        }
         let facets = job.frame.as_ref().map_or(facets.clone(), |f| f.local_facets(&facets));
         let found = match law {
             Law::Cross => cross_problem(judged, &facets, &job, &cutter).map(|w| if local.is_none() { w } else { String::new() }),
@@ -126,7 +132,7 @@ fn part_problem(world: &World, name: &str, op: &Operation, path: &Toolpath, know
                         Law::Hole => contain_with_drill(&mut w, judged, &facets, c, DepthLaw::Contain, stl, excess, job.material.file_tolerance, &job.params, bores, drill),
                         _ => {
                             contain_with_drill(&mut w, judged, &facets, c, DepthLaw::Keep, stl, excess, job.material.file_tolerance, &job.params, &[], drill);
-                            super::keep_law::note_stock_chamfer_gouges(&job.params, job.part_solid, &mut w);
+                            super::keep_law::note_stock_chamfer_gouges(&job.params, job.part_solid, drawn, &mut w);
                         }
                     }
                     w
@@ -143,6 +149,8 @@ fn part_problem(world: &World, name: &str, op: &Operation, path: &Toolpath, know
                         w.to_string()
                     } else if matches!(w, verify::Warning::StockChamferGouge { .. }) {
                         "stock-source chamfer breaks into a part; chamfer with the part as source".to_owned()
+                    } else if matches!(w, verify::Warning::ProfileChamferGouge { .. }) {
+                        "profile chamfer breaks into a part away from its edges; draw the chain on the part's top edge, or chamfer with the part as source".to_owned()
                     } else if matches!(w, verify::Warning::StockDeburrGouge { .. }) {
                         "stock-source deburr breaks into a part; use the part as source".to_owned()
                     } else {

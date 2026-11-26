@@ -442,9 +442,17 @@ impl OpParams {
                 feed,
                 plunge_feed,
                 tolerance,
+                chain_overrides,
                 ..
             } => {
-                pos(*width)
+                let overrides_ok = chain_overrides.iter().enumerate().all(|(i, o)| {
+                    !o.entity.is_empty()
+                        && !chain_overrides[..i]
+                            .iter()
+                            .any(|prev| prev.entity == o.entity && prev.chain == o.chain)
+                });
+                overrides_ok
+                    && pos(*width)
                     && (0.0..90.0).contains(angle_deg)
                     && pos(*tolerance)
                     && clearance_z.is_sane()

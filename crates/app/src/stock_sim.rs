@@ -185,6 +185,10 @@ pub(crate) struct Planned {
     /// on a model that carries a modelled bevel, none of its breaks are
     /// credited (`stock_sim_breaks::program_breaks`).
     pub auto_edges: bool,
+    /// Journeyman S10 follow-up: a 2D Chamfer on a DXF profile - its
+    /// edges drawn by the user, its breaks credited only on an edge of
+    /// the model (`on_drawn_edges`).
+    pub drawn: bool,
     /// The mark budget and target part(s) the op declares (#1595, #1627,
     /// `operation::mark_law`): `Some` only for an Engrave or Trace.
     pub mark: Option<crate::operation::mark_law::SimMark>,
@@ -402,7 +406,8 @@ fn plan_ops(world: &flecs_ecs::prelude::World, ops: &[(String, flecs_ecs::prelud
             // and never a stock edge's bevel over a part.
             breaks: if breaks::breaks_stock_edge(world, &op) { Vec::new() } else { breaks::bounded(name, &op.params, cache.path.breaks) },
             walled: matches!(op.params, crate::operation::OpParams::Chamfer2D { .. }),
-            auto_edges: breaks::auto_edges(&op),
+            auto_edges: breaks::auto_edges(world, &op),
+            drawn: breaks::drawn_edges(world, &op),
             mark: crate::operation::mark_law::sim_mark_of(world, &op, crate::operation::mark_law::cutter_depth_limit(&op.params, &tool))
                 .or_else(|| crate::operation::drill_chamfer::sim_mark(world, &op, &tool, &cache.warnings)),
             radius,

@@ -7,6 +7,11 @@
 //! Provenance: our own fixtures over our own commands; DXF geometry uses
 //! public Autodesk ASCII DXF group codes.
 
+#[path = "contour_dxf_sketch_s9/mod.rs"]
+mod s9;
+#[path = "contour_dxf_sketch_s10/mod.rs"]
+mod s10;
+
 use std::path::{Path, PathBuf};
 
 use flecs_ecs::prelude::World;
@@ -21,7 +26,7 @@ use camcraft_app::machining2d::Lead;
 use camcraft_app::model;
 use camcraft_app::operation::{
     self, AreaControls, ChainOverride, FeatureSel, GeoSel, Height, HeightReference, OpParams,
-    OpType, SrcRef,
+    OpType, OpenChainSide, SrcRef,
 };
 use camcraft_app::schema::Location;
 use camcraft_app::sketch;
@@ -171,7 +176,7 @@ fn nested_loops_from_separate_sketches_keep_their_side_when_only_reverse_changes
 
     let mut reversed = params;
     if let OpParams::Contour { chain_overrides, .. } = &mut reversed {
-        *chain_overrides = vec![ChainOverride { entity: "ring".into(), chain: ring, side: None, reverse: true }];
+        *chain_overrides = vec![ChainOverride { entity: "ring".into(), chain: ring, side: None, reverse: true, open_side: OpenChainSide::None }];
     }
     run(&world, &mut history, CreateOperation::new(&world, "Reversed", TOOL, SrcRef::Selection(picks), reversed), "create reversed");
     run(&world, &mut history, GenerateOperation::new(&world, "Reversed"), "generate reversed");

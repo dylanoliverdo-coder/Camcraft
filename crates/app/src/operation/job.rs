@@ -61,6 +61,9 @@ pub struct GenJob {
     /// `contour_sel` / `picked_region` when `src` selects sketch entities).
     pub(super) sketch_contour:
         Option<Result<super::contour_sketch::SketchContourPlan, GenError>>,
+    /// Journeyman spec S10: resolved DXF sketch chains for `2D Chamfer`.
+    pub(super) sketch_chamfer:
+        Option<Result<super::contour_sketch::SketchContourPlan, GenError>>,
     pub(super) drive_chains: Option<Result<Vec<Vec<Point3>>, GenError>>,
     /// #1504: a picked Slot's room, read here; the Slot arm confines to it.
     pub(super) slot_bound: Option<Result<crate::machining2d::SlotBound, GenError>>,
@@ -126,6 +129,10 @@ pub struct GenJob {
     /// the plain solid law (`keep_law::neighbour_parts`); empty for a
     /// stock source and a one-part document.
     pub(super) neighbour_parts: Vec<Triangle>,
+    /// Journeyman S10 follow-up: for a 2D Chamfer on a DXF profile, the
+    /// triangle count of each part in `keep_parts`, part by part
+    /// (`keep_law_drawn::drawn_part_sizes`); `None` for every other job.
+    pub(super) drawn_parts: Option<Vec<usize>>,
     /// The area controls resolved against the world (M11.5); `None` for
     /// the identity - an untouched operation carries nothing new.
     pub(super) area: Option<Result<AreaCtx, GenError>>,
@@ -267,7 +274,9 @@ pub fn collect_job(world: &World, op: &Operation, op_name: &str) -> Result<GenJo
     // arm's own statement in `run_job`.
     let section_z = section_z_of(world, setup, Some(&op.src), &op.params, frame.as_ref());
     let sketch_slot = super::slot_sketch::is_sketch_slot(world, &op.src, &op.params);
-    let picked_region = if super::contour_sketch::is_sketch_contour(world, &op.src, &op.params) {
+    let picked_region = if super::contour_sketch::is_sketch_contour(world, &op.src, &op.params)
+        || super::chamfer_sketch::is_sketch_chamfer(world, &op.src, &op.params)
+    {
         None
     } else if sketch_slot {
         // #1868: sketch picks bound the slot (`slot_bound`); the region
@@ -301,6 +310,8 @@ pub fn collect_job(world: &World, op: &Operation, op_name: &str) -> Result<GenJo
     let wire_ruled = super::wire_ruled::picks_of(world, op);
     let sketch_contour = super::contour_sketch::is_sketch_contour(world, &op.src, &op.params)
         .then(|| super::contour_sketch::resolve_plan(world, &op.src, &op.params));
+    let sketch_chamfer = super::chamfer_sketch::is_sketch_chamfer(world, &op.src, &op.params)
+        .then(|| super::chamfer_sketch::resolve_plan(world, &op.src, &op.params));
     let contour_sel = match (&op.params, &op.src) {
         // The plasma cut reads its picks the contour's way (#670):
         // closed rings AND open runs, each cut as picked.
@@ -492,6 +503,7 @@ pub fn collect_job(world: &World, op: &Operation, op_name: &str) -> Result<GenJo
         picked_region,
         contour_sel,
         sketch_contour,
+        sketch_chamfer,
         drive_chains,
         slot_bound,
         rotary_picks: super::rotary_picks::picks_of(world, op),
@@ -515,6 +527,7 @@ pub fn collect_job(world: &World, op: &Operation, op_name: &str) -> Result<GenJo
         around_part,
         keep_parts: super::keep_law::parts_in_stock(world, setup, &op.params, part_solid),
         neighbour_parts: super::keep_law::neighbour_parts(world, setup, &op.params, &op.src, part_solid),
+        drawn_parts: super::keep_law_drawn::drawn_part_sizes(world, setup, &op.params, &op.src, part_solid),
         area,
         avoid,
         wcs_origin,

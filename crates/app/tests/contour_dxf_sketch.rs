@@ -23,7 +23,7 @@ use camcraft_app::machining2d::{Lead, Side};
 use camcraft_app::model;
 use camcraft_app::operation::{
     self, ChainOverride, ChainSide, FeatureSel, GeoSel, Height, HeightReference, OpParams,
-    OpStatus, OpType, SrcRef,
+    OpStatus, OpType, OpenChainSide, SrcRef,
 };
 use camcraft_app::posting;
 use camcraft_app::project;
@@ -241,18 +241,21 @@ fn layer_and_chain_picks_per_chain_overrides_undo_and_project_v74_roundtrip() {
                 chain: ids.big_circle,
                 side: Some(ChainSide::Outside),
                 reverse: false,
+                open_side: OpenChainSide::None,
             },
             ChainOverride {
                 entity: "plate".into(),
                 chain: ids.small_circle,
                 side: Some(ChainSide::Inside),
                 reverse: true,
+                open_side: OpenChainSide::None,
             },
             ChainOverride {
                 entity: "plate".into(),
                 chain: ids.open_line,
                 side: None,
                 reverse: true,
+                open_side: OpenChainSide::None,
             },
         ];
     }
@@ -339,6 +342,7 @@ fn open_chain_safety_refuses_side_compensation_and_g41_by_name() {
             chain: ids.open_line,
             side: Some(ChainSide::Outside),
             reverse: false,
+            open_side: OpenChainSide::None,
         }];
     }
     run(&world, &mut history, CreateOperation::new(&world, "OpOv", TOOL, SrcRef::Selection(open_pick.clone()), p_ov), "create");
@@ -366,6 +370,7 @@ fn open_chain_safety_refuses_side_compensation_and_g41_by_name() {
             chain: ids.open_line,
             side: None,
             reverse: true,
+            open_side: OpenChainSide::None,
         }];
     }
     run(&world, &mut history, CreateOperation::new(&world, "Fwd", TOOL, SrcRef::Selection(open_pick.clone()), p_fwd), "fwd");

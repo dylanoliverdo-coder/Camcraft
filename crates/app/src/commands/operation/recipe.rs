@@ -78,7 +78,8 @@ fn has_saved_geometry(params: &OpParams) -> bool {
     match params {
         OpParams::Drill { holes, cross, .. } => !holes.is_empty() || !cross.is_empty(),
         OpParams::Bore { holes, .. } | OpParams::Thread { holes, .. } => !holes.is_empty(),
-        OpParams::Contour { chain_overrides, .. } => !chain_overrides.is_empty(),
+        OpParams::Contour { chain_overrides, .. }
+        | OpParams::Chamfer2D { chain_overrides, .. } => !chain_overrides.is_empty(),
         OpParams::Deburr { exclude_edges, .. } | OpParams::MultiAxisDeburr { exclude_edges, .. } => !exclude_edges.is_empty(),
         OpParams::Circular { .. }
         | OpParams::Slot { .. }
@@ -99,7 +100,6 @@ fn has_saved_geometry(params: &OpParams) -> bool {
         OpParams::Face { .. }
         | OpParams::Engrave { .. }
         | OpParams::VCarve { .. }
-        | OpParams::Chamfer2D { .. }
         | OpParams::Trace { .. }
         | OpParams::Pocket3D { .. }
         | OpParams::Finish3D { .. }

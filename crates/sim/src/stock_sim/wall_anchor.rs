@@ -1,7 +1,8 @@
 //! A 2D chamfer's break is credited only where its cone tip stands on a
-//! wall (#2435).
+//! wall (#2435; Journeyman spec S10 follow-up for drawn DXF profile edges).
 //!
-//! Provenance: the chamfer mill's cut law (machine-tool handbook
+//! Provenance: Journeyman spec S10 (docs/journeyman/specs/S10-chamfer-on-sketch-chains.md)
+//! and the chamfer mill's cut law (machine-tool handbook
 //! geometry, [`crate::cl::EdgeBreak`]): the 2D chamfer puts the tip ON
 //! the wall at the corner depth and the cone's generatrix on the face,
 //! so beside the tip, off the edge on one side, there is air down to
@@ -50,6 +51,56 @@ fn walled(facets: &[Triangle], tol: f64, b: &EdgeBreak) -> bool {
     // down to the tip on at least one side.
     samples(b, |x, y, z, nx, ny| tops.at(x + nx, y + ny).min(tops.at(x - nx, y - ny)) <= z - b.depth + tol)
         .unwrap_or(false)
+}
+
+/// Journeyman S10 follow-up: the records of a 2D Chamfer whose edges the
+/// user DREW (a DXF profile's chains) that stand on an edge of `facets`.
+/// [`on_walls`]'s wall, and one more: a drawn edge's height is the
+/// operation's top plane, not read off the model, so beside the tip no
+/// part of the model may stand higher than the drawn edge (plus `tol`) on
+/// either side. A chain drawn below the part's real edge has air down to
+/// the tip outside the wall, but the part rises above the edge inside it:
+/// the cone cuts a V into the wall there, which is no edge break. The
+/// model standing LOWER than the drawn edge (a modelled chamfer, a chord
+/// of a faceted arc, a chain drawn a hair off the wall) leaves nothing
+/// for the credit to forgive. Framed records and single points are kept
+/// as [`on_walls`] keeps them; where no model stands near a record at
+/// all (a drawing over a part that is not placed), the record stands on
+/// air and is kept: it forgives nothing.
+#[must_use]
+pub fn on_drawn_edges(facets: &[Triangle], tol: f64, breaks: Vec<EdgeBreak>) -> Vec<EdgeBreak> {
+    let tol = if tol.is_finite() { tol.max(0.0) } else { 0.0 };
+    breaks
+        .into_iter()
+        .filter(|b| b.volume.is_some() || b.edge.len() < 2 || drawn_edge(facets, tol, b))
+        .collect()
+}
+
+fn drawn_edge(facets: &[Triangle], tol: f64, b: &EdgeBreak) -> bool {
+    let Some(tops) = Tops::near(facets, b) else {
+        return false;
+    };
+    samples(b, |x, y, z, nx, ny| {
+        let (p, q) = (tops.at(x + nx, y + ny), tops.at(x - nx, y - ny));
+        p.min(q) <= z - b.depth + tol && p.max(q) <= z + tol
+    })
+    .unwrap_or(false)
+}
+
+/// Whether the model stands beside any record of `breaks`: under the
+/// probe `WALL_PROBE` off the edge, on either side, at some sample.
+/// [`on_drawn_edges`] keeps a record over air (it forgives nothing); this
+/// tells such a record from one drawn on the model's edge.
+#[must_use]
+pub fn beside_model(facets: &[Triangle], breaks: &[EdgeBreak]) -> bool {
+    breaks.iter().filter(|b| b.volume.is_none() && b.edge.len() >= 2).any(|b| {
+        let Some(tops) = Tops::near(facets, b) else {
+            return false;
+        };
+        // `samples` stops at the first false: a sample with the model
+        // under a probe answers false there.
+        samples(b, |x, y, _, nx, ny| tops.at(x + nx, y + ny).max(tops.at(x - nx, y - ny)) == f64::NEG_INFINITY) == Some(false)
+    })
 }
 
 /// #2596: whether the model itself already carries a bevel (a modelled
@@ -220,6 +271,35 @@ mod tests {
         // The edge 1 mm in from the wall: the tip at z 9 under the top.
         let kept = on_walls(&brick(), 0.01, vec![rec(ring(1.0, 10.0))]);
         assert!(kept.is_empty());
+    }
+
+    #[test]
+    fn a_drawn_edge_on_the_parts_top_edge_keeps_its_credit() {
+        let kept = on_drawn_edges(&brick(), 0.01, vec![rec(ring(0.0, 10.0))]);
+        assert_eq!(kept.len(), 1);
+    }
+
+    #[test]
+    fn a_drawn_edge_below_the_parts_top_edge_is_a_groove_not_a_break() {
+        // The outline drawn at z 8 on the brick's wall: air down to the tip
+        // outside (on_walls keeps it), the brick up to z 10 inside.
+        assert_eq!(on_walls(&brick(), 0.01, vec![rec(ring(0.0, 8.0))]).len(), 1);
+        assert!(on_drawn_edges(&brick(), 0.01, vec![rec(ring(0.0, 8.0))]).is_empty());
+    }
+
+    #[test]
+    fn a_drawn_edge_inside_the_part_or_over_no_part() {
+        // 1 mm in from the wall: the tip inside the brick - dropped. 30 mm
+        // out, where no model stands: air on both sides - kept, forgiving
+        // nothing.
+        assert!(on_drawn_edges(&brick(), 0.01, vec![rec(ring(1.0, 10.0))]).is_empty());
+        assert_eq!(on_drawn_edges(&brick(), 0.01, vec![rec(ring(-30.0, 10.0))]).len(), 1);
+    }
+
+    #[test]
+    fn the_model_beside_a_record_or_not() {
+        assert!(beside_model(&brick(), &[rec(ring(-30.0, 10.0)), rec(ring(0.0, 10.0))]));
+        assert!(!beside_model(&brick(), &[rec(ring(-30.0, 10.0))]));
     }
 
     #[test]

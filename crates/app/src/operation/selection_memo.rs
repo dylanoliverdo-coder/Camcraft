@@ -152,6 +152,13 @@ impl Answer {
             let (notes, refusal, inside) = super::contour_sketch::account(world, src, params);
             return Self { notes, refusal, inside };
         }
+        if super::chamfer_sketch::is_sketch_chamfer(world, src, params) {
+            if let Some(why) = crate::sketch_model::source_problem(world, setup, src, params) {
+                return Self { notes: Vec::new(), refusal: Some(why), inside: None };
+            }
+            let (notes, refusal, inside) = super::chamfer_sketch::account(world, src, params);
+            return Self { notes, refusal, inside };
+        }
         let items = match src {
             SrcRef::Stock | SrcRef::Entity(_) => {
                 return Self { notes: Vec::new(), refusal: None, inside: Some(false) };
@@ -236,7 +243,9 @@ pub fn selection_walks() -> u64 {
 /// reads the side from its own walk in `job`).
 #[must_use]
 pub fn contour_auto_side_fresh(world: &World, setup: Option<&str>, src: &SrcRef, params: &OpParams) -> Option<bool> {
-    if super::contour_sketch::is_sketch_contour(world, src, params) {
+    if super::contour_sketch::is_sketch_contour(world, src, params)
+        || super::chamfer_sketch::is_sketch_chamfer(world, src, params)
+    {
         return Answer::fresh(world, setup, src, params).inside;
     }
     match src {
@@ -259,7 +268,7 @@ pub fn selection_account_fresh(world: &World, setup: Option<&str>, items: &[GeoS
 mod tests {
     use super::*;
     use crate::commands::{Command, DxfOptions, ImportDxf, SetStock};
-    use crate::operation::{ChainOverride, ChainSide, OpType};
+    use crate::operation::{ChainOverride, ChainSide, OpType, OpenChainSide};
     use crate::schema::Location;
     use crate::stock::StockShape;
     use crate::world::new_world;
@@ -295,6 +304,7 @@ mod tests {
                 chain: cid,
                 side: Some(ChainSide::Inside),
                 reverse: false,
+                open_side: OpenChainSide::None,
             });
         }
         let b1 = selection_walks();

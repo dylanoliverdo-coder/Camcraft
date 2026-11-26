@@ -200,9 +200,11 @@ mod contour_open;
 mod contour_sketch_pick;
 mod sketch_memo;
 pub use contour_sketch_pick::{SketchChainInfo, sketch_chain_infos_fresh, sketch_z_range_fresh};
+pub(crate) use contour_sketch_pick::chain_overrides_refusal;
 pub use sketch_memo::{
     display_heights, sketch_chain_info_builds, sketch_chain_infos, sketch_z_builds, sketch_z_fresh_reads,
 };
+mod chamfer_sketch;
 mod contour_sketch;
 mod finish_clip;
 mod finish_entry;
@@ -268,6 +270,8 @@ mod air_law;
 pub mod mark_law;
 // #1603: the part a pocket-family op keeps, judged on the op.
 pub mod keep_law;
+// Journeyman spec S10 follow-up: drawn-edge part split for DXF profile chamfers.
+mod keep_law_drawn;
 // #1749: the 3D Pocket's footprint past its open edges.
 mod open_side;
 pub use open_side::AIR_BAND_FIXTURE;

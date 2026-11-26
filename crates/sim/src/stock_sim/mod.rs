@@ -153,7 +153,7 @@ pub use dexel_box::{simulate_box, BOX_ARC_REFUSAL};
 pub use dexel_outline::{simulate_outline, OUTLINE_ARC_REFUSAL};
 pub use edge_break::credit_breaks;
 pub use corner_relief::credit_corner_reliefs;
-pub use wall_anchor::{models_a_bevel, on_walls};
+pub use wall_anchor::{beside_model, models_a_bevel, on_drawn_edges, on_walls};
 pub use mark::{credit_marks, Mark};
 // The floor a mark must leave on the part's underside (#1595).
 pub use crate::verify::MARK_FLOOR;

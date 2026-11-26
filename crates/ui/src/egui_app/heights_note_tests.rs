@@ -55,6 +55,7 @@ fn tilted_corner_note_uses_the_same_local_frame_as_its_top_row() {
         feed: 800.0, plunge_feed: 200.0, climb: true,
         side: camcraft_app::machining2d::Side::Outside,
         tolerance: 0.01, tilt: state.op_ui.params.tilt(),
+        chain_overrides: Vec::new(),
     };
     let mut harness = heights_tab(state);
     harness.run();

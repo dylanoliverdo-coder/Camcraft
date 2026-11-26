@@ -219,6 +219,7 @@ impl ParamsDto {
                         chain: ChainIdDto(o.chain),
                         side: o.side.map(chain_side_dto),
                         reverse: o.reverse,
+                        open_side: open_chain_side_dto(o.open_side),
                     })
                     .collect(),
                 passes: (*passes).into(),
@@ -461,6 +462,7 @@ impl ParamsDto {
                 side,
                 tolerance,
                 tilt,
+                chain_overrides,
             } => ParamsDto::Chamfer2D {
                 width: *width,
                 angle_deg: *angle_deg,
@@ -477,6 +479,16 @@ impl ParamsDto {
                 },
                 tolerance: *tolerance,
                 tilt: (*tilt).map(Into::into),
+                chain_overrides: chain_overrides
+                    .iter()
+                    .map(|o| ChainOverrideDto {
+                        entity: o.entity.clone(),
+                        chain: ChainIdDto(o.chain),
+                        side: o.side.map(chain_side_dto),
+                        reverse: o.reverse,
+                        open_side: open_chain_side_dto(o.open_side),
+                    })
+                    .collect(),
             },
             OpParams::Circular {
                 links,
@@ -1577,6 +1589,7 @@ impl ParamsDto {
                         chain: o.chain.0,
                         side: o.side.map(chain_side_of),
                         reverse: o.reverse,
+                        open_side: open_chain_side_of(o.open_side),
                     })
                     .collect(),
                 passes: (*passes).into(),
@@ -1820,6 +1833,7 @@ impl ParamsDto {
                 side,
                 tolerance,
                 tilt,
+                chain_overrides,
             } => OpParams::Chamfer2D {
                 width: *width,
                 angle_deg: *angle_deg,
@@ -1836,6 +1850,16 @@ impl ParamsDto {
                 },
                 tolerance: *tolerance,
                 tilt: (*tilt).map(Into::into),
+                chain_overrides: chain_overrides
+                    .iter()
+                    .map(|o| crate::operation::ChainOverride {
+                        entity: o.entity.clone(),
+                        chain: o.chain.0,
+                        side: o.side.map(chain_side_of),
+                        reverse: o.reverse,
+                        open_side: open_chain_side_of(o.open_side),
+                    })
+                    .collect(),
             },
             ParamsDto::Circular {
                 links,
