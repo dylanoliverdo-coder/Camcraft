@@ -105,11 +105,12 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
     if let Some(stock) = next.floor_stock() {
         back.insert("floor_stock".into(), json!(stock));
     }
-    // Journeyman S3: accept an explicit return to zero for `retract_feed` on Face and Links ops.
+    // Journeyman S3: accept an explicit return to zero for `retract_feed` on Face and the 7 2D Links ops only.
     if let OpParams::Face { retract_feed, .. } = &next {
         back.insert("retract_feed".into(), json!(retract_feed));
     }
-    if let Some(links) = next.links()
+    if next.supports_links_retract_feed()
+        && let Some(links) = next.links()
         && patch
             .get("links")
             .and_then(Value::as_object)

@@ -49,6 +49,23 @@ impl OpParams {
         !matches!(self, OpParams::Pocket { .. }) && self.links().is_some_and(|l| l.approach.predrilled)
     }
 
+    /// Journeyman spec S3: refuse invalid `retract_feed` by name on the 8 2D
+    /// operations, and refuse any non-zero/non-finite `retract_feed` on
+    /// non-2D `Links` operations (`Pocket3D`, `RotaryOffset`, `MultiAxisRough`).
+    fn retract_feed_refusal(&self) -> Option<&'static str> {
+        if let OpParams::Face { retract_feed, .. } = self {
+            return camcraft_motion::fed_retract::retract_feed_refusal(*retract_feed);
+        }
+        let l = self.links()?;
+        if self.supports_links_retract_feed() {
+            camcraft_motion::fed_retract::retract_feed_refusal(l.approach.retract_feed)
+        } else if l.approach.retract_feed != 0.0 {
+            Some("retract_feed is only supported on 2D milling operations (not 3D, rotary, or multi-axis operations)")
+        } else {
+            None
+        }
+    }
+
     /// The by-name refusal behind a failed [`Self::is_sane`], where a
     /// kind can say it (#546: the sinker burn's wear rate and layer
     /// step; the side burn's structural refusal, which names a wear rate
@@ -85,13 +102,8 @@ impl OpParams {
         if let Some(why) = self.links().and_then(|l| l.approach.approach_distance_refusal()) {
             return Some(why.into());
         }
-        // Journeyman spec S3: retract_feed refusal by name across all 8 2D ops.
-        if let Some(why) = self.links().and_then(|l| camcraft_motion::fed_retract::retract_feed_refusal(l.approach.retract_feed)) {
-            return Some(why.into());
-        }
-        if let OpParams::Face { retract_feed, .. } = self
-            && let Some(why) = camcraft_motion::fed_retract::retract_feed_refusal(*retract_feed)
-        {
+        // Journeyman spec S3: retract_feed refusal by name (2D bounds + non-2D exclusion).
+        if let Some(why) = self.retract_feed_refusal() {
             return Some(why.into());
         }
         match self {
@@ -174,6 +186,8 @@ impl OpParams {
         let links_ok = links_ok && self.arc_turn_refusal().is_none();
         // #1489: a rest group the generator would refuse.
         let links_ok = links_ok && crate::operation::rest_op::rest_refusal(self).is_none();
+        // Journeyman spec S3: retract_feed bounds (2D) and non-2D exclusion.
+        let links_ok = links_ok && self.retract_feed_refusal().is_none();
         let floor_ok = self.floor_stock_refusal().is_none();
         tilt_ok
             && links_ok

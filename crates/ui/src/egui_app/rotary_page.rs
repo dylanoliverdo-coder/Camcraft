@@ -110,7 +110,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             max_tilt_deg,
         } => {
             if tab == SEC_LEADS {
-                lead_page::leads_tab(ui, u, "ro", Some((entry, helix_radius)), links);
+                lead_page::leads_tab_3d(ui, u, "ro", Some((entry, helix_radius)), links);
             }
             if tab == SEC_HEIGHTS {
                 height_editor(
@@ -207,7 +207,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             shank_avoid,
         } => {
             if tab == SEC_LEADS {
-                lead_page::leads_tab(ui, u, "ma", Some((entry, helix_radius)), links);
+                lead_page::leads_tab_3d(ui, u, "ma", Some((entry, helix_radius)), links);
             }
             if tab == SEC_HEIGHTS {
                 height_editor(

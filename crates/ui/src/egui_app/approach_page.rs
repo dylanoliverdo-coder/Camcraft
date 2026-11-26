@@ -103,15 +103,17 @@ pub(super) fn approach_distance_group(ui: &mut Ui, u: Unit, start: PassStart, a:
     });
 }
 
-/// The entry moves' own feeds.
-pub(super) fn feeds_group(ui: &mut Ui, u: Unit, a: &mut Approach) {
+/// The entry moves' own feeds. `show_retract_feed` is true only for the 7 2D
+/// `Links` operations (Journeyman spec S3).
+pub(super) fn feeds_group(ui: &mut Ui, u: Unit, a: &mut Approach, show_retract_feed: bool) {
     group(ui, "Entry feeds", None, |ui| {
         auto_value(ui, "Ramp / helix / arc feed", "Auto", &mut a.ramp_feed, "cutting feed", 300.0, |ui, v| {
             num_feed(ui, u, v);
         });
         auto_value(ui, "Entry plunge feed", "Auto", &mut a.plunge_feed, "plunge feed", 150.0, |ui, v| num_feed(ui, u, v));
-        // Journeyman spec S3: vertical fed retract rate (0 = rapid).
-        retract_feed_row(ui, u, &mut a.retract_feed);
+        if show_retract_feed {
+            retract_feed_row(ui, u, &mut a.retract_feed);
+        }
         prop_row(ui, "Lead-in feed", |ui| num_unit(ui, &mut a.lead_feed_pct, "%"));
         hint(ui, "a share of the cutting feed");
     });

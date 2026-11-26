@@ -20,8 +20,7 @@
 //!   ([`confined`]) - construction is the plan, the check is the law;
 //!
 //! Prime Directive: degenerate/narrow/uncontained channels are refused by name.
-//! Provenance: Otkur & Lazoglu (2007), Rauch et al. (2009), Blum (1967), Held (1991),
-//! Journeyman spec S3 (`retract_feed`); no vendor parameters, text or code.
+//! Provenance: Otkur & Lazoglu 2007, Rauch et al. 2009, Blum 1967, Held 1991, Journeyman S3; no vendor code.
 
 use crate::cl::{MoveKind, PathBuilder, Toolpath, lattice};
 use crate::geo2d::{Point2, Region};
@@ -233,9 +232,11 @@ pub(super) fn trochoidal_inside_finish(
             } else {
                 above
             };
-            last_from = crate::fed_retract::switch_z(fin_above, p_orig.links.approach.plunge_height, hop);
             let fin_passes = super::adaptive::plan_finish_rings(region, p_orig, f, keepout, Point2::new(at.x, at.y))?;
-            super::adaptive::emit_troch_finish_level(&mut bld, &fin_passes, &center_final, p_orig, z, fin_above);
+            if !fin_passes.is_empty() {
+                last_from = crate::fed_retract::switch_z(fin_above, p_orig.links.approach.plunge_height, hop);
+                super::adaptive::emit_troch_finish_level(&mut bld, &fin_passes, &center_final, p_orig, z, fin_above);
+            }
         }
         above = z;
     }

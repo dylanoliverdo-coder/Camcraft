@@ -54,6 +54,23 @@ impl OpParams {
         self.links().map_or(stepdown, |l| crate::machining2d::ladder_stepdown(&l.approach, top, bottom, stepdown))
     }
 
+    /// Whether this operation kind supports fed vertical retract (`retract_feed`,
+    /// Journeyman spec S3): the 7 2D level-ladder operations carrying `Links`
+    /// (`Face` carries its own `retract_feed` field directly).
+    #[must_use]
+    pub fn supports_links_retract_feed(&self) -> bool {
+        matches!(
+            self,
+            OpParams::Contour { .. }
+                | OpParams::Pocket { .. }
+                | OpParams::Adaptive2D { .. }
+                | OpParams::Offset2D { .. }
+                | OpParams::Circular { .. }
+                | OpParams::Slot { .. }
+                | OpParams::Bore { .. }
+        )
+    }
+
     /// The links a kind posted before M11.2 - what a file without the
     /// key means and what the stamp and the file leave unwritten: the
     /// 3-D ladder's pass links have always stayed down where proved, the

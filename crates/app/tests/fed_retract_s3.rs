@@ -17,7 +17,7 @@ use camcraft_app::machining2d::{FaceHoles, PocketStrategy};
 use camcraft_app::machining3d::Entry3D;
 use camcraft_app::mcp::Server;
 use camcraft_app::model;
-use camcraft_app::operation::{self, Height, HeightReference, OpParams, OpStatus, SrcRef};
+use camcraft_app::operation::{self, Height, HeightReference, OpParams, OpStatus, OpType, SrcRef};
 use camcraft_app::posting;
 use camcraft_app::project;
 use camcraft_app::stock::StockShape;
@@ -326,4 +326,65 @@ fn s3_refusals_by_name_and_mcp_reset_to_default() {
         json!({ "name": "F1", "params": { "retract_feed": -5.0 } }),
     );
     assert!(err, "MCP negative Face retract_feed must fail");
+}
+
+#[test]
+fn s3_non_2d_ops_refuse_retract_feed_in_commands_and_mcp() {
+    let world = new_world();
+    let mut history = History::default();
+    history.execute(
+        &world,
+        SetStock::new(&world, StockShape::Box { dx: 40.0, dy: 30.0, dz: 10.0 }, Default::default()).expect("stock"),
+    );
+    history.execute(&world, AddTool::new(&world, "EM-0600-4FL", tool("EM-0600-4FL")).expect("tool"));
+    history.execute(&world, AddTool::new(&world, "DR-0400", tool("DR-0400")).expect("drill tool"));
+    history.execute(&world, ImportModel::from_mesh("box", cube(Point3::ZERO, Point3::new(40.0, 30.0, 10.0))));
+    let src = SrcRef::Entity("box".into());
+
+    // All three non-2D Links ops refuse any non-zero / non-finite retract_feed by name.
+    for kind in [OpType::Pocket3D, OpType::RotaryOffset, OpType::MultiAxisRough] {
+        let mut p = operation::seed_params(kind.ordinal());
+        for bad in [2540.0, -10.0, f64::NAN] {
+            if let Some(l) = p.links_mut() {
+                l.approach.retract_feed = bad;
+            }
+            let e = CreateOperation::new(&world, "BadNon2D", "EM-0600-4FL", src.clone(), p.clone())
+                .err()
+                .expect("non-2D op with retract_feed must refuse");
+            assert!(e.to_string().contains("retract_feed"), "{kind:?} create refusal: {e}");
+        }
+    }
+
+    // Valid Pocket3D and Drill: EditOperationParams and MCP edit_operation both reject retract_feed.
+    let p3_ok = operation::seed_params(OpType::Pocket3D.ordinal());
+    let mut p3_bad = p3_ok.clone();
+    if let Some(l) = p3_bad.links_mut() {
+        l.approach.retract_feed = RF;
+    }
+    history.execute(&world, CreateOperation::new(&world, "P3", "EM-0600-4FL", src.clone(), p3_ok).expect("p3"));
+    history.execute(
+        &world,
+        CreateOperation::new(&world, "D1", "DR-0400", src, operation::seed_params(OpType::Drill.ordinal())).expect("d1"),
+    );
+    let e = EditOperationParams::new(&world, "P3", p3_bad).err().expect("Pocket3D edit must refuse");
+    assert!(e.to_string().contains("retract_feed"), "Pocket3D edit refusal: {e}");
+
+    let mut file = std::env::temp_dir();
+    file.push(format!("camcraft-s3-non2d-{}.camproj", std::process::id()));
+    let _ = std::fs::remove_file(&file);
+    project::save(&world, &file).expect("save");
+    let mut srv = Server::new();
+    let (err, r) = mcp_call(&mut srv, 1, "open_project", json!({ "path": file.to_string_lossy() }));
+    let _ = std::fs::remove_file(&file);
+    assert!(!err, "open_project: {r}");
+
+    for (id, name, patch) in [
+        (2, "P3", json!({ "links": { "approach": { "retract_feed": 2540.0 } } })),
+        (3, "P3", json!({ "links": { "approach": { "retract_feed": 0.0 } } })),
+        (4, "D1", json!({ "retract_feed": 2540.0 })),
+        (5, "D1", json!({ "retract_feed": 0.0 })),
+    ] {
+        let (err, body) = mcp_call(&mut srv, id, "edit_operation", json!({ "name": name, "params": patch }));
+        assert!(err, "MCP edit_operation on {name} with {patch} must fail, got {body}");
+    }
 }

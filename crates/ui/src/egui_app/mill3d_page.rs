@@ -56,7 +56,7 @@ pub(super) fn fields(ui: &mut Ui, world: &World, params: &mut OpParams, cx: &mut
             pass_start,
         } => {
             if tab == SEC_LEADS {
-                lead_page::leads_tab(ui, u, "p3", Some((entry, helix_radius)), links);
+                lead_page::leads_tab_3d(ui, u, "p3", Some((entry, helix_radius)), links);
             }
             if tab == SEC_HEIGHTS {
                 height_editor(
