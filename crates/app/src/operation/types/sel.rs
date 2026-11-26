@@ -76,6 +76,7 @@ pub struct ChainOverride {
     pub side: Option<super::area::ChainSide>,
     pub reverse: bool,
     pub open_side: super::area::OpenChainSide,
+    pub straight_ramp: Option<crate::machining2d::StraightContourRamp>,
 }
 
 impl FeatureSel {

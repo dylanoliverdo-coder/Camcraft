@@ -116,6 +116,7 @@ fn open_ov(chain: ChainId, open_side: OpenChainSide, reverse: bool) -> Vec<Chain
         side: None,
         reverse,
         open_side,
+        straight_ramp: None,
     }]
 }
 

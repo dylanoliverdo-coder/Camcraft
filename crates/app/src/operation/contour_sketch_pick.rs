@@ -324,6 +324,14 @@ pub(super) fn collect_chains(
                 }
             }
         }
+        let straight_ramp = if let Some(ramp) = ov.and_then(|o| o.straight_ramp) {
+            if !closed || eff_side != Some(Side::Outside) {
+                return Err(GenError::Invalid(format!("{label}: a straight ramp needs a closed Outside sketch chain")));
+            }
+            Some(super::contour_straight_ramp::from_sketch(ramp, pose, &label)?)
+        } else {
+            None
+        };
         out.push(ResolvedSketchChain {
             chain_id,
             entity: entity_name.to_owned(),
@@ -339,6 +347,7 @@ pub(super) fn collect_chains(
             open_side_err,
             auto_role_err,
             rank,
+            straight_ramp,
         });
         Ok(())
     })?;

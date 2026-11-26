@@ -129,6 +129,7 @@ fn state_sketch_layer_pick_per_chain_override_and_generate_produces_ok_status() 
             side: Some(ChainSide::Inside),
             reverse: true,
             open_side: OpenChainSide::None,
+            straight_ramp: None,
         });
     }
     state.pending.push_back(CommandKind::EditOperationParams { name: "Contour1".into(), params });

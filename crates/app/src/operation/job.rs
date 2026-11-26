@@ -221,6 +221,12 @@ pub fn collect_job(world: &World, op: &Operation, op_name: &str) -> Result<GenJo
     // the tilt's own refusal keeps its place below (`checked_frame`,
     // after the heights resolve) exactly where the old head raised it -
     // the job's error-order law.
+    if let OpParams::Contour { chain_overrides, .. } = &op.params
+        && chain_overrides.iter().any(|o| o.straight_ramp.is_some())
+        && !super::contour_sketch::is_sketch_contour(world, &op.src, &op.params)
+    {
+        return Err(GenError::Invalid("a straight ramp needs its selected DXF outline".into()));
+    }
     let opframe = OpFrame::of(op);
     let material = opframe.material_of(world, &op.src)?;
     // #3452: whether this setup can say which end of the part is free.

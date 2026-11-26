@@ -34,6 +34,9 @@ use camcraft_app::stock_sim::simulate_document;
 use camcraft_app::tools::catalog;
 use camcraft_app::world::new_world;
 
+#[path = "contour_dxf_sketch/straight_ramp.rs"]
+mod straight_ramp;
+
 const TOOL: &str = "EM-0400-2FL"; // 4 mm endmill -> tool radius 2 mm
 
 fn tmp_dir(tag: &str) -> PathBuf {
@@ -242,6 +245,7 @@ fn layer_and_chain_picks_per_chain_overrides_undo_and_project_v74_roundtrip() {
                 side: Some(ChainSide::Outside),
                 reverse: false,
                 open_side: OpenChainSide::None,
+                straight_ramp: None,
             },
             ChainOverride {
                 entity: "plate".into(),
@@ -249,6 +253,7 @@ fn layer_and_chain_picks_per_chain_overrides_undo_and_project_v74_roundtrip() {
                 side: Some(ChainSide::Inside),
                 reverse: true,
                 open_side: OpenChainSide::None,
+                straight_ramp: None,
             },
             ChainOverride {
                 entity: "plate".into(),
@@ -256,6 +261,7 @@ fn layer_and_chain_picks_per_chain_overrides_undo_and_project_v74_roundtrip() {
                 side: None,
                 reverse: true,
                 open_side: OpenChainSide::None,
+                straight_ramp: None,
             },
         ];
     }
@@ -343,6 +349,7 @@ fn open_chain_safety_refuses_side_compensation_and_g41_by_name() {
             side: Some(ChainSide::Outside),
             reverse: false,
             open_side: OpenChainSide::None,
+            straight_ramp: None,
         }];
     }
     run(&world, &mut history, CreateOperation::new(&world, "OpOv", TOOL, SrcRef::Selection(open_pick.clone()), p_ov), "create");
@@ -371,6 +378,7 @@ fn open_chain_safety_refuses_side_compensation_and_g41_by_name() {
             side: None,
             reverse: true,
             open_side: OpenChainSide::None,
+            straight_ramp: None,
         }];
     }
     run(&world, &mut history, CreateOperation::new(&world, "Fwd", TOOL, SrcRef::Selection(open_pick.clone()), p_fwd), "fwd");

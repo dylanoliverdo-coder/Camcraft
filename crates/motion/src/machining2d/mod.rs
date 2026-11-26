@@ -251,3 +251,6 @@ pub(crate) use microlift::link_at as microlift_link;
 pub(crate) use pocket_hsm::{adaptive_passes, choose_entry, in_air};
 pub use pocket_hsm::{RINGS_FALLBACK, rings_fallbacks};
 pub(crate) use waterscan::chord_crosses_path;
+
+mod straight_contour_ramp;
+pub use straight_contour_ramp::{StraightContourRamp, straight_contour_ramp};

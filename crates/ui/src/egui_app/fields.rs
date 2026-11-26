@@ -353,8 +353,18 @@ pub(super) fn sketch_chain_overrides_ui(
                 }
                 ui.checkbox(&mut reverse, "Reverse");
             });
+            if let Some(k) = existing
+                && let Some(ramp) = overrides[k].straight_ramp
+            {
+                ui.horizontal(|ui| {
+                    ui.label(format!("Straight ramp {:.2} mm", ramp.run_mm));
+                    if small_button(ui, "Clear straight ramp").clicked() {
+                        overrides[k].straight_ramp = None;
+                    }
+                });
+            }
             match (existing, side, open_side, reverse) {
-                (Some(k), None, OpenChainSide::None, false) => {
+                (Some(k), None, OpenChainSide::None, false) if overrides[k].straight_ramp.is_none() => {
                     overrides.remove(k);
                 }
                 (Some(k), s, os, rev) => {
@@ -370,6 +380,7 @@ pub(super) fn sketch_chain_overrides_ui(
                             side: s,
                             reverse: rev,
                             open_side: os,
+                            straight_ramp: None,
                         });
                     }
                 }
