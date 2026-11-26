@@ -41,3 +41,5 @@ Each module that a spec changes or adds carries one provenance line, for example
 | S6 | Drill: chamfer each hole to a width | built (360cbfe6c), checked on a lab part |
 | S7 | 2D descents: a stated height where the rapid becomes a feed | written |
 | S8 | Contour, Pocket, Face: finishing levels at a smaller stepdown | written |
+| S9 | Contour: open sketch chain on a chosen side | built (9200f5ff2), checked on a lab part |
+| S10 | 2D Chamfer: closed and open sketch chains | built (9200f5ff2), checked on a lab part |
