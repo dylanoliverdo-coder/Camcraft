@@ -834,6 +834,7 @@ fn seed_adaptive2d(c: &Carried) -> OpParams {
         rest: None,
         tilt: c.tilt,
         pass_start: crate::machining2d::PassStart::Auto,
+        finish: crate::machining2d::AdaptiveFinish::default(),
     }
 }
 

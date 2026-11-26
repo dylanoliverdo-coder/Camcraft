@@ -43,6 +43,7 @@ pub(super) fn roughing2d_pane(
     corner_relief: &mut camcraft_app::machining2d::CornerRelief,
     tilt: &mut Option<Tilt>,
     pass_start: Option<&mut camcraft_app::machining2d::PassStart>,
+    finish: Option<&mut camcraft_app::machining2d::AdaptiveFinish>,
 ) {
     if tab == SEC_HEIGHTS {
         orientation_editor(ui, u, tilt);
@@ -93,6 +94,9 @@ pub(super) fn roughing2d_pane(
             && *m == camcraft_app::machining2d::AdaptiveMethod::Trochoidal
         {
             adaptive_troch_passes(ui, u, t);
+        }
+        if let Some(f) = finish {
+            super::adaptive_finish_rows::adaptive_finish_rows(ui, u, f);
         }
     } else if tab == SEC_LEADS {
         lead_page::leads_tab_with_retract(ui, u, tag, Some((entry, helix_radius)), links, retract_z.is_some());

@@ -301,6 +301,10 @@ pub enum OpParams {
         /// pass-order parameter of #3316. `Auto` is every earlier file,
         /// byte for byte; the Trochoidal method refuses the other two.
         pass_start: crate::machining2d::PassStart,
+        /// Wall finishing passes after clearing (Journeyman spec S5; Held 1991,
+        /// Stori & Wright 2000; no vendor parameters, text or code). Default is
+        /// clearing alone, byte for byte.
+        finish: crate::machining2d::AdaptiveFinish,
     },
     /// 2D Offset pocket roughing, style A (M2.4 A): concentric rings
     /// from the boundary inward at the roughing stepover - the pocket's

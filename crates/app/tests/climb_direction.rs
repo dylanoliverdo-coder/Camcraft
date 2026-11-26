@@ -233,6 +233,7 @@ fn adaptive2d(climb: bool) -> OpParams {
         tilt: None,
         corner_relief: Default::default(),
         pass_start: Default::default(),
+        finish: Default::default(),
     }
 }
 

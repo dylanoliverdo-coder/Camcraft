@@ -109,6 +109,24 @@ fn patched(base: &OpParams, patch: &Value) -> Result<OpParams, String> {
     if let OpParams::Drill { chamfer_width, .. } = &next {
         back.insert("chamfer_width".into(), json!(chamfer_width));
     }
+    // Journeyman spec S5 (Held 1991, Stori & Wright 2000; no vendor
+    // parameters, text or code): the project DTO omits default `finish`
+    // sub-fields; restore the typed fields so resetting back to defaults via
+    // MCP passes `lost` while unknown sub-keys stay refused by name.
+    if let OpParams::Adaptive2D { finish, .. } = &next {
+        back.insert(
+            "finish".into(),
+            json!({
+                "finish_passes": finish.finish_passes,
+                "finish_spacing": finish.finish_spacing,
+                "spring_passes": finish.spring_passes,
+                "finish_level": match finish.finish_level {
+                    crate::machining2d::FinishLevel::Every => "every",
+                    crate::machining2d::FinishLevel::Last => "last",
+                },
+            }),
+        );
+    }
     // An opt-in flag (`blend_turns`) is written only when ON, so `false`
     // never comes back: it is kept when `true` would have come back.
     for (k, v) in patch {
@@ -406,4 +424,47 @@ pub(super) fn redo(env: &mut Env, _a: &Map<String, Value>) -> Result<Value, Stri
     let mut out = history_state(env);
     out["redone"] = json!(true);
     Ok(out)
+}
+
+#[cfg(test)]
+mod s5_finish_mcp_tests {
+    use super::*;
+    use crate::machining2d::{AdaptiveFinish, FinishLevel};
+    use crate::operation::OpType;
+
+    #[test]
+    fn adaptive_finish_mcp_patch_resets_defaults_and_rejects_unknown_keys() {
+        let base = seed(OpType::Adaptive2D.ordinal());
+        // Set non-default finishing passes.
+        let active = patched(
+            &base,
+            &json!({ "finish": { "finish_passes": 2, "finish_spacing": 0.25, "spring_passes": 1, "finish_level": "last" } }),
+        )
+        .expect("set finish");
+        let OpParams::Adaptive2D { finish, .. } = &active else { panic!("Adaptive2D") };
+        assert_eq!(
+            *finish,
+            AdaptiveFinish { finish_passes: 2, finish_spacing: 0.25, spring_passes: 1, finish_level: FinishLevel::Last }
+        );
+
+        // Partial reset of sub-fields back to defaults succeeds.
+        let partial = patched(&active, &json!({ "finish": { "spring_passes": 0, "finish_level": "every" } }))
+            .expect("partial reset");
+        let OpParams::Adaptive2D { finish, .. } = &partial else { panic!("Adaptive2D") };
+        assert_eq!(finish.spring_passes, 0);
+        assert_eq!(finish.finish_level, FinishLevel::Every);
+
+        // Full reset of finish back to defaults succeeds (even though DTO omits default key).
+        let reset = patched(
+            &active,
+            &json!({ "finish": { "finish_passes": 0, "finish_spacing": 0.0, "spring_passes": 0, "finish_level": "every" } }),
+        )
+        .expect("full reset to default");
+        let OpParams::Adaptive2D { finish, .. } = &reset else { panic!("Adaptive2D") };
+        assert_eq!(*finish, AdaptiveFinish::default());
+
+        // Unknown sub-key inside finish is still refused by name.
+        let bad = patched(&base, &json!({ "finish": { "bogus_key": 1 } })).expect_err("unknown sub-key refused");
+        assert!(bad.contains("finish.bogus_key"), "refusal names unknown key: {bad}");
+    }
 }

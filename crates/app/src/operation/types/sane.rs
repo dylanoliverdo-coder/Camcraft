@@ -118,15 +118,18 @@ impl OpParams {
             OpParams::SlotUndercut(p) => p.refusal(),
             OpParams::Pocket { corner_relief, .. }
             | OpParams::Offset2D { corner_relief, .. } => corner_relief.validate().err().map(|e| e.to_string()),
-            OpParams::Adaptive2D { method, troch, corner_relief, pass_start, .. } => troch.refusal().or_else(|| {
-                if let Some(why) = crate::machining2d::trochoidal_pass_start_refusal(*method, *pass_start) {
-                    Some(why)
-                } else if *method == crate::machining2d::AdaptiveMethod::Trochoidal && !corner_relief.is_off() {
-                    Some("corner relief is not available with the Trochoidal method - turn corner relief off or use Spiral".into())
-                } else {
-                    corner_relief.validate().err().map(|e| e.to_string())
-                }
-            }),
+            OpParams::Adaptive2D { method, troch, corner_relief, pass_start, finish, .. } => finish
+                .refusal()
+                .or_else(|| troch.refusal())
+                .or_else(|| {
+                    if let Some(why) = crate::machining2d::trochoidal_pass_start_refusal(*method, *pass_start) {
+                        Some(why)
+                    } else if *method == crate::machining2d::AdaptiveMethod::Trochoidal && !corner_relief.is_off() {
+                        Some("corner relief is not available with the Trochoidal method - turn corner relief off or use Spiral".into())
+                    } else {
+                        corner_relief.validate().err().map(|e| e.to_string())
+                    }
+                }),
             _ => None,
         }
     }
@@ -336,6 +339,7 @@ impl OpParams {
                 method,
                 troch,
                 corner_relief,
+                finish,
                 ..
             } => {
                 pos(*stepover)
@@ -350,6 +354,7 @@ impl OpParams {
                     && pos(*helix_radius)
                     && crate::load::load_in_door(*optimal_load)
                     && troch.is_sane()
+                    && finish.refusal().is_none()
                     && corner_relief.validate().is_ok()
                     && !(*method == crate::machining2d::AdaptiveMethod::Trochoidal && !corner_relief.is_off())
             }

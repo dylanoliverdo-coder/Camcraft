@@ -210,7 +210,11 @@ pub use slot_room::{SlotBound, SlotFit, FIT_TOL as SLOT_FIT_TOL};
 pub use undercut::{undercut, undercut_band, undercut_station, UndercutParams, MAX_BULGE as UNDERCUT_MAX_BULGE};
 pub use vcarve::{v_carve, VCarveParams};
 pub use unreached::{unreached_corner_note, unreached_corners, unreached_note, unreached_pieces};
-pub use adaptive::{rest_adaptive, rest_levels, RestStock, StockFloor, REST_STOCK_FILM};
+pub use adaptive::{
+    AdaptiveFinish, RestStock, StockFloor, adaptive_avoid_with_finish, adaptive_flute_covers_wall,
+    adaptive_trochoidal_with_finish, adaptive_with_finish, rest_adaptive, rest_levels,
+    REST_STOCK_FILM,
+};
 pub use adaptive_method::AdaptiveMethod;
 pub use pocket_hsm_start::trochoidal_pass_start_refusal;
 pub use adaptive_troch::{AdaptiveTrochParams, adaptive_trochoidal, adaptive_trochoidal_with};

@@ -283,6 +283,7 @@ impl OpParams {
                 rest,
                 tilt,
                 pass_start,
+                finish,
             } => {
                 w(h, *stepover);
                 w(h, *stock_to_leave);
@@ -336,6 +337,7 @@ impl OpParams {
                 write_rest(rest, h, false);
                 write_corner_relief(corner_relief, h);
                 digest::write_pass_start(*pass_start, h);
+                digest::write_adaptive_finish(finish, h);
             }
             OpParams::Offset2D { .. }
             | OpParams::Slot { .. }

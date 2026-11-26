@@ -277,6 +277,19 @@ pub(super) fn post_crossing_free(
     .0
 }
 
+/// [`post_crossing_free`] returning the surviving crossing-free walks for
+/// `passes` checked against all prior moves already in `b` (Journeyman spec
+/// S5; Held 1991, Stori & Wright 2000; no vendor parameters, text or code).
+pub(super) fn crossing_free_on(
+    b: &PathBuilder,
+    passes: &[Vec<Point2>],
+    runs: Vec<Vec<Seg>>,
+    tally: &mut ProofTally,
+    post: impl Fn(&mut PathBuilder, &[Vec<Seg>]),
+) -> Vec<Vec<Seg>> {
+    crossing_free_from(|| b.clone(), passes, runs, tally, post).1
+}
+
 /// [`post_crossing_free`] from a bare start, handing back the walks
 /// that survived too: the 3-D ladder (`machining3d::hsm`) posts a level's
 /// walks itself and only asks which arcs the law lets stand.

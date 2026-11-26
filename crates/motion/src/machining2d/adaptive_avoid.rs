@@ -27,7 +27,7 @@ use super::pocket::{PocketParams, non_sliver_center, pocket_over_with_relief, po
 /// The keep-out of `avoid` over the full height of the path, or `None`
 /// when it does not reach the cutter-centre area of `region`: then the
 /// plain planner runs and its path stays the one it always was.
-fn keepout_for(region: &Region, p: &PocketParams, avoid: &AvoidSpec) -> Result<Option<Region>, GenError> {
+pub(super) fn keepout_for(region: &Region, p: &PocketParams, avoid: &AvoidSpec) -> Result<Option<Region>, GenError> {
     if avoid.is_empty() {
         return Ok(None);
     }
@@ -42,7 +42,7 @@ fn keepout_for(region: &Region, p: &PocketParams, avoid: &AvoidSpec) -> Result<O
 
 /// Lift the rapid links over the items; a link that cannot clear them
 /// refuses the path. Then say what the protection did.
-fn finish(mut path: Toolpath, avoid: &AvoidSpec, what: &str) -> Result<Toolpath, GenError> {
+pub(super) fn finish(mut path: Toolpath, avoid: &AvoidSpec, what: &str) -> Result<Toolpath, GenError> {
     let names = avoid.names_list();
     let mut notes = elevate_rapid_links(&mut path, avoid, None, AVOID_PAD);
     if !notes.is_empty() {

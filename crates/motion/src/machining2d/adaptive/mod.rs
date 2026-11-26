@@ -45,6 +45,9 @@ mod air_uncross;
 mod budget;
 mod conform;
 mod core;
+// Journeyman spec S5: wall finishing passes after 2D Adaptive clearing.
+mod finish_passes;
+mod finish_rings;
 mod front;
 mod grow;
 mod guard;
@@ -96,6 +99,12 @@ pub(crate) use morph::SAG as PLAN_SAG;
 use super::GenError;
 use raster::Raster;
 pub use rest::{REST_STOCK_FILM, RestStock, StockFloor, rest_adaptive, rest_levels};
+pub use finish_passes::{
+    AdaptiveFinish, adaptive_avoid_with_finish, adaptive_flute_covers_wall,
+    adaptive_trochoidal_with_finish, adaptive_with_finish,
+};
+pub(crate) use finish_passes::level_runs_finishing;
+pub(crate) use finish_rings::{emit_troch_finish_level, plan_finish_rings};
 
 /// The worst contact angle a trial walk read, and where.
 type Worst = (f64, Point2);
