@@ -50,6 +50,11 @@ pub fn current_stamp(
     if kind.mode == crate::verify::Mode::Envelope && kind.section != Section::Turning {
         h.write(b"vertical-rapid-part-4062");
     }
+    // Sketch chamfer caches from before the closed-pass fitter lack the
+    // arcs and verdicts the interpreter generates for those passes.
+    if super::chamfer_sketch::is_sketch_chamfer(world, src, params) {
+        h.write(b"sketch-chamfer-closed-arcs");
+    }
     // #2965: the multi-axis, rotary and cross-drill kinds answer to the
     // first-traverse law now. Only their caches read Stale once; the
     // salt above stays, so no other kind's stamp moves.

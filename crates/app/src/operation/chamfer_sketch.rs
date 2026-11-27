@@ -166,6 +166,7 @@ pub(super) fn generate_plan(
     cp: &ChamferParams,
     op_side: Side,
     op_climb: bool,
+    tolerance: f64,
 ) -> Result<(Region, Toolpath), GenError> {
     validate_plan(&plan)?;
     let verify_region = if plan.region_loops.is_empty() {
@@ -210,7 +211,7 @@ pub(super) fn generate_plan(
         open.push(orient_open_for_chamfer(item, op_climb)?);
     }
 
-    let mut path = machining2d::chamfer_chains(&closed, &open, cp)?;
+    let mut path = machining2d::chamfer_chains_with_tolerance(&closed, &open, cp, tolerance)?;
     for n in plan.notes {
         if !path.notes.contains(&n) {
             path.notes.push(n);
