@@ -46,6 +46,8 @@ mod heavy_covers_tests;
 mod heavy_files;
 #[cfg(test)]
 mod heavy_files_tests;
+#[cfg(test)]
+mod heavy_gate_map_tests;
 mod lanes;
 mod light;
 #[cfg(test)]
@@ -84,6 +86,8 @@ mod merge_plan_tests;
 mod merge_review;
 mod merge_trial;
 mod package;
+#[cfg(test)]
+mod ownership_contract_tests;
 mod path_mods;
 mod plan;
 mod process_bump;
