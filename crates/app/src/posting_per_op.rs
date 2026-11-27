@@ -18,7 +18,7 @@
 use super::{
     mounts::posted_machine_for, op_streams, post_of_setup, script_of, script_source, viewer_map, Posted,
 };
-use crate::post::{cnc, engine, options::OptionValue};
+use crate::post::{engine, options::OptionValue};
 use crate::schema::PostRef;
 use flecs_ecs::prelude::World;
 use std::collections::BTreeMap;
@@ -235,7 +235,7 @@ fn post_per_op_with(
             setup.as_deref(),
             extra,
         )?;
-        let out = engine::run_program_with(&cps, &mch, &cnc::serialize(records), &options, &id)
+        let out = engine::run_app_program_with(&cps, &mch, records, &options, &id)
             .map_err(|e| format!("{name}: post engine: {e}"))?;
         if !out.warnings.is_empty() {
             return Err(format!(

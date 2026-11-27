@@ -343,7 +343,7 @@ fn post_each(
             extra,
         )?;
         let mch = posted_machine_for(&mount.machine).map_err(|why| format!("{}: {why}", mount.label()))?;
-        let out = engine::run_program_with(&cps, &mch, &cnc::serialize(&records), &options, &id)
+        let out = engine::run_app_program_with(&cps, &mch, &records, &options, &id)
             .map_err(|e| format!("{}: post engine: {e}", mount.label()))?;
         if !out.warnings.is_empty() {
             return Err(format!(

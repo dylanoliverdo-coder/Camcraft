@@ -14,7 +14,7 @@
 //! (rigidTappingStated, safeRetractZ), app::posting (registry, machine library).
 
 use camcraft_app::machine::parse_mch;
-use camcraft_app::post::{engine, machine};
+use camcraft_app::post::{cnc, engine, js::ProgramId, machine};
 use camcraft_app::posting::{BUILTINS, MACHINES, builtin_machine_text, builtin_post_text};
 use serde_json::{Value, json};
 use std::path::Path;
@@ -83,6 +83,14 @@ fn post(m: &Value, stream: &str, options: &Value) -> String {
     nc
 }
 
+#[test]
+fn fine_linuxcnc_post_preserves_fractional_drill_center() {
+    let stream = STREAM.replace("X 20000", "X 20000.4");
+    let output = post(&stated(Some(-2.0), false), &stream, &json!({"fineCoordinates": true}));
+    assert!(output.lines().any(|line| line == "G0 X20.0004 Y5"), "{output}");
+    assert!(output.contains("G82 X20.0004 Y5 Z-3 R2 P1.5 F100"), "{output}");
+}
+
 /// Every G or M code of every non-comment line is one this post may write.
 fn assert_linuxcnc_words(nc: &str) {
     for l in nc.lines() {
@@ -137,6 +145,48 @@ fn a_stated_safe_z_is_the_retract_before_m6_and_at_the_end() {
     assert_eq!(&lines[s + 1..s + 4], &["M8", "G0 Z15", "G0 X0 Y0"], "{nc}");
     assert!(nc.contains("G2 X20 Y0 Z-2 I5 J0 F400"), "a helix with incremental IJ: {nc}");
     assert!(nc.contains("G99\nG82 X20 Y5 Z-3 R2 P1.5 F100\nG80"), "{nc}");
+}
+
+#[test]
+fn fine_coordinates_keep_the_same_drill_center_in_approach_and_cycle() {
+    let source = STREAM.replace("X 20000", "X 20000.4");
+    let records = cnc::parse(&source).expect("synthetic stream");
+    let mch = stated(Some(-2.0), false);
+    let options = json!({"fineCoordinates": true});
+    let fine = engine::run_app_program_with(&cps(), &mch, &records, &options, &ProgramId::default())
+        .expect("fine post");
+    assert!(fine.warnings.is_empty(), "{:?}", fine.warnings);
+    assert!(fine.program.contains("G82 X20.0004 Y5 Z-3 R2 P1.5 F100"), "{}", fine.program);
+    assert!(fine.program.contains("G0 X20.0004 Y5"), "{}", fine.program);
+    let default = engine::run_app_program_with(&cps(), &mch, &records, &Value::Null, &ProgramId::default())
+        .expect("default post");
+    assert_eq!(default.program, post(&mch, STREAM, &Value::Null));
+    assert_eq!(cnc::serialize(&records), cnc::serialize(&cnc::parse(STREAM).expect("integer stream")));
+}
+
+#[test]
+fn fine_radius_arcs_distinguish_collapsed_short_and_full_turns() {
+    let options = json!({"fineCoordinates": true, "useRadiusArcs": true});
+    let mch = stated(Some(-2.0), false);
+    let post_arc = |start: &str, end: &str| {
+        let stream = format!(
+            "PARAM ClearancePlane 10\nPARAM SpindleSpeed 3000\nTOOL 3 EM6\nSECTION\n\
+             Rapid X {start} Y 0 Z 5000\nArc CCW X {end} Y 0 Z 5000 F 200000 I 2 J 1000\nENDSECTION\n"
+        );
+        let records = cnc::parse(&stream).expect("synthetic arc");
+        let output = engine::run_app_program_with(&cps(), &mch, &records, &options, &ProgramId::default())
+            .expect("radius post");
+        assert!(output.warnings.is_empty(), "{:?}", output.warnings);
+        output.program
+    };
+    let arcs = |nc: &str| nc.lines().filter(|line| line.split_whitespace().any(|word| word == "G3")).count();
+    let collapsed = post_arc("0.4998", "0.5002");
+    assert_eq!(arcs(&collapsed), 0, "{collapsed}");
+    let short = post_arc("0.500", "0.506");
+    assert_eq!(arcs(&short), 1, "{short}");
+    assert!(short.contains("G3 X0.000506 Y0 Z5 R1"), "{short}");
+    let full = post_arc("0.500", "0.500");
+    assert_eq!(arcs(&full), 4, "{full}");
 }
 
 #[test]
