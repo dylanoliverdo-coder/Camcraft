@@ -99,6 +99,21 @@ pub fn run_numbered_with(
     run_program_with(cps, mch, stream, options, &id)
 }
 
+/// Post the app's records using its validated post options. The default is
+/// the same integer stream as a CNC export. When a post requests fine
+/// motion coordinates, carry fractional microns through the same reader.
+pub fn run_app_program_with(
+    cps: &str,
+    mch: &Value,
+    records: &[Record],
+    options: &Value,
+    id: &ProgramId,
+) -> Result<PostOutput, PostError> {
+    let fine = options["fineCoordinates"].as_bool().unwrap_or(false);
+    let stream = cnc::serialize_with_motion_precision(records, fine);
+    run_program_with(cps, mch, &stream, options, id)
+}
+
 /// The whole seam with the document's program identity (#258): the
 /// number, whether it was stated, and the program comment - what the
 /// script reads as its `program` global.

@@ -704,7 +704,6 @@ fn post_script_body_with(
     if !report.problems.is_empty() {
         return Err(format!("post blocked - {}", report.problems.join("; ")));
     }
-    let stream = cnc::serialize(&records);
     let id = document_program_id(world, 1)?;
     let mount_setup = mount
         .setups
@@ -714,7 +713,7 @@ fn post_script_body_with(
     let opts = program_options_for_script(world, cps, post, mount_setup.as_deref(), extra)?;
     // #2319: no mounted machine and a bad default file refuses by name.
     let mch = mounts::posted_machine_for(&machine)?;
-    let out = engine::run_program_with(cps, &mch, &stream, &opts, &id)
+    let out = engine::run_app_program_with(cps, &mch, &records, &opts, &id)
         .map_err(|e| format!("post engine: {e}"))?;
     if !out.warnings.is_empty() {
         return Err(format!(

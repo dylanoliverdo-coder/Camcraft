@@ -51,6 +51,7 @@ declaredOptions = {
     default: "g53",
   },
   writeToolLength: { type: "boolean", title: "Write G43 H after M6", group: "Machine", description: "Apply the tool length offset with G43 H<n>; turn off when the M6 remap applies the tool length itself", default: true },
+  fineCoordinates: { type: "boolean", title: "Fine motion coordinates", group: "Machine", description: "Write lengths to six metric or eight inch decimal places. In-app posting retains fractional microns for motion and hole positions.", default: false },
   pathControl: {
     type: "enum",
     title: "Path control",
@@ -123,6 +124,7 @@ var smoothTol = 0;         // #616: the section's PARAM Smoothing, mm (0: none a
 var smoothActive = false;  // #616: this section wrote its smoothing words
 var orgX = 0, orgY = 0, orgZ = 0; // the WCS slot origin (OriginX/Y/Z PARAMs)
 var inch = false;          // the document's unit is inch (onOpen, #902: postOptions.Units)
+var fineCoordinates = false;
 
 // ------------------------------------------------------------ helpers
 // The stream speaks mm and mm/min. An inch program gets every length and
@@ -136,7 +138,7 @@ function trim(s) {
 function len(v) { return inch ? v / 25.4 : v; }
 function fu(v) {  // a length, in the program's unit
   if (!has(v)) return "0";
-  return trim(Number(len(v)).toFixed(inch ? 4 : 3));
+  return trim(Number(len(v)).toFixed(fineCoordinates ? (inch ? 8 : 6) : (inch ? 4 : 3)));
 }
 function ff(v) {  // a feed: whole mm/min, or in/min at two decimals
   if (!has(v) || v <= 0) return "0";
@@ -409,6 +411,7 @@ function invertedNotes() {
 
 function onOpen() {
   inch = typeof postOptions !== "undefined" && postOptions.Units === "inch";
+  fineCoordinates = optBool("fineCoordinates", false);
   if (optBool("percentDelimiters", false)) writeln("%");
   var nm = (typeof machine !== "undefined" && machine.name) || "CAMCRAFT";
   note(headTitle(nm));
@@ -781,7 +784,9 @@ function emitArcWithRadius(p, g, fwd) {
   var r = (r0 + r1) * 0.5;
   if (Math.abs(r0 - r1) > Math.min(0.02, Math.max(0.002, r * 0.005))) return false;
   var a0 = Math.atan2(dv, du), ccw = p.CircularDirection !== "CW";
-  var full = Math.abs(to[u] - from[u]) < 1e-5 && Math.abs(to[v] - from[v]) < 1e-5;
+  var full = fineCoordinates
+    ? to[u] === from[u] && to[v] === from[v]
+    : Math.abs(to[u] - from[u]) < 1e-5 && Math.abs(to[v] - from[v]) < 1e-5;
   var sweep = 2 * Math.PI;
   if (!full) {
     var a1 = Math.atan2(ev, eu);

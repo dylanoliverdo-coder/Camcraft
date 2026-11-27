@@ -30,9 +30,9 @@
 use super::cnc::MoveRec;
 use crate::cl::ArcPlane;
 
-/// The lattice word of a length: micrometres, nearest.
-fn um(v: f64) -> i64 {
-    (v * 1000.0).round() as i64
+/// The serialized motion lattice, in micrometres or nanometres.
+pub(super) fn motion_units(v: f64, fine: bool) -> i64 {
+    (v * if fine { 1_000_000.0 } else { 1000.0 }).round() as i64
 }
 
 /// True when the rounded points `s` and `e` differ only along one ray from
@@ -59,6 +59,10 @@ fn on_one_ray(s: (i64, i64), e: (i64, i64), c: (i64, i64)) -> bool {
 /// one ray from the rounded centre. A record with no arc, no known start,
 /// or a non-finite value is never changed.
 pub fn short_arc_on_lattice(from: Option<[f64; 3]>, m: &MoveRec) -> bool {
+    short_arc_on_motion_grid(from, m, false)
+}
+
+pub(super) fn short_arc_on_motion_grid(from: Option<[f64; 3]>, m: &MoveRec, fine: bool) -> bool {
     let (Some((c0, c1)), Some(s)) = (m.center, from) else {
         return false;
     };
@@ -74,9 +78,10 @@ pub fn short_arc_on_lattice(from: Option<[f64; 3]>, m: &MoveRec) -> bool {
     if vals.iter().any(|x| !x.is_finite()) {
         return false;
     }
-    let (rs, re) = ((um(s[u]), um(s[v])), (um(e[u]), um(e[v])));
+    let unit = |v| motion_units(v, fine);
+    let (rs, re) = ((unit(s[u]), unit(s[v])), (unit(e[u]), unit(e[v])));
     let coincide = rs == re;
-    if !coincide && !on_one_ray(rs, re, (um(cu), um(cv))) {
+    if !coincide && !on_one_ray(rs, re, (unit(cu), unit(cv))) {
         return false;
     }
     if s[u] == e[u] && s[v] == e[v] {
