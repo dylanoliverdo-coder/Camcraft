@@ -25,8 +25,9 @@ use crate::cl::{EdgeBreak, MoveKind, PathBuilder, Toolpath};
 use crate::geo2d::{Loop, Point2};
 use crate::geometry::Point3;
 
+use super::arcs::{ARC_FIT_TOL, Seg, fit_arcs_sided};
 use super::face::GenError;
-use super::levels::{Motion, run_levels};
+use super::levels::{Motion, run_level_walks, run_levels};
 
 /// One chamfer ride's numbers. `top_z` is the plane the chamfer's wide
 /// end opens in (the picked edge's top); the corner depth follows from
@@ -176,6 +177,16 @@ pub fn chamfer_chains(
     open: &[Vec<Point2>],
     p: &ChamferParams,
 ) -> Result<Toolpath, GenError> {
+    chamfer_chains_with_tolerance(closed, open, p, ARC_FIT_TOL)
+}
+
+/// Generate a sketch chamfer using the operation's tolerance for closed-pass arc fitting.
+pub fn chamfer_chains_with_tolerance(
+    closed: &[ChamferClosedChain],
+    open: &[Vec<Point2>],
+    p: &ChamferParams,
+    tolerance: f64,
+) -> Result<Toolpath, GenError> {
     p.validate()?;
     if closed.is_empty() && open.is_empty() {
         return Err(GenError::Empty("no chamfer chains to cut".into()));
@@ -189,6 +200,8 @@ pub fn chamfer_chains(
     ordered_closed.sort_by(|x, y| y.loop_.area().abs().total_cmp(&x.loop_.area().abs()));
 
     let mut passes: Vec<Vec<Point2>> = Vec::with_capacity(ordered_closed.len() + open.len());
+    let mut walks: Vec<Vec<Seg>> = Vec::with_capacity(passes.capacity());
+    let fit_tolerance = tolerance.min(ARC_FIT_TOL);
     for c in ordered_closed {
         // Canonicalize each closed loop through `Region::new` (the same
         // representation `chamfer` reads from a picked solid loop) so it is
@@ -201,6 +214,7 @@ pub fn chamfer_chains(
             if let Some(&start) = pass.first() {
                 pass.push(start);
             }
+            walks.push(fit_arcs_sided(&pass, fit_tolerance, Some(c.climb)));
             passes.push(pass);
         }
     }
@@ -212,6 +226,7 @@ pub fn chamfer_chains(
         if !chain.iter().all(|q| q.x.is_finite() && q.y.is_finite()) {
             return Err(GenError::Invalid("an open chamfer chain holds non-finite points".into()));
         }
+        walks.push(vec![Seg::Line(chain[1..].to_vec())]);
         passes.push(chain.clone());
     }
     if passes.is_empty() {
@@ -220,7 +235,7 @@ pub fn chamfer_chains(
 
     let mut b = PathBuilder::approached(Point3::new(0.0, 0.0, p.clearance_z));
     let motion = Motion::new(p.clearance_z, p.retract_z, p.feed, p.plunge_feed);
-    run_levels(&mut b, &passes, &[z], &motion, None, None, None);
+    run_level_walks(&mut b, &passes, &[z], &motion, Some(&walks), None, None);
     let cur = b.at();
     b.push(MoveKind::Rapid, Point3::new(cur.x, cur.y, p.clearance_z), None);
 
@@ -290,6 +305,34 @@ mod tests {
         let z = path.moves.iter().find(|m| m.kind == MoveKind::Feed).expect("feed").to.z;
         assert!((z - (-0.5 * 30f64.to_radians().tan())).abs() < 1e-9);
         assert!((z - (-0.2887)).abs() < 1e-4, "z={z}");
+    }
+
+    #[test]
+    fn closed_sketch_chamfer_fits_arcs_in_both_directions() {
+        let points = (0..256)
+            .map(|i| {
+                let angle = f64::from(i) * std::f64::consts::TAU / 256.0;
+                Point2::new(10.0 * angle.cos(), 10.0 * angle.sin())
+            })
+            .collect::<Vec<_>>();
+        let circle = Loop::new(points.clone()).expect("circle");
+        let p = base_params(0.5, 45.0);
+        let open = &points[..65];
+        for (inside, climb) in [(true, true), (true, false), (false, true), (false, false)] {
+            let path = chamfer_chains(
+                &[ChamferClosedChain { loop_: circle.clone(), inside, climb }],
+                &[open.to_vec()],
+                &p,
+            ).expect("chamfer");
+            let arcs: Vec<_> = path.moves.iter().filter_map(|m| m.arc.as_ref()).collect();
+            assert!(!arcs.is_empty(), "the sampled circle stayed linear");
+            assert!(arcs.iter().all(|arc| arc.ccw == (inside == climb)));
+            assert!(path.moves.windows(2).all(|w| w[0].to == w[1].from));
+            let feeds: Vec<_> = path.moves.iter().filter(|m| m.kind == MoveKind::Feed).collect();
+            assert!(feeds.len() < 256 + open.len() - 1);
+            assert!(feeds.iter().all(|m| (m.to.z + 0.5).abs() < 1e-9 && m.feed == Some(p.feed)));
+            assert!(feeds[feeds.len() - open.len() + 1..].iter().all(|m| m.arc.is_none()));
+        }
     }
 
     #[test]

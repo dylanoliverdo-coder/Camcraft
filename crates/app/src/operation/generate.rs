@@ -2568,6 +2568,7 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
         // wall the region picks (the sim judges), and so which way
         // climb travels it (#1555: material right of travel under M3).
         OpParams::Chamfer2D {
+            tolerance,
             width,
             angle_deg,
             feed,
@@ -2622,7 +2623,7 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
                 inside: *side == Side::Inside,
             };
             if let Some(plan_res) = sketch_chamfer.take() {
-                super::chamfer_sketch::generate_plan(plan_res?, &cp, *side, *climb)?
+                super::chamfer_sketch::generate_plan(plan_res?, &cp, *side, *climb, *tolerance)?
             } else {
                 let region = region_for_job(
                     &mut picked_region,

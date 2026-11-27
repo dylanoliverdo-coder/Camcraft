@@ -13,10 +13,11 @@ use camcraft_app::geometry::Point3;
 use camcraft_app::mcp::Server;
 use camcraft_app::model;
 use camcraft_app::operation::{
-    self, ChainOverride, FeatureSel, GeoSel, OpParams, OpStatus, OpenChainSide, SrcRef,
+    self, ChainOverride, FeatureSel, GenStamp, GeoSel, OpParams, OpStatus, OpenChainSide, SrcRef,
 };
 use camcraft_app::project;
-use camcraft_app::schema::Location;
+use camcraft_app::posting;
+use camcraft_app::schema::{Location, PostRef};
 use camcraft_app::stock::StockShape;
 use camcraft_app::stock_sim::simulate_document;
 use camcraft_app::world::new_world;
@@ -39,6 +40,38 @@ fn mcp_call(server: &mut Server, id: i64, name: &str, args: Value) -> (bool, Val
         result["structuredContent"].clone()
     };
     (is_err, body)
+}
+
+#[test]
+fn closed_sketch_chamfer_post_uses_haas_arcs() {
+    let points = (0..256).map(|i| {
+        let a = f64::from(i) * std::f64::consts::TAU / 256.0;
+        (10.0 * a.cos(), 10.0 * a.sin())
+    }).collect::<Vec<_>>();
+    let dxf = dxf_polylines(&[("circle", &points, true)]);
+    let stock = StockShape::Box { dx: 40.0, dy: 40.0, dz: 4.0 };
+    let loc = Location { pos: Point3::new(0.0, 0.0, -4.0), ..Location::default() };
+    let (world, mut history, _) = world_with_dxf(&dxf, &stock, loc);
+    posting::post_set(&world, &PostRef::Named("Haas".into()));
+    run(&world, &mut history, CreateOperation::new(&world, "ChCircle", CONE90, SrcRef::Entity("part".into()),
+        s10_chamfer(0.5, 45.0)), "create circle chamfer");
+    run(&world, &mut history, GenerateOperation::new(&world, "ChCircle"), "generate circle chamfer");
+    let entity = model::find_by_name(&world, "ChCircle").expect("chamfer");
+    let mut old = model::operation_of(&world, &entity).expect("operation");
+    // Captured from this same authored circle on the pre-fit fork head.
+    old.stamp = Some(GenStamp(4_215_829_103_167_998_917));
+    entity.entity_view(&world).set(old);
+    assert_eq!(operation::status_of(&world, &entity), OpStatus::Stale);
+    let reason = posting::post_setup_unwritten(&world).map(|_| ()).expect_err("the old stamp must hold");
+    assert!(reason.contains("inputs moved since generation"), "{reason}");
+    run(&world, &mut history, GenerateOperation::new(&world, "ChCircle"), "regenerate circle chamfer");
+    let posted = posting::post_setup_unwritten(&world).expect("normal Haas post gate");
+    let arcs = posted.program.lines().filter(|line| {
+        line.split_whitespace().any(|word| matches!(word, "G2" | "G3" | "G02" | "G03"))
+    }).count();
+    assert!(arcs > 0, "Haas output has no circular interpolation");
+    assert!(posted.lines < 64, "the circular sketch still posts as many feed lines");
+    eprintln!("{arcs} arcs in {} Haas program lines", posted.lines);
 }
 
 #[test]
