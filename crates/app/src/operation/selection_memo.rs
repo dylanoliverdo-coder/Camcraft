@@ -305,6 +305,7 @@ mod tests {
                 side: Some(ChainSide::Inside),
                 reverse: false,
                 open_side: OpenChainSide::None,
+                straight_ramp: None,
             });
         }
         let b1 = selection_walks();

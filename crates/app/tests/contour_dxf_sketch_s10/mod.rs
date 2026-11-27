@@ -160,6 +160,7 @@ fn s10_checks_2_3_4_5_7_closed_open_refusal_angle_and_nested_auto() {
             side: None,
             reverse: false,
             open_side: OpenChainSide::Left,
+            straight_ramp: None,
         }];
     }
     run(&w3, &mut h3, CreateOperation::new(&w3, "OpenL", CONE90, SrcRef::Entity("part".into()), p_left), "open L");
@@ -177,6 +178,7 @@ fn s10_checks_2_3_4_5_7_closed_open_refusal_angle_and_nested_auto() {
             side: None,
             reverse: false,
             open_side: OpenChainSide::Right,
+            straight_ramp: None,
         }];
     }
     run(&w3, &mut h3, CreateOperation::new(&w3, "OpenR", CONE90, SrcRef::Entity("part".into()), p_right), "open R");
@@ -209,6 +211,7 @@ fn s10_checks_2_3_4_5_7_closed_open_refusal_angle_and_nested_auto() {
             side: None,
             reverse: false,
             open_side: OpenChainSide::Left,
+            straight_ramp: None,
         }];
     }
     run(&w3, &mut h3, CreateOperation::new(&w3, "Ang30", CONE120, SrcRef::Entity("part".into()), p30), "ang30");
@@ -256,6 +259,7 @@ fn s10_checks_2_3_4_5_7_closed_open_refusal_angle_and_nested_auto() {
             side: None,
             reverse: false,
             open_side: OpenChainSide::Left,
+            straight_ramp: None,
         }];
     }
     let err = CreateOperation::new(&w2, "BadClosedOs", CONE90, SrcRef::Entity("part".into()), p_closed_os)
@@ -272,6 +276,7 @@ fn s10_checks_2_3_4_5_7_closed_open_refusal_angle_and_nested_auto() {
             side: None,
             reverse: false,
             open_side: OpenChainSide::Left,
+            straight_ramp: None,
         }];
     }
     run(&w3, &mut h3, CreateOperation::new(&w3, "BadCone", CONE90, SrcRef::Entity("part".into()), p_bad_angle), "bad cone");
@@ -309,6 +314,7 @@ fn s10_open_chains_ride_in_profile_order_regardless_of_pick_order() {
                 side: None,
                 reverse: false,
                 open_side: OpenChainSide::Left,
+                straight_ramp: None,
             })
             .collect();
     }

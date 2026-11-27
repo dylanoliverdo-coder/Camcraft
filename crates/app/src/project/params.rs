@@ -52,6 +52,8 @@ pub struct ChainOverrideDto {
     pub reverse: bool,
     #[serde(default, skip_serializing_if = "OpenChainSideDto::is_none")]
     pub open_side: OpenChainSideDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub straight_ramp: Option<crate::machining2d::StraightContourRamp>,
 }
 
 /// Which point of a twist drill `break_through` is measured from (#2441).

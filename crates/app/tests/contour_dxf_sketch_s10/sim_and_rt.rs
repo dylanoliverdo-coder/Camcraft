@@ -58,6 +58,7 @@ fn s10_check_6_stock_simulator_45deg_1mm_open_edge_chamfer() {
             side: None,
             reverse: false,
             open_side: OpenChainSide::Left,
+            straight_ramp: None,
         }];
     }
     run(&world, &mut history, CreateOperation::new(&world, "EdgeCh", CONE90, SrcRef::Entity("part".into()), params), "create");
@@ -183,6 +184,7 @@ fn s10_check_8_project_roundtrip_legacy_load_and_mcp_surface() {
             side: None,
             reverse: false,
             open_side: OpenChainSide::Left,
+            straight_ramp: None,
         }];
     }
     let picks = SrcRef::Selection(vec![

@@ -131,6 +131,12 @@ pub(super) fn write_chain_overrides(
                 OpenChainSide::Right => 2,
             });
         }
+        if let Some(ramp) = o.straight_ramp {
+            h.write(b"straight-ramp");
+            for word in ramp.words() {
+                h.write_u64(word);
+            }
+        }
     }
 }
 

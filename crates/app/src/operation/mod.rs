@@ -206,6 +206,7 @@ pub use sketch_memo::{
 };
 mod chamfer_sketch;
 mod contour_sketch;
+mod contour_straight_ramp;
 mod finish_clip;
 mod finish_entry;
 mod boundary_ctx;

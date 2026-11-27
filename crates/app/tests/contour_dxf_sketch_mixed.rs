@@ -176,7 +176,7 @@ fn nested_loops_from_separate_sketches_keep_their_side_when_only_reverse_changes
 
     let mut reversed = params;
     if let OpParams::Contour { chain_overrides, .. } = &mut reversed {
-        *chain_overrides = vec![ChainOverride { entity: "ring".into(), chain: ring, side: None, reverse: true, open_side: OpenChainSide::None }];
+        *chain_overrides = vec![ChainOverride { entity: "ring".into(), chain: ring, side: None, reverse: true, open_side: OpenChainSide::None, straight_ramp: None }];
     }
     run(&world, &mut history, CreateOperation::new(&world, "Reversed", TOOL, SrcRef::Selection(picks), reversed), "create reversed");
     run(&world, &mut history, GenerateOperation::new(&world, "Reversed"), "generate reversed");

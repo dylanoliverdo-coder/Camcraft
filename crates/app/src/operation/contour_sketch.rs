@@ -39,6 +39,7 @@ pub(super) struct ResolvedSketchChain {
     pub(super) auto_role_err: Option<String>,
     /// Deterministic index of the chain within its owning DXF profile.
     pub(super) rank: usize,
+    pub(super) straight_ramp: Option<machining2d::StraightContourRamp>,
 }
 
 #[derive(Clone, Debug)]
@@ -51,6 +52,9 @@ pub(super) struct SketchContourPlan {
 impl SketchContourPlan {
     pub(super) fn rotate_xy(&mut self, rot: &Rot2) -> Result<(), GenError> {
         for item in &mut self.items {
+            if let Some(ramp) = &mut item.straight_ramp {
+                super::contour_straight_ramp::rotate(ramp, rot);
+            }
             for p in &mut item.pts {
                 *p = rot.p2(*p);
             }
@@ -132,6 +136,11 @@ pub(super) fn resolve_plan(
         return Err(GenError::Invalid("not a 2D Contour operation".into()));
     };
     let items = collect_chains(world, src, *tolerance, *side, *climb, chain_overrides)?;
+    if chain_overrides.iter().any(|o| o.straight_ramp.is_some()
+        && !items.iter().any(|item| item.entity == o.entity && item.chain_id == o.chain))
+    {
+        return Err(GenError::Invalid("a straight ramp's outline is missing - reselect the outline".into()));
+    }
     let mut region_loops = Vec::new();
     let mut closed_outer = 0usize;
     let mut closed_inside = 0usize;
@@ -231,7 +240,7 @@ fn can_group_natural(closed: &[&ResolvedSketchChain], op_climb: bool) -> bool {
     };
     let ids: HashSet<ChainId> = closed.iter().map(|c| c.chain_id).collect();
     closed.iter().all(|c| {
-        c.natural_auto
+        c.straight_ramp.is_none() && c.natural_auto
             && c.entity == first.entity
             && c.eff_climb == op_climb
             && c.parent.is_none_or(|p| ids.contains(&p))
@@ -256,7 +265,7 @@ pub(super) fn generate_plan(
     mut area: Option<AreaCtx>,
     d: f64,
     comp_name: &str,
-    carried_top: &mut dyn FnMut(&Region, &Toolpath) -> Option<f64>,
+    carried_top: &mut dyn FnMut(&Region, &Toolpath, bool) -> Option<f64>,
 ) -> Result<(Region, Toolpath, Option<f64>), GenError> {
     let control_comp = cp.links.approach.compensation.in_control();
     validate_plan(&plan, control_comp, comp_name)?;
@@ -278,6 +287,13 @@ pub(super) fn generate_plan(
     }
 
     let closed_items: Vec<&ResolvedSketchChain> = plan.items.iter().filter(|i| i.closed).collect();
+    let straight_protection = super::contour_straight_ramp::protection(&closed_items, cp)?;
+    if straight_protection.is_some() && plan.items.iter().any(|item| !item.closed) {
+        return Err(GenError::Invalid("open chains cannot share an authored straight-ramp operation".into()));
+    }
+    if straight_protection.is_some() && area.is_some() {
+        return Err(GenError::Invalid("boundary edits do not apply to an authored straight ramp".into()));
+    }
     let verify_region = if plan.region_loops.is_empty() {
         Region::empty()
     } else {
@@ -299,7 +315,7 @@ pub(super) fn generate_plan(
             }
             let reg = apply_area_controls(verify_region.clone(), ctx.as_ref())?;
             let mut sub = machining2d::contour(&reg, &g_cp)?;
-            if let Some(m) = carried_top(&super::top_stock::contour_reach(&reg, false, d), &sub) {
+            if let Some(m) = carried_top(&super::top_stock::contour_reach(&reg, false, d), &sub, false) {
                 g_cp.links.approach.material_top = Some(m);
                 max_carried = Some(max_carried.map_or(m, |p| p.max(m)));
                 sub = machining2d::contour(&reg, &g_cp)?;
@@ -326,10 +342,16 @@ pub(super) fn generate_plan(
                 let mut c_cp = *cp;
                 c_cp.side = eff_side;
                 c_cp.climb = item.eff_climb;
+                if let (Some(ramp), Some(protected)) = (item.straight_ramp, &straight_protection) {
+                    let sub = super::contour_straight_ramp::generate(item, ramp, &reg, protected, &c_cp, carried_top)?;
+                    path = if path.moves.is_empty() { sub } else { stitch(path, sub) };
+                    continue;
+                }
                 let mut sub = machining2d::contour(&reg, &c_cp)?;
                 if let Some(m) = carried_top(
                     &super::top_stock::contour_reach(&reg, eff_side == Side::Inside, d),
                     &sub,
+                    false,
                 ) {
                     c_cp.links.approach.material_top = Some(m);
                     max_carried = Some(max_carried.map_or(m, |p| p.max(m)));

@@ -56,6 +56,7 @@ fn s9_check_11_stock_simulator_removes_10mm_band_on_plus_y_only() {
             side: None,
             reverse: false,
             open_side: OpenChainSide::Left,
+            straight_ramp: None,
         }];
     }
     run(
@@ -181,6 +182,7 @@ fn s9_check_12_project_roundtrip_legacy_load_and_mcp_surface() {
                 side: None,
                 reverse: false,
                 open_side: side,
+                straight_ramp: None,
             }];
         }
         run(&w, &mut h, CreateOperation::new(&w, "Op", TOOL10, SrcRef::Entity("part".into()), p), "create");
@@ -208,6 +210,7 @@ fn s9_check_12_project_roundtrip_legacy_load_and_mcp_surface() {
             side: None,
             reverse: true,
             open_side: OpenChainSide::None,
+            straight_ramp: None,
         }];
     }
     run(&w, &mut h, CreateOperation::new(&w, "Legacy", TOOL10, SrcRef::Entity("part".into()), p_legacy), "legacy");

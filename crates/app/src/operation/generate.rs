@@ -604,11 +604,17 @@ fn run_job_arms(job: GenJob) -> Result<(Toolpath, Vec<Warning>), GenError> {
                 }
             }
             let (region, path) = if let Some(plan_res) = sketch_contour.take() {
-                let mut carry = |reach: &Region, candidate: &Toolpath| -> Option<f64> {
-                    carry_need!(reach, candidate)
+                let plan = plan_res?;
+                if plan.items.iter().any(|item| item.straight_ramp.is_some())
+                    && (tool.kind != K::EndMill || frame.is_some())
+                {
+                    return Err(GenError::Invalid("an authored straight ramp needs an upright flat end mill".into()));
+                }
+                let mut carry = |reach: &Region, candidate: &Toolpath, plunge: bool| -> Option<f64> {
+                    if plunge { carried_top!(reach) } else { carry_need!(reach, candidate) }
                 };
                 let (reg, path, mat_top) = super::contour_sketch::generate_plan(
-                    plan_res?,
+                    plan,
                     &cp,
                     *side,
                     *climb,

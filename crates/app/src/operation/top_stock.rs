@@ -109,7 +109,7 @@ pub(super) fn dives_into(
 
 /// The tool's disc at `q` as a region (32 chords, circumscribed so it
 /// never reads less than the disc).
-fn disc(q: Point2, r: f64) -> Option<Region> {
+pub(super) fn disc(q: Point2, r: f64) -> Option<Region> {
     if !(r.is_finite() && r > 0.0) {
         return None;
     }

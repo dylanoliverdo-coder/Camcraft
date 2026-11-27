@@ -226,6 +226,7 @@ impl ParamsDto {
                         side: o.side.map(chain_side_dto),
                         reverse: o.reverse,
                         open_side: open_chain_side_dto(o.open_side),
+                        straight_ramp: o.straight_ramp,
                     })
                     .collect(),
                 passes: (*passes).into(),
@@ -495,6 +496,7 @@ impl ParamsDto {
                         side: o.side.map(chain_side_dto),
                         reverse: o.reverse,
                         open_side: open_chain_side_dto(o.open_side),
+                        straight_ramp: o.straight_ramp,
                     })
                     .collect(),
             },
@@ -1604,6 +1606,7 @@ impl ParamsDto {
                         side: o.side.map(chain_side_of),
                         reverse: o.reverse,
                         open_side: open_chain_side_of(o.open_side),
+                        straight_ramp: o.straight_ramp,
                     })
                     .collect(),
                 passes: (*passes).into(),
@@ -1874,6 +1877,7 @@ impl ParamsDto {
                         side: o.side.map(chain_side_of),
                         reverse: o.reverse,
                         open_side: open_chain_side_of(o.open_side),
+                        straight_ramp: o.straight_ramp,
                     })
                     .collect(),
             },

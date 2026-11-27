@@ -332,6 +332,7 @@ impl OpParams {
                 // record there, said in the path's notes.
                 let overrides_ok = chain_overrides.iter().enumerate().all(|(i, o)| {
                     !o.entity.is_empty()
+                        && o.straight_ramp.is_none_or(|r| r.is_sane())
                         && !chain_overrides[..i]
                             .iter()
                             .any(|prev| prev.entity == o.entity && prev.chain == o.chain)
@@ -522,6 +523,7 @@ impl OpParams {
             } => {
                 let overrides_ok = chain_overrides.iter().enumerate().all(|(i, o)| {
                     !o.entity.is_empty()
+                        && o.straight_ramp.is_none()
                         && !chain_overrides[..i]
                             .iter()
                             .any(|prev| prev.entity == o.entity && prev.chain == o.chain)

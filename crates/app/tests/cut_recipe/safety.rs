@@ -141,6 +141,7 @@ fn cut_recipe_refuses_saved_picks_and_plane_origins() {
             side: None,
             reverse: true,
             open_side: OpenChainSide::None,
+            straight_ramp: None,
         });
     }
     let mut deburr = seed_params(OpType::Deburr.ordinal());

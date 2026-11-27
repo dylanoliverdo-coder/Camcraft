@@ -83,6 +83,36 @@ fn sheet_client() -> Client {
 }
 
 #[test]
+fn straight_outline_ramp_survives_geometry_edit_and_project_roundtrip() {
+    let dir = tmp_dir("straight-outline");
+    let mut c = sheet_client();
+    c.ok("import_dxf", json!({ "path": write_dxf(&dir, "outline.dxf", Some(4)) }));
+    c.ok("add_operation", json!({
+        "kind": "2D Contour", "tool": "EM-0400-2FL", "source": "outline", "name": "Edge"
+    }));
+    let features = c.ok("list_features", json!({ "model": "outline", "kinds": ["chains"] }));
+    let id = &features["chains"].as_array().expect("chains").iter()
+        .find(|chain| chain["layer"] == "cut").expect("outer rectangle")["id"];
+    let ramp = json!({
+        "start_xy": [-2.0, 0.0], "direction_xy": [0.0, 1.0],
+        "drop_mm": 0.1, "run_mm": 1.0, "normal_lead_mm": 0.25
+    });
+    let geometry = c.ok("set_operation_geometry", json!({
+        "operation": "Edge", "picks": [{ "model": "outline", "id": id, "side": "outside", "straight_ramp": ramp }]
+    }));
+    assert_eq!(geometry["chain_overrides"][0]["straight_ramp"], ramp);
+    let file = dir.join("outline.camproj").display().to_string();
+    c.ok("save_project", json!({ "path": file }));
+    c.ok("open_project", json!({ "path": file }));
+    let reopened = c.ok("get_operation_geometry", json!({ "operation": "Edge" }));
+    assert_eq!(reopened["chain_overrides"], geometry["chain_overrides"]);
+    let cleared = c.ok("set_operation_geometry", json!({
+        "operation": "Edge", "picks": [{ "model": "outline", "id": id, "side": "outside" }]
+    }));
+    assert!(cleared["chain_overrides"][0].get("straight_ramp").is_none());
+}
+
+#[test]
 fn import_dxf_places_a_profile_and_states_units_and_skipped_counts() {
     let dir = tmp_dir("import");
     let mut c = sheet_client();
